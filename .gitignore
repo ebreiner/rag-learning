@@ -1,7 +1,8 @@
+.idea
 build
 data
+main
+.kreuzberg
 venv
 .venv
-main
-.idea
 
