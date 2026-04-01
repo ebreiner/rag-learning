@@ -115,7 +115,7 @@ func (q *Query) byHybrid() (querries.ChunkList, error) {
 }
 
 func (q *Query) CutQueryString() string {
-	return q.normalized[:50]
+	return q.Query[:50]
 }
 
 func doRFF(fts, ann querries.ChunkList, kRRF uint16) querries.ChunkList {
