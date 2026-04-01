@@ -1,5 +1,5 @@
-export CGO_CFLAGS := "-I/home/emil/.local/include"
-export CGO_LDFLAGS := "-L/home/emil/.local/lib -lkreuzberg_ffi"
+export CGO_CFLAGS := "-I/home/emil.breiner/.local/include"
+export CGO_LDFLAGS := "-L/home/emil.breiner/.local/lib -lkreuzberg_ffi"
 
 build:
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
@@ -26,3 +26,6 @@ load-db: build
 
 test: build
 	./main test
+
+serve: build
+	./main serve mcp

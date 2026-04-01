@@ -4,4 +4,4 @@ venv
 .venv
 main
 .idea
-
+.env
