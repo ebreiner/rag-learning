@@ -59,7 +59,7 @@ Rules:
 - ann_variants and fts_variants must each contain exactly 4 queries.
 - Rephrased queries need to be german
 - Do NOT explain anything.
-- Output ONLY JSONL.
+- Output ONLY JSONL
 
 Output format:
 
@@ -72,10 +72,9 @@ Output format:
 "fts_variants": ["...", "...", "...", "..."]
 }
 
-{ "id": 1, "text": "ich brauche passwörter bzw zugang zu einem system, was muss ich tun?", "fts_query": "", "ann_query": ""}
-{ "id": 2, "text": "wie richte ich mein phpstorm ein?", "fts_query": "", "ann_query": ""}
-{ "id": 3, "text": "was ist gerrit und wie wird es bei uns eingesetzt?", "fts_query": "", "ann_query": ""}
-{ "id": 4, "text": "wo finde ich informationen über qualitätsmanagement bei der krumedia", "fts_query": "", "ann_query": ""}
+{ "id": 1, "text": "welche informationen kann ich an einen datenpunkt heften?", "fts_query": "", "ann_query": ""}
+{ "id": 2, "text": "welche datenquellen gibt es?", "fts_query": "", "ann_query": ""}
+{ "id": 3, "text": "was ist ein lora device driver or payload decoder", "fts_query": "", "ann_query": ""}
 
 no output except the jsonl. no heres your output, no markdon code block syntax, no decorations. only jsonl
 

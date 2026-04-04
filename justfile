@@ -1,7 +1,8 @@
-export CGO_CFLAGS := "-I/home/emil/.local/include"
-export CGO_LDFLAGS := "-L/home/emil/.local/lib -lkreuzberg_ffi"
-
 build:
+	#!/usr/bin/env bash
+	set -euxo pipefail
+	export CGO_CFLAGS="-I$HOME/.local/include"
+	export CGO_LDFLAGS="-L$HOME/.local/lib -lkreuzberg_ffi"
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
 
@@ -26,3 +27,6 @@ load-db: build
 
 test: build
 	./main test
+
+serve: build
+	./main serve mcp
