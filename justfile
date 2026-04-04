@@ -6,11 +6,8 @@ build:
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
 
-scrape: build
-	./main scrape
-
-convert: build
-	./main scrape -s
+mw: build
+	./main mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
 
 chunk: build
 	./main chunk

@@ -20,19 +20,52 @@ import (
 	"golang.org/x/term"
 )
 
-var scrapeCmd = &cobra.Command{
-	Use:   "scrape",
-	Short: "Scrape all articles from mediawiki instance",
-	Long: `Gets a list of all articles for the given instance and saves them into a file.
-		The download afterwards acts based on the list of articles in the file. This can
-		be controlled via --only-list and --only-download.
-	`,
+var mwCmd = &cobra.Command{
+	Use:   "mw",
+	Short: "download and convert all articles from given mediawiki url",
+	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		client := login()
-		articleList := getArticleList(client)
-		getArticles(articleList, client)
-		articlesToMarkdown()
+		skipDownloadFlag := cmd.Flag("skip-download")
+		skipDownload := skipDownloadFlag.Value.String()
+		outputDirFlag := cmd.Flag("output-dir")
+		outputDir := outputDirFlag.Value.String()
+		if !filepath.IsAbs(outputDir) {
+			cwd, _ := os.Getwd()
+			outputDir = filepath.Join(cwd, outputDir)
+		}
+		_, err := os.Stat(outputDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("no output directory found, creating..")
+				if err := os.Mkdir(outputDir, 0750); err != nil {
+					log.Fatalf("error creating output directory: %s", err.Error())
+				}
+			} else {
+				log.Fatalf("error checking for existence of output directory: %s", err.Error())
+			}
+		}
+		addressFlag := cmd.Flag("mw-address")
+		mwAddress, err := url.Parse(addressFlag.Value.String())
+		if err != nil {
+			log.Fatalf("error parsing provided mw address %s: %s", addressFlag.Value.String(), err.Error())
+		}
+
+		var client *http.Client
+		var articleList string
+		if skipDownload == "false" {
+			client = login(mwAddress)
+			articleList = getArticleList(mwAddress, client)
+		}
+		getArticles(articleList, mwAddress, outputDir, client)
+		articlesToMarkdown(outputDir)
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(mwCmd)
+	mwCmd.Flags().BoolP("skip-download", "s", false, "--skip-download")
+	mwCmd.Flags().StringP("output-dir", "o", "mw-output", "--output")
+	mwCmd.Flags().StringP("mw-address", "a", "empty_placeholder", "--address")
 }
 
 type Page struct {
@@ -44,22 +77,7 @@ type Page struct {
 	}
 }
 
-func init() {
-	rootCmd.AddCommand(scrapeCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// scrapeCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// scrapeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle"A
-	scrapeCmd.Flags().BoolP("skip-download", "s", true, "--skip-download")
-}
-
-func login() *http.Client {
+func login(baseURL *url.URL) *http.Client {
 	usernameReader := bufio.NewReader(os.Stdin)
 	fmt.Print("Enter username: ")
 	username, _ := usernameReader.ReadString('\n')
@@ -75,7 +93,6 @@ func login() *http.Client {
 	client := &http.Client{Jar: jar}
 
 	// Get csrf token for login
-	baseURL, _ := url.Parse("https://wiki.krumedia.com/api.php")
 	params := url.Values{}
 	params.Add("action", "query")
 	params.Add("meta", "tokens")
@@ -145,8 +162,7 @@ func login() *http.Client {
 	return client
 }
 
-func getArticleList(client *http.Client) string {
-	baseURL, _ := url.Parse("https://wiki.krumedia.com/api.php")
+func getArticleList(baseURL *url.URL, client *http.Client) string {
 	params := url.Values{}
 	params.Add("action", "query")
 	params.Add("list", "allpages")
@@ -207,7 +223,7 @@ func getArticleList(client *http.Client) string {
 	return pageList
 }
 
-func articlesToMarkdown() {
+func articlesToMarkdown(outputDir string) {
 	testPandoc := exec.Command("pandoc", "--version")
 	testPandoc.Stdout = os.Stdout
 	testPandoc.Stderr = os.Stderr
@@ -216,41 +232,34 @@ func articlesToMarkdown() {
 		log.Fatalf("stderr: \n\n%s\n", err.Error())
 	}
 
-	inputDir, err := os.ReadDir("./data/mw-download/")
+	inputDir, err := os.ReadDir(outputDir)
 	if err != nil {
 		log.Fatalf("error reading directory: %s", err.Error())
 	}
 	for count, inputFileEntry := range inputDir {
-		inputFileName, _ := normalizeTitle(inputFileEntry.Name())
-		fmt.Printf("processing file %s\n", inputFileEntry.Name())
-		pwd, _ := os.Getwd()
-		inputFilePath := filepath.Join(pwd, "data", "mw-download", inputFileName)
-		targetFileName, _ := normalizeTitle(inputFileEntry.Name())
-		split := strings.Split(targetFileName, ".")
-		if len(split) > 2 {
-			split = split[:len(split)-1]
-			fmt.Printf("split: %+v\n", split)
-			targetFileName = strings.Join(split, "") + ".md"
-		} else {
-			targetFileName = targetFileName + ".md"
-
+		split := strings.Split(inputFileEntry.Name(), ".")
+		if split[len(split)-1] != "mw" {
+			continue
 		}
-		outDir, _ := os.Getwd()
-		targetFilePath := filepath.Join(outDir, "data", "mw-converted", targetFileName)
-		cmd := exec.Command("pandoc", "-f", "mediawiki", "-t", "markdown", inputFilePath, "-o", targetFilePath)
+		title := inputFileEntry.Name()[:len(inputFileEntry.Name())-3]
+		title, _ = normalizeTitle(title)
+		inputPath := filepath.Join(outputDir, title+".mw")
+		outputPath := filepath.Join(outputDir, title+".md")
+		fmt.Printf("processing file %s\n", inputPath)
+
+		cmd := exec.Command("pandoc", "-f", "mediawiki", "-t", "markdown", inputPath, "-o", outputPath)
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
 		fmt.Printf("command: %s\n\n", strings.Join(cmd.Args, " "))
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("error converting mediacode to markdown: %s\n", err.Error())
 		} else {
-			log.Printf("finished converting # %d %s\n", count, inputFilePath)
+			log.Printf("finished converting # %d %s\n", count, inputPath)
 		}
 	}
 }
 
-func getArticles(articleList string, client *http.Client) {
-	baseURL, _ := url.Parse("https://wiki.krumedia.com/api.php")
+func getArticles(articleList string, baseURL *url.URL, outputDir string, client *http.Client) {
 	for rowCount, row := range strings.Split(articleList, "\n") {
 		if len(row) < 2 {
 			fmt.Print("empty line, skipping\n")
@@ -311,10 +320,10 @@ func getArticles(articleList string, client *http.Client) {
 		if len(pageResponse.Query.Page) != 1 {
 			log.Fatal("got more then one page in response, this cannot be right")
 		}
-		filePath, _ := os.Getwd()
 		title, _ := normalizeTitle(page.Title)
+		title = title + ".mw"
+		outputPath := filepath.Join(outputDir, title)
 		fmt.Printf("title dump: %s\n", title)
-		filePath = filepath.Join(filePath, "data", "mw-download", title)
 		if len(pageResponse.Query.Page) == 0 {
 			log.Fatalf("missing page in response for : %s", baseURL.String())
 		}
@@ -323,9 +332,9 @@ func getArticles(articleList string, client *http.Client) {
 		}
 		content := pageResponse.Query.Page[0].Revisions[0].Content
 		content = strings.ReplaceAll(content, "<br>", "  ")
-		fmt.Printf("writing converted file to %s\n", filePath)
-		if err := os.WriteFile(filePath, []byte(content), 0640); err != nil {
-			log.Fatalf("error writing content of %s to file: %s", filePath, err.Error())
+		fmt.Printf("writing converted file to %s\n", outputPath)
+		if err := os.WriteFile(outputPath, []byte(content), 0640); err != nil {
+			log.Fatalf("error writing content of %s to file: %s", outputPath, err.Error())
 		}
 	}
 }
