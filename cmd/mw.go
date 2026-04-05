@@ -45,6 +45,9 @@ var mwCmd = &cobra.Command{
 			}
 		}
 		addressFlag := cmd.Flag("mw-address")
+		if addressFlag.Value.String() == "empty_placeholder" {
+			log.Fatal("error missing mediawiki api url")
+		}
 		mwAddress, err := url.Parse(addressFlag.Value.String())
 		if err != nil {
 			log.Fatalf("error parsing provided mw address %s: %s", addressFlag.Value.String(), err.Error())
