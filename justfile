@@ -9,6 +9,9 @@ build:
 mw: build
 	./main mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
 
+extract input-dir output-dir: build
+	./main extract -i {{input-dir}} -o {{output-dir}}
+
 chunk: build
 	./main chunk
 

@@ -29,20 +29,9 @@ var mwCmd = &cobra.Command{
 		skipDownload := skipDownloadFlag.Value.String()
 		outputDirFlag := cmd.Flag("output-dir")
 		outputDir := outputDirFlag.Value.String()
-		if !filepath.IsAbs(outputDir) {
-			cwd, _ := os.Getwd()
-			outputDir = filepath.Join(cwd, outputDir)
-		}
-		_, err := os.Stat(outputDir)
+		outputDir, err := outputDirHelper(outputDir)
 		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Println("no output directory found, creating..")
-				if err := os.Mkdir(outputDir, 0750); err != nil {
-					log.Fatalf("error creating output directory: %s", err.Error())
-				}
-			} else {
-				log.Fatalf("error checking for existence of output directory: %s", err.Error())
-			}
+			log.Fatal(err.Error())
 		}
 		addressFlag := cmd.Flag("mw-address")
 		if addressFlag.Value.String() == "empty_placeholder" {
@@ -67,7 +56,7 @@ var mwCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(mwCmd)
 	mwCmd.Flags().BoolP("skip-download", "s", false, "--skip-download")
-	mwCmd.Flags().StringP("output-dir", "o", "mw-output", "--output")
+	mwCmd.Flags().StringP("output-dir", "o", "./data/output", "--output-dir")
 	mwCmd.Flags().StringP("mw-address", "a", "empty_placeholder", "--address")
 }
 
