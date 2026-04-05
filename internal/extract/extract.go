@@ -2,57 +2,16 @@ package extract
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"rag/internal/writer"
 	"strings"
 	"sync"
 )
-
-type Node struct {
-	ID                string
-	NodeType          string
-	Parent            int32
-	Children          []int32
-	GroupHeadingLevel int32
-	GroupHeadingText  string
-	Level             int32
-	Text              string
-	Page              int32
-}
-
-type Document struct {
-	Title        string
-	Nodes        []Node
-	SourceFormat string
-	MimeType     string
-	Metadata     MetaData
-}
-
-type MetaData struct {
-	QualityScore float64
-	Mail         MailData
-}
-
-type MailData struct {
-	Subject  string
-	MailFrom string
-	MailCC   []string
-	MailTo   []string
-}
-
-type writeError struct {
-	OutputPath string
-	Err        string
-}
-
-func (e writeError) Error() string {
-	return fmt.Sprintf("error writing file %s: %s", e.OutputPath, e.Err)
-}
 
 // TODO: upload async and stream files with io.Pipe into connections
 func Extract(outputDir, inputDir string) error {
@@ -61,20 +20,22 @@ func Extract(outputDir, inputDir string) error {
 		return fmt.Errorf("error reading input dir: %s", err.Error())
 	}
 
-	errChan := make(chan writeError)
-	resultChan := make(chan []Document)
-	var wgDone sync.WaitGroup
+	errChan := make(chan writer.WriteError)
+	resultChan := make(chan writer.ResultMessage)
+	var wgWriter sync.WaitGroup
+	wgWriter.Add(1)
 	var wgErr sync.WaitGroup
-	errList := make([]writeError, 0)
+	wgErr.Add(1)
+
+	errList := make([]writer.WriteError, 0)
 	go func() {
 		for err := range errChan {
 			errList = append(errList, err)
 		}
+		wgErr.Done()
 	}()
 
-	wgDone.Add(len(inputDirList))
-	wgErr.Add(1)
-	go handleWrites(outputDir, &wgDone, &wgErr, errChan, resultChan)
+	go writer.HandleWrites(outputDir, &wgWriter, errChan, resultChan)
 
 	filesInBatch := 0
 	batchSize := 10
@@ -82,6 +43,12 @@ func Extract(outputDir, inputDir string) error {
 	if err != nil {
 		return err
 	}
+	var wgSender sync.WaitGroup
+	doneCount := len(inputDirList) / batchSize
+	if len(inputDirList)%batchSize != 0 {
+		doneCount = doneCount + 1
+	}
+	wgSender.Add(doneCount)
 	titleList := make([]string, 0, batchSize)
 	for i, inputEntry := range inputDirList {
 		fmt.Printf("processing file # %d: %s\n", i, inputEntry.Name())
@@ -95,12 +62,10 @@ func Extract(outputDir, inputDir string) error {
 		filesInBatch++
 
 		if filesInBatch == batchSize {
-			err = sendBatch(titleList, body, writer, resultChan)
-			if err != nil {
-				return fmt.Errorf("error sending batch: %s", err.Error())
-			}
+			go sendBatch(titleList, body, writer, resultChan, errChan, &wgSender)
+
 			// reset list by setting length to zero while keeping capacity
-			titleList = titleList[:0]
+			titleList = make([]string, 0, batchSize)
 
 			body, writer, err = newMultipartForm()
 			if err != nil {
@@ -113,18 +78,17 @@ func Extract(outputDir, inputDir string) error {
 	}
 
 	if filesInBatch > 0 {
-		err = sendBatch(titleList, body, writer, resultChan)
+		go sendBatch(titleList, body, writer, resultChan, errChan, &wgSender)
 		if err != nil {
 			return fmt.Errorf("error sending final batch: %s", err.Error())
 		}
 	}
-
+	wgSender.Wait()
 	close(resultChan)
+	fmt.Print("writer channel closed, waiting for shutdown..\n")
+	wgWriter.Wait()
 
-	wgDone.Wait()
 	wgErr.Wait()
-	close(errChan)
-
 	if len(errList) > 0 {
 		var errString string
 		for count, err := range errList {
@@ -133,39 +97,6 @@ func Extract(outputDir, inputDir string) error {
 		return fmt.Errorf(errString)
 	}
 	return nil
-}
-
-func handleWrites(outputDir string, wgDone, errDone *sync.WaitGroup, errChan chan writeError, resultChan chan []Document) {
-	fmt.Println("writer started and ready..")
-	for results := range resultChan {
-		for _, result := range results {
-			name := result.Title
-			if result.SourceFormat == "email" {
-				name = result.Metadata.Mail.Subject
-			}
-			outputFileName := name + ".jsonl"
-			outputPath := filepath.Join(outputDir, outputFileName)
-			content, err := json.Marshal(result)
-			if err != nil {
-				errChan <- writeError{
-					OutputPath: outputPath,
-					Err:        fmt.Sprintf("cannot marshal json in writer: %s", err.Error()),
-				}
-				wgDone.Done()
-			}
-
-			if err := os.WriteFile(outputPath, content, 0640); err != nil {
-				errChan <- writeError{
-					OutputPath: outputPath,
-					Err:        fmt.Sprintf("cannot write file %s: %s", outputPath, err.Error()),
-				}
-				wgDone.Done()
-			}
-
-			wgDone.Done()
-		}
-	}
-	errDone.Done()
 }
 
 func newMultipartForm() (*bytes.Buffer, *multipart.Writer, error) {
@@ -200,35 +131,47 @@ func addFileToMultipart(filepath, multipartFileName string, writer *multipart.Wr
 	return nil
 }
 
-func sendBatch(titleList []string, body *bytes.Buffer, writer *multipart.Writer, resultChan chan []Document) error {
-	err := writer.Close()
+func sendBatch(titleList []string, body *bytes.Buffer, multipartWriter *multipart.Writer, resultChan chan writer.ResultMessage, errChan chan writer.WriteError, wg *sync.WaitGroup) {
+	errHelper := func(errString string) {
+		errChan <- writer.WriteError{
+			Err: errString,
+		}
+	}
+	err := multipartWriter.Close()
 	if err != nil {
-		return fmt.Errorf("error closing writer: %s", err.Error())
+		errHelper(fmt.Sprintf("error closing writer: %s", err.Error()))
+		return
 	}
 
 	req, err := http.NewRequest("POST", "http://127.0.0.1:8000/extract", body)
 	if err != nil {
-		return fmt.Errorf("error creating request: %s", err.Error())
+		errHelper(fmt.Sprintf("error creating request: %s", err.Error()))
+		return
 	}
 
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", multipartWriter.FormDataContentType())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("error received for extraction request: %s", err.Error())
+		errHelper(fmt.Sprintf("error received for extraction request: %s", err.Error()))
+		errHelper(fmt.Sprintf("", err.Error()))
+		return
 	}
 
 	result, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("error reading response body: %s", err.Error())
+		errHelper(fmt.Sprintf("error reading response body: %s", err.Error()))
+		return
 	}
 	err = resp.Body.Close()
 	if err != nil {
-		return fmt.Errorf("cannot close request body: %s", err.Error())
+		errHelper(fmt.Sprintf("cannot close request body: %s", err.Error()))
+		return
 	}
 
 	documents, err := handleRequestResult(result)
 	if err != nil {
-		return fmt.Errorf("error processing read request body: %s", err.Error())
+		errHelper(fmt.Sprintf("error processing read request body: %s", err.Error()))
+		return
 	}
 
 	for i := range documents {
@@ -236,17 +179,17 @@ func sendBatch(titleList []string, body *bytes.Buffer, writer *multipart.Writer,
 			documents[i].Title = titleList[i]
 		}
 	}
-	resultChan <- documents
-
-	return nil
+	msg := writer.ResultMessage{
+		Documents:     documents,
+		FileExtension: "jsonl",
+	}
+	resultChan <- msg
+	wg.Done()
 }
 
 func filenameWithoutExt(filename string) string {
 	split := strings.Split(filename, ".")
 	split = split[:len(split)-1]
-	var filenameNoExt string
-	for _, el := range split {
-		filenameNoExt = filenameNoExt + el
-	}
+	filenameNoExt := strings.Join(split, ".")
 	return filenameNoExt
 }

@@ -12,8 +12,8 @@ mw: build
 extract input-dir output-dir: build
 	./main extract -i {{input-dir}} -o {{output-dir}}
 
-chunk: build
-	./main chunk
+chunk input-dir output-dir: build
+	./main chunk -i {{input-dir}} -o {{output-dir}}
 
 dummy: build
 	./main dummy
