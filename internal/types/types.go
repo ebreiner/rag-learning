@@ -23,7 +23,7 @@ type Document struct {
 
 type MetaData struct {
 	QualityScore float64  `json:"quality_score,omitempty"`
-	Mail         MailData `json:"mail,omitempty"`
+	Mail         MailData `json:"mail"`
 }
 
 type MailData struct {
@@ -34,7 +34,8 @@ type MailData struct {
 }
 
 type Chunk struct {
-	Text       string `json:"text"`
-	ChunkCount int    `json:"chunk_count"`
-	ChunkIndex int    `json:"chunk_index"`
+	Text       string    `json:"text"`
+	ChunkCount int       `json:"chunk_count"`
+	ChunkIndex int       `json:"chunk_index"`
+	Embedding  []float64 `json:"embedding"`
 }

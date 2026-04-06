@@ -15,11 +15,8 @@ extract input-dir output-dir: build
 chunk input-dir output-dir: build
 	./main chunk -i {{input-dir}} -o {{output-dir}}
 
-dummy: build
-	./main dummy
-
-embed: build
-	./main embed
+embed input-dir output-dir: build
+	./main embed -i {{input-dir}} -o {{output-dir}}
 
 load-db: build
 	rm -f ./data/data.db*

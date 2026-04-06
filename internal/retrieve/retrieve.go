@@ -21,7 +21,7 @@ const (
 type Query struct {
 	Query      string
 	normalized string
-	embedding  []float32
+	embedding  []float64
 	Strategy   QueryStrategy
 	K          uint16
 	ctx        context.Context
@@ -69,11 +69,12 @@ func (q *Query) Run() (QueryResult, error) {
 
 func (q *Query) byEmbedding() (querries.ChunkList, error) {
 	chunks := make(querries.ChunkList)
-	embedding, err := embedding.Embed(q.ctx, q.normalized)
-	q.embedding = embedding.Vec
+	embedings, err := embedding.EmbedQuery(q.Query)
 	if err != nil {
-		return chunks, fmt.Errorf("error embedding querry: %s", err.Error())
+		return chunks, fmt.Errorf("error embedding query: %s", err.Error())
 	}
+	q.embedding = embedings[0]
+
 	chunks, err = querries.TopKByVec(q.db, 25, q.embedding, q.ctx)
 	if err != nil {
 		return chunks, fmt.Errorf("error running ann: %s", err.Error())

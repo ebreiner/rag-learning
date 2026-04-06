@@ -57,6 +57,14 @@ func Chunk(inputDir, outputDir string) error {
 	wgWriter.Wait()
 	wgErrDone.Wait()
 
+	if len(processErrs) > 0 {
+		var errString string
+		for count, err := range processErrs {
+			errString = errString + fmt.Sprintf("# %d %s: %s\n", count, err.OutputPath, err.Err)
+		}
+		return fmt.Errorf(errString)
+	}
+
 	return nil
 }
 
