@@ -18,6 +18,7 @@ type embedding struct {
 	Embedding []float64
 }
 
+// TODO: implement context, move wg out of processing function embedDoc lifecycle should be handled from outside
 func EmbedInputDir(inputDir, outputDir string) error {
 	inputEntryList, err := os.ReadDir(inputDir)
 	if err != nil {
@@ -27,17 +28,8 @@ func EmbedInputDir(inputDir, outputDir string) error {
 	var wgWriter sync.WaitGroup
 	wgWriter.Add(1)
 
-	var wgErrDone sync.WaitGroup
-	wgErrDone.Add(1)
-
 	errChan := make(chan writer.WriteError)
 	var processErrs []writer.WriteError
-	go func() {
-		for err := range errChan {
-			processErrs = append(processErrs, err)
-		}
-		wgErrDone.Done()
-	}()
 
 	resultChan := make(chan writer.ResultMessage)
 
@@ -46,25 +38,41 @@ func EmbedInputDir(inputDir, outputDir string) error {
 	var wgProcessing sync.WaitGroup
 	wgProcessing.Add(len(inputEntryList))
 
+	sem := make(chan struct{}, 10)
 	for index, entry := range inputEntryList {
-		fmt.Printf("processing file # %d: %s\n", index, entry.Name())
-		inputPath := filepath.Join(inputDir, entry.Name())
-		content, err := os.ReadFile(inputPath)
-		if err != nil {
-			return fmt.Errorf("error reading file %s: %s", entry.Name(), err.Error())
-		}
-		var doc types.Document
-		if err := json.Unmarshal(content, &doc); err != nil {
-			return fmt.Errorf("cannot unmarshal json from %s: %s", entry.Name(), err.Error())
-		}
+		// Aquire slot
+		sem <- struct{}{}
 
-		go embedDoc(doc, resultChan, errChan, &wgProcessing)
+		go func() {
+			defer wgProcessing.Done()
+			defer func() { <-sem }() // release slot
 
+			fmt.Printf("processing file # %d: %s\n", index, entry.Name())
+
+			inputPath := filepath.Join(inputDir, entry.Name())
+			content, err := os.ReadFile(inputPath)
+			if err != nil {
+				errChan <- writer.WriteError{OutputPath: entry.Name(), Err: fmt.Sprintf("error reading file %s: %s", entry.Name(), err.Error())}
+				return
+			}
+			var doc types.Document
+			if err := json.Unmarshal(content, &doc); err != nil {
+				errChan <- writer.WriteError{OutputPath: entry.Name(), Err: fmt.Sprintf("cannot unmarshal json from %s: %s", entry.Name(), err.Error())}
+				return
+			}
+
+			embedDoc(doc, resultChan, errChan)
+		}()
 	}
+
 	wgProcessing.Wait()
 	close(resultChan)
 	wgWriter.Wait()
-	wgErrDone.Wait()
+
+	//	close(errChan)
+	for err := range errChan {
+		processErrs = append(processErrs, err)
+	}
 
 	if len(processErrs) > 0 {
 		var errString string
@@ -134,12 +142,11 @@ func embedStrings(inputs []embedding) ([]embedding, error) {
 	for index := range embeddings {
 		embeddings[index].Embedding = embedResp.Embeddings[index]
 	}
-	fmt.Printf("embeding dump: %+v\n", embeddings)
 
 	return embeddings, nil
 }
 
-func embedDoc(doc types.Document, resultChan chan writer.ResultMessage, errChan chan writer.WriteError, wg *sync.WaitGroup) {
+func embedDoc(doc types.Document, resultChan chan writer.ResultMessage, errChan chan writer.WriteError) {
 	errHelper := func(errString string) {
 		errChan <- writer.WriteError{
 			Err: errString,
@@ -171,5 +178,4 @@ func embedDoc(doc types.Document, resultChan chan writer.ResultMessage, errChan 
 	docs = append(docs, doc)
 
 	resultChan <- writer.ResultMessage{Documents: docs, FileExtension: "jsonl"}
-	wg.Done()
 }
