@@ -2,10 +2,10 @@ package extract
 
 import (
 	"encoding/json"
-	"rag/internal/types"
+	"rag/internal/ingest"
 )
 
-func handleRequestResult(respResults []byte) ([]types.Document, error) {
+func handleRequestResult(respResults []byte) ([]ingest.Document, error) {
 	// keep response struct scoped to this function
 	// dump response into a file and feed it to some llm to update or add new fields
 	type requestNodeContent struct {
@@ -66,19 +66,19 @@ func handleRequestResult(respResults []byte) ([]types.Document, error) {
 		return nil, err
 	}
 
-	var documents []types.Document
+	var documents []ingest.Document
 	for _, result := range unmarshaled {
-		document := types.Document{
+		document := ingest.Document{
 			MimeType:     result.MimeType,
 			Title:        result.Metadata.Title,
 			SourceFormat: result.Document.SourceFormat,
 		}
 
-		metaData := types.MetaData{
+		metaData := ingest.MetaData{
 			QualityScore: result.QualityScore,
 		}
 		if result.Document.SourceFormat == "email" {
-			metaData.Mail = types.MailData{
+			metaData.Mail = ingest.MailData{
 				Subject:  result.Metadata.Subject,
 				MailFrom: result.Metadata.FromMail,
 				MailTo:   result.Metadata.ToMail,
@@ -87,9 +87,9 @@ func handleRequestResult(respResults []byte) ([]types.Document, error) {
 			document.Title = result.Metadata.Subject
 		}
 
-		nodes := make([]types.Node, 0)
+		nodes := make([]ingest.Node, 0)
 		for _, n := range result.Document.NodesRequest {
-			node := types.Node{
+			node := ingest.Node{
 				ID:                n.ID,
 				NodeType:          n.Content.NodeType,
 				Parent:            n.Parent,

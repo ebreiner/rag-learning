@@ -1,4 +1,4 @@
-package normalize
+package sqlite
 
 import (
 	"regexp"

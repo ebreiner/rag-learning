@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"rag/internal/db/connection"
+	search "rag/internal/platform/sqlite"
 	"rag/internal/retrieve"
 
 	"github.com/spf13/cobra"
@@ -31,7 +31,7 @@ func init() {
 
 func runTest() {
 	ctx := context.Background()
-	db, err := connection.NewConn()
+	db, err := search.NewConn()
 	if err != nil {
 		log.Fatalf("error opening db: %s", err.Error())
 	}

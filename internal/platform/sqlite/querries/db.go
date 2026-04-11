@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package query
+package querries
 
 import (
 	"context"
@@ -27,6 +27,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createDocumentStmt, err = db.PrepareContext(ctx, createDocument); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateDocument: %w", err)
 	}
+	if q.getChunksForIDsStmt, err = db.PrepareContext(ctx, getChunksForIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetChunksForIDs: %w", err)
+	}
 	if q.insertChunkStmt, err = db.PrepareContext(ctx, insertChunk); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertChunk: %w", err)
 	}
@@ -38,6 +41,11 @@ func (q *Queries) Close() error {
 	if q.createDocumentStmt != nil {
 		if cerr := q.createDocumentStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createDocumentStmt: %w", cerr)
+		}
+	}
+	if q.getChunksForIDsStmt != nil {
+		if cerr := q.getChunksForIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getChunksForIDsStmt: %w", cerr)
 		}
 	}
 	if q.insertChunkStmt != nil {
@@ -82,17 +90,19 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                 DBTX
-	tx                 *sql.Tx
-	createDocumentStmt *sql.Stmt
-	insertChunkStmt    *sql.Stmt
+	db                  DBTX
+	tx                  *sql.Tx
+	createDocumentStmt  *sql.Stmt
+	getChunksForIDsStmt *sql.Stmt
+	insertChunkStmt     *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                 tx,
-		tx:                 tx,
-		createDocumentStmt: q.createDocumentStmt,
-		insertChunkStmt:    q.insertChunkStmt,
+		db:                  tx,
+		tx:                  tx,
+		createDocumentStmt:  q.createDocumentStmt,
+		getChunksForIDsStmt: q.getChunksForIDsStmt,
+		insertChunkStmt:     q.insertChunkStmt,
 	}
 }

@@ -10,8 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"rag/internal/db/connection"
-	"rag/internal/db/insert"
+	search "rag/internal/platform/sqlite"
 
 	kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
 	_ "github.com/mattn/go-sqlite3"
@@ -40,8 +39,8 @@ func loadDB(model string, dimensions uint16) {
 		log.Fatalf("error reading directory: %s", err.Error())
 	}
 
-	var errList []insert.InsertError
-	errChan := make(chan insert.InsertError)
+	var errList []search.InsertError
+	errChan := make(chan search.InsertError)
 	go func() {
 		for err := range errChan {
 			fmt.Printf("error processing %s: %s\n", err.DocTitle, err.Err)
@@ -49,8 +48,8 @@ func loadDB(model string, dimensions uint16) {
 		}
 	}()
 
-	writeChan := make(chan insert.ChunkedDoc)
-	db, err := connection.NewConn()
+	writeChan := make(chan search.ChunkedDoc)
+	db, err := search.NewConn()
 	if err != nil {
 		cancel()
 		log.Fatalf("error opening db: %s", err.Error())
@@ -63,7 +62,7 @@ func loadDB(model string, dimensions uint16) {
 	// Add one per doc to process
 	writerDoneWG.Add(len(inputDir))
 	// Start the writer routine
-	go insert.HandleChunks(ctx, db, &writerInitWG, &writerDoneWG, writeChan, errChan)
+	go search.HandleChunks(ctx, db, &writerInitWG, &writerDoneWG, writeChan, errChan)
 	// Wait until setup is finished
 	writerInitWG.Wait()
 
@@ -75,7 +74,7 @@ func loadDB(model string, dimensions uint16) {
 			fmt.Printf("processing file # %d %s\n", fileCount, filePath)
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				errChan <- insert.InsertError{
+				errChan <- search.InsertError{
 					DocTitle: filePath,
 					Err:      err.Error(),
 				}
@@ -83,7 +82,7 @@ func loadDB(model string, dimensions uint16) {
 				return
 			}
 
-			doc := insert.ChunkedDoc{
+			doc := search.ChunkedDoc{
 				Title: entry.Name(),
 			}
 
@@ -94,7 +93,7 @@ func loadDB(model string, dimensions uint16) {
 				}
 				var chunk kreuzberg.Chunk
 				if err := json.Unmarshal([]byte(rawChunk), &chunk); err != nil {
-					errChan <- insert.InsertError{
+					errChan <- search.InsertError{
 						Err:      fmt.Sprintf("error unmarshalling line %d into chunk: %s", chunkID, err.Error()),
 						DocTitle: filePath,
 						ChunkID:  int64(chunkID),

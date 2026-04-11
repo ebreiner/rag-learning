@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"rag/internal/types"
+	"rag/internal/ingest"
 	"rag/internal/writer"
 	"sync"
 )
@@ -45,7 +45,7 @@ func Chunk(inputDir, outputDir string) error {
 		if err != nil {
 			return fmt.Errorf("error reading file %s: %s", entry.Name(), err.Error())
 		}
-		var doc types.Document
+		var doc ingest.Document
 		if err := json.Unmarshal(content, &doc); err != nil {
 			return fmt.Errorf("cannot unmarshal json from %s: %s", entry.Name(), err.Error())
 		}
@@ -68,18 +68,18 @@ func Chunk(inputDir, outputDir string) error {
 	return nil
 }
 
-func processDoc(doc types.Document, errChan chan writer.WriteError, resultChan chan writer.ResultMessage, wgProcessing *sync.WaitGroup) {
+func processDoc(doc ingest.Document, errChan chan writer.WriteError, resultChan chan writer.ResultMessage, wgProcessing *sync.WaitGroup) {
 	var chunkIndex int
 	chunkIndex = 0
 	maxSize := 1000
-	var chunks []types.Chunk
-	var chunk types.Chunk
+	var chunks []ingest.Chunk
+	var chunk ingest.Chunk
 
 	// local mini helper to ease up emitting of chunks, tightly coupled to the state this scope!
 	emitchunk := func() {
 		chunks = append(chunks, chunk)
 		chunkIndex++
-		chunk = types.Chunk{ChunkIndex: chunkIndex}
+		chunk = ingest.Chunk{ChunkIndex: chunkIndex}
 	}
 
 	for _, node := range doc.Nodes {
@@ -99,9 +99,10 @@ func processDoc(doc types.Document, errChan chan writer.WriteError, resultChan c
 			chunk.Text += node.Text + "\n"
 
 		default:
-			errChan <- writer.WriteError{
-				Err: fmt.Sprintf("error processesing node: unkown node type '%s'", node.NodeType),
-			}
+			continue
+			//			errChan <- writer.WriteError{
+			//				Err: fmt.Sprintf("error processesing node: unkown node type '%s'", node.NodeType),
+			//			}
 		}
 
 	}
@@ -114,7 +115,7 @@ func processDoc(doc types.Document, errChan chan writer.WriteError, resultChan c
 		chunks[idx] = cc
 	}
 	doc.Chunks = chunks
-	docs := make([]types.Document, 1)
+	docs := make([]ingest.Document, 1)
 	docs[0] = doc
 	resultChan <- writer.ResultMessage{
 		Documents:     docs,

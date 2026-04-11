@@ -1,12 +1,11 @@
-package retrieve
+package sqlite
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"rag/internal/db/retrieve/query"
-	"rag/internal/db/utils"
+	"rag/internal/platform/sqlite/querries"
 	"strings"
 )
 
@@ -21,9 +20,9 @@ type Chunk struct {
 	DocTitle string
 }
 
-func TopKByVec(db *sql.DB, k int, embedding []float64, ctx context.Context) (ChunkList, error) {
+func TopKByVec(db *sql.DB, k int, embedding []float32, ctx context.Context) (ChunkList, error) {
 	chunks := make(ChunkList)
-	buf, err := utils.PackEmbedding(embedding)
+	buf, err := PackEmbedding(embedding)
 	if err != nil {
 		return chunks, fmt.Errorf("error writing float to buffer: %s", err.Error())
 	}
@@ -118,7 +117,7 @@ func TopKByFts(db *sql.DB, k uint16, rawQuery string, ctx context.Context) (Chun
 }
 
 func ChunksForIDs(ctx context.Context, db *sql.DB, chunks ChunkList) (ChunkList, error) {
-	q := retrieve.New(db)
+	q := querries.New(db)
 	var ids []int64
 	for _, chunk := range chunks {
 		ids = append(ids, chunk.ID)

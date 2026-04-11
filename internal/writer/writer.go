@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"rag/internal/types"
+	"rag/internal/ingest"
 	"sync"
 )
 
@@ -19,7 +19,7 @@ func (e WriteError) Error() string {
 }
 
 type ResultMessage struct {
-	Documents     []types.Document
+	Documents     []ingest.Document
 	FileExtension string
 }
 

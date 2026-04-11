@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package retrieve
+package querries
 
 type Chunk struct {
 	ID         int64

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"rag/internal/db/connection"
+	search "rag/internal/platform/sqlite"
 	"rag/internal/retrieve"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -85,7 +85,7 @@ func serveMCP() {
 		}
 		fmt.Printf("k: %d, query: %s", k, retrievalQuery)
 
-		db, err := connection.NewConn()
+		db, err := search.NewConn()
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

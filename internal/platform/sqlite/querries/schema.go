@@ -1,4 +1,4 @@
-package schema
+package querries
 
 import _ "embed"
 
