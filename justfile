@@ -1,3 +1,6 @@
+###############
+# rag-cli
+###############
 build:
 	#!/usr/bin/env bash
 	set -euxo pipefail
@@ -5,9 +8,6 @@ build:
 	export CGO_LDFLAGS="-L$HOME/.local/lib -lkreuzberg_ffi"
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
-
-mw: build
-	./main mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
 
 extract input-dir output-dir: build
 	./main extract -i {{input-dir}} -o {{output-dir}}
@@ -27,3 +27,15 @@ test: build
 
 serve: build
 	./main serve mcp
+
+
+###############
+# scrape-cli
+###############
+scrape-build:
+	go build -o ./scrape cmd/scrape
+	chmod a+x ./scrape
+
+mw: scrape-build
+	./scrape mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
+

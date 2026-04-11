@@ -1,15 +1,11 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
-package cmd
+package cli
 
 import (
 	"fmt"
 	"log"
 
-	"rag/internal/extract"
-
 	"github.com/spf13/cobra"
+	"rag/internal/extract"
 )
 
 var extractCmd = &cobra.Command{
@@ -26,7 +22,7 @@ to quickly create a Cobra application.`,
 		outputDirFlag := cmd.Flag("output-dir")
 		inputDir := inputDirFlag.Value.String()
 		outputDir := outputDirFlag.Value.String()
-		outputDir, err := outputDirHelper(outputDir)
+		outputDir, err := OutputDirHelper(outputDir)
 		if err != nil {
 			log.Fatal(err.Error())
 		}

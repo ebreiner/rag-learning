@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-func outputDirHelper(outputDir string) (string, error) {
+func OutputDirHelper(outputDir string) (string, error) {
 	if !filepath.IsAbs(outputDir) {
 		cwd, _ := os.Getwd()
 		outputDir = filepath.Join(cwd, outputDir)

@@ -1,7 +1,4 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
-package cmd
+package cli
 
 import (
 	"log"
@@ -20,7 +17,7 @@ var chunkCmd = &cobra.Command{
 		outputDirFlag := cmd.Flag("output-dir")
 		inputDir := inputDirFlag.Value.String()
 		outputDir := outputDirFlag.Value.String()
-		outputDir, err := outputDirHelper(outputDir)
+		outputDir, err := OutputDirHelper(outputDir)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
