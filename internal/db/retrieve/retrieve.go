@@ -21,7 +21,7 @@ type Chunk struct {
 	DocTitle string
 }
 
-func TopKByVec(db *sql.DB, k int, embedding []float32, ctx context.Context) (ChunkList, error) {
+func TopKByVec(db *sql.DB, k int, embedding []float64, ctx context.Context) (ChunkList, error) {
 	chunks := make(ChunkList)
 	buf, err := utils.PackEmbedding(embedding)
 	if err != nil {

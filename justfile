@@ -6,20 +6,17 @@ build:
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
 
-scrape: build
-	./main scrape
+mw: build
+	./main mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
 
-convert: build
-	./main scrape -s
+extract input-dir output-dir: build
+	./main extract -i {{input-dir}} -o {{output-dir}}
 
-chunk: build
-	./main chunk
+chunk input-dir output-dir: build
+	./main chunk -i {{input-dir}} -o {{output-dir}}
 
-dummy: build
-	./main dummy
-
-embed: build
-	./main embed
+embed input-dir output-dir: build
+	./main embed -i {{input-dir}} -o {{output-dir}}
 
 load-db: build
 	rm -f ./data/data.db*

@@ -4,15 +4,16 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"fmt"
 	"log"
-	"rag/internal/embedding"
+
+	"rag/internal/extract"
 
 	"github.com/spf13/cobra"
 )
 
-// embedCmd represents the embed command
-var embedCmd = &cobra.Command{
-	Use:   "embed",
+var extractCmd = &cobra.Command{
+	Use:   "extract",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -29,20 +30,23 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			log.Fatal(err.Error())
 		}
-		embed(inputDir, outputDir)
 
+		if err := extractDir(inputDir, outputDir); err != nil {
+			log.Fatal(err.Error())
+		}
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(embedCmd)
-	embedCmd.Flags().StringP("input-dir", "i", "./data/input", "--input-dir")
-	embedCmd.Flags().StringP("output-dir", "o", "./data/output", "--output-dir")
+	rootCmd.AddCommand(extractCmd)
+	extractCmd.Flags().StringP("input-dir", "i", "./data/input", "--input-dir")
+	extractCmd.Flags().StringP("output-dir", "o", "./data/output", "--output-dir")
 }
 
-func embed(inputDir, outputDir string) {
-	err := embedding.EmbedInputDir(inputDir, outputDir)
-	if err != nil {
-		log.Fatal(err.Error())
+func extractDir(inputDir, outputDir string) error {
+	if err := extract.Extract(outputDir, inputDir); err != nil {
+		return fmt.Errorf("error running extraction for %s: %s", inputDir, err.Error())
 	}
+
+	return nil
 }
