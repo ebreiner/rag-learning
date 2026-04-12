@@ -4,15 +4,53 @@
 
 package querries
 
+import (
+	"database/sql"
+	"time"
+)
+
 type Chunk struct {
-	ID         int64
-	DocumentID int64
-	ChunkIndex int64
-	ChunkCount int64
-	Text       string
+	ID               int64
+	CreatedAt        time.Time
+	RepresentationID int64
+	Position         int64
+	Text             string
+	Embedded         int64
 }
 
 type Document struct {
-	ID       int64
-	Filename string
+	ID           int64
+	CreatedAt    time.Time
+	Name         string
+	MetadataJson sql.NullString
+}
+
+type Extraction struct {
+	ID               int64
+	CreatedAt        time.Time
+	RepresentationID int64
+	MimeType         string
+	QualityScore     []byte
+	MetadataJson     sql.NullString
+}
+
+type ExtractionNode struct {
+	ID                  int64
+	CreatedAt           time.Time
+	ExtractionID        int64
+	NodeID              string
+	NodeType            string
+	ParentIndex         sql.NullInt64
+	ChildrenIndexesJson sql.NullString
+	Level               sql.NullInt64
+	Text                sql.NullString
+	Page                sql.NullInt64
+}
+
+type Representation struct {
+	ID                     int64
+	CreatedAt              time.Time
+	DocumentID             int64
+	ParentRepresentationID sql.NullInt64
+	Stage                  string
 }

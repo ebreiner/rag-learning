@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	search "rag/internal/platform/sqlite"
-	"rag/internal/retrieve"
+	"rag/internal/platform/embedclient"
+	"rag/internal/platform/sqlite/retrieval"
+	"rag/internal/retrieval/step"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -85,40 +86,31 @@ func serveMCP() {
 		}
 		fmt.Printf("k: %d, query: %s", k, retrievalQuery)
 
-		db, err := search.NewConn()
+		hydrator, err := retrieval.NewChunkHydrator(ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		query := retrieve.NewQuery(ctx, db)
-		query.K = uint16(k)
-		query.Query = retrievalQuery
-		query.Strategy = retrieve.Hybrid
-		fmt.Printf("running query: %s\n", query.CutQueryString())
-		result, err := query.Run()
+		retriever, err := retrieval.NewSQLiteRetriever(ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		type ResultChunk struct {
-			DocTitle string
-			Content  string
-			ChunkID  int64
-		}
-		var jsonl string
-		for _, chunk := range result.Results {
-			resultChunk := ResultChunk{
-				DocTitle: chunk.DocTitle,
-				Content:  chunk.Text,
-				ChunkID:  chunk.ID,
-			}
-			marshalled, err := json.Marshal(resultChunk)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("error marshaling result chunk %d: %s", chunk.ID, err.Error())), nil
-			}
-			jsonl = jsonl + string(marshalled)
+
+		client, err := embedclient.NewKreuzbergClient()
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf(jsonl)), nil
+		chunks, err := step.RunRetrieval(retrievalQuery, step.Hybrid, 10, &hydrator, &retriever, client)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		b, err := json.Marshal(chunks)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(string(b)), nil
 	})
 	if err := httpServer.Start("0.0.0.0:8080"); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

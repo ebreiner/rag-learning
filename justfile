@@ -9,21 +9,23 @@ build:
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
 
-extract input-dir output-dir: build
-	./main extract -i {{input-dir}} -o {{output-dir}}
+cleanup:
+	rm -f data/data.db
 
-chunk input-dir output-dir: build
-	./main chunk -i {{input-dir}} -o {{output-dir}}
+extract input-dir: build
+	./main extract -i {{input-dir}}
 
-embed input-dir output-dir: build
-	./main embed -i {{input-dir}} -o {{output-dir}}
+chunk: build
+	./main chunk
 
-load-db: build
-	rm -f ./data/data.db*
-	./main load-db
+embed: build
+	./main embed
 
-test: build
-	./main test
+retrieve user-query: build
+	./main retrieve -q '{{user-query}}'
+
+inspect: build
+	./main inspect
 
 serve: build
 	./main serve mcp

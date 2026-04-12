@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"rag/internal/platform/sqlite/querries"
 	"strings"
 )
 
@@ -29,7 +28,7 @@ func TopKByVec(db *sql.DB, k int, embedding []float32, ctx context.Context) (Chu
 
 	query := `
 	SELECT e.chunk_id, e.distance
-	FROM embeddings_balanced_768 AS e
+	FROM embeddings_balanced_1536 AS e
 	WHERE e.embedding MATCH ?
 	ORDER BY e.distance
 	LIMIT ?
@@ -117,26 +116,5 @@ func TopKByFts(db *sql.DB, k uint16, rawQuery string, ctx context.Context) (Chun
 }
 
 func ChunksForIDs(ctx context.Context, db *sql.DB, chunks ChunkList) (ChunkList, error) {
-	q := querries.New(db)
-	var ids []int64
-	for _, chunk := range chunks {
-		ids = append(ids, chunk.ID)
-	}
-	chunkRows, err := q.GetChunksForIDs(ctx, ids)
-	if err != nil {
-		return chunks, fmt.Errorf("error retrieving chunks for ids: %s", err.Error())
-	}
-	if len(chunks) != len(chunkRows) {
-		return chunks, fmt.Errorf("error: different count of rows to querried ids received")
-	}
-
-	for idx, row := range chunkRows {
-		chunk := chunks[uint16(idx)]
-		chunk.Text = row.Text
-		chunk.DocID = row.DocumentID
-		chunk.DocTitle = row.Filename
-		chunks[uint16(idx)] = chunk
-	}
-
 	return chunks, nil
 }

@@ -1,4 +1,4 @@
-package extract
+package extractor
 
 var extractConfig = `{
 		"output_format": "markdown",
@@ -30,5 +30,14 @@ var extractConfig = `{
 	},
 	"pdf_options": {
 		"extract_metadata": true
+	},
+	"chunking": {
+		"max_characters": 500,
+		"overlap": 100,
+		"chunker_type": "markdown",
+		"sizing": {
+			"type": "tokenizer",
+			"model": "Xenova/gpt-4o"
+		}
 	}
 }`

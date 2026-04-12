@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"rag/internal/extract/step"
+	"rag/internal/platform/extraction/extractor"
+	"rag/internal/platform/extraction/source"
+	"rag/internal/platform/sqlite/extraction"
 
 	"github.com/spf13/cobra"
-	"rag/internal/extract"
 )
 
 var extractCmd = &cobra.Command{
@@ -19,29 +23,37 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		inputDirFlag := cmd.Flag("input-dir")
-		outputDirFlag := cmd.Flag("output-dir")
-		inputDir := inputDirFlag.Value.String()
-		outputDir := outputDirFlag.Value.String()
-		outputDir, err := OutputDirHelper(outputDir)
+		inputdir := inputDirFlag.Value.String()
+		err := createExtractions(inputdir)
 		if err != nil {
-			log.Fatal(err.Error())
-		}
-
-		if err := extractDir(inputDir, outputDir); err != nil {
-			log.Fatal(err.Error())
+			log.Fatal(err)
 		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(extractCmd)
-	extractCmd.Flags().StringP("input-dir", "i", "./data/input", "--input-dir")
-	extractCmd.Flags().StringP("output-dir", "o", "./data/output", "--output-dir")
+	extractCmd.Flags().StringP("input-dir", "i", "build/input", "--input-dir foo/bar or /foo/bar")
 }
 
-func extractDir(inputDir, outputDir string) error {
-	if err := extract.Extract(outputDir, inputDir); err != nil {
-		return fmt.Errorf("error running extraction for %s: %s", inputDir, err.Error())
+func createExtractions(inputDir string) error {
+	ctx := context.Background()
+	sourceDocSource, err := source.NewSourceDocSource(inputDir, ctx)
+	if err != nil {
+		return fmt.Errorf("error creating docs source: %s", err.Error())
+	}
+	extracedDocSink, err := extraction.NewExtractedDocSink(ctx)
+	if err != nil {
+		return fmt.Errorf("error creating docs sink: %s", err.Error())
+	}
+	extractor, err := extractor.NewKreuzbergExtractor()
+	if err != nil {
+		return fmt.Errorf("error creating docs sink: %s", err.Error())
+	}
+
+	err = step.RunExtract(&sourceDocSource, &extracedDocSink, &extractor)
+	if err != nil {
+		return err
 	}
 
 	return nil

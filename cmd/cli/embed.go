@@ -1,9 +1,13 @@
 package cli
 
 import (
-	"github.com/spf13/cobra"
+	"context"
 	"log"
-	"rag/internal/embedding"
+	"rag/internal/embedding/step"
+	"rag/internal/platform/embedclient"
+	"rag/internal/platform/sqlite/embedding"
+
+	"github.com/spf13/cobra"
 )
 
 // embedCmd represents the embed command
@@ -17,16 +21,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		inputDirFlag := cmd.Flag("input-dir")
-		outputDirFlag := cmd.Flag("output-dir")
-		inputDir := inputDirFlag.Value.String()
-		outputDir := outputDirFlag.Value.String()
-		outputDir, err := OutputDirHelper(outputDir)
-		if err != nil {
-			log.Fatal(err.Error())
-		}
-		embed(inputDir, outputDir)
-
+		embed()
 	},
 }
 
@@ -36,9 +31,24 @@ func init() {
 	embedCmd.Flags().StringP("output-dir", "o", "./data/output", "--output-dir")
 }
 
-func embed(inputDir, outputDir string) {
-	err := embedding.EmbedInputDir(inputDir, outputDir)
+func embed() {
+	ctx := context.Background()
+	sink, err := embedding.NewEmbedingsResultSink(ctx)
 	if err != nil {
 		log.Fatal(err.Error())
+	}
+	chunkSource, err := embedding.NewChunkSource(ctx)
+	source := &chunkSource
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	client, err := embedclient.NewKreuzbergClient()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	err = step.Embed(sink, source, client)
+	if err != nil {
+		log.Fatal(err)
 	}
 }

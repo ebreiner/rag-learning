@@ -24,33 +24,169 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
+	if q.countChunksStmt, err = db.PrepareContext(ctx, countChunks); err != nil {
+		return nil, fmt.Errorf("error preparing query CountChunks: %w", err)
+	}
+	if q.countDocumentsStmt, err = db.PrepareContext(ctx, countDocuments); err != nil {
+		return nil, fmt.Errorf("error preparing query CountDocuments: %w", err)
+	}
+	if q.countExtractionNodesStmt, err = db.PrepareContext(ctx, countExtractionNodes); err != nil {
+		return nil, fmt.Errorf("error preparing query CountExtractionNodes: %w", err)
+	}
+	if q.countExtractionsStmt, err = db.PrepareContext(ctx, countExtractions); err != nil {
+		return nil, fmt.Errorf("error preparing query CountExtractions: %w", err)
+	}
+	if q.countRepresentationsStmt, err = db.PrepareContext(ctx, countRepresentations); err != nil {
+		return nil, fmt.Errorf("error preparing query CountRepresentations: %w", err)
+	}
+	if q.createChildRepresentationFromParentStmt, err = db.PrepareContext(ctx, createChildRepresentationFromParent); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateChildRepresentationFromParent: %w", err)
+	}
 	if q.createDocumentStmt, err = db.PrepareContext(ctx, createDocument); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateDocument: %w", err)
 	}
-	if q.getChunksForIDsStmt, err = db.PrepareContext(ctx, getChunksForIDs); err != nil {
-		return nil, fmt.Errorf("error preparing query GetChunksForIDs: %w", err)
+	if q.createExtractionStmt, err = db.PrepareContext(ctx, createExtraction); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateExtraction: %w", err)
+	}
+	if q.createExtractionNodeStmt, err = db.PrepareContext(ctx, createExtractionNode); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateExtractionNode: %w", err)
+	}
+	if q.createRepresentationStmt, err = db.PrepareContext(ctx, createRepresentation); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateRepresentation: %w", err)
+	}
+	if q.getChunkBatchAfterIDStmt, err = db.PrepareContext(ctx, getChunkBatchAfterID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetChunkBatchAfterID: %w", err)
+	}
+	if q.getDocumentIDsAfterIDStmt, err = db.PrepareContext(ctx, getDocumentIDsAfterID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDocumentIDsAfterID: %w", err)
+	}
+	if q.getLatestExtractionOfDocStmt, err = db.PrepareContext(ctx, getLatestExtractionOfDoc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLatestExtractionOfDoc: %w", err)
+	}
+	if q.headChunksStmt, err = db.PrepareContext(ctx, headChunks); err != nil {
+		return nil, fmt.Errorf("error preparing query HeadChunks: %w", err)
+	}
+	if q.headDocumentsStmt, err = db.PrepareContext(ctx, headDocuments); err != nil {
+		return nil, fmt.Errorf("error preparing query HeadDocuments: %w", err)
+	}
+	if q.headExtractionNodesStmt, err = db.PrepareContext(ctx, headExtractionNodes); err != nil {
+		return nil, fmt.Errorf("error preparing query HeadExtractionNodes: %w", err)
+	}
+	if q.headExtractionsStmt, err = db.PrepareContext(ctx, headExtractions); err != nil {
+		return nil, fmt.Errorf("error preparing query HeadExtractions: %w", err)
+	}
+	if q.headRepresentationsStmt, err = db.PrepareContext(ctx, headRepresentations); err != nil {
+		return nil, fmt.Errorf("error preparing query HeadRepresentations: %w", err)
 	}
 	if q.insertChunkStmt, err = db.PrepareContext(ctx, insertChunk); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertChunk: %w", err)
+	}
+	if q.retrievalChunksByIDsStmt, err = db.PrepareContext(ctx, retrievalChunksByIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query RetrievalChunksByIDs: %w", err)
 	}
 	return &q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
+	if q.countChunksStmt != nil {
+		if cerr := q.countChunksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countChunksStmt: %w", cerr)
+		}
+	}
+	if q.countDocumentsStmt != nil {
+		if cerr := q.countDocumentsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countDocumentsStmt: %w", cerr)
+		}
+	}
+	if q.countExtractionNodesStmt != nil {
+		if cerr := q.countExtractionNodesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countExtractionNodesStmt: %w", cerr)
+		}
+	}
+	if q.countExtractionsStmt != nil {
+		if cerr := q.countExtractionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countExtractionsStmt: %w", cerr)
+		}
+	}
+	if q.countRepresentationsStmt != nil {
+		if cerr := q.countRepresentationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countRepresentationsStmt: %w", cerr)
+		}
+	}
+	if q.createChildRepresentationFromParentStmt != nil {
+		if cerr := q.createChildRepresentationFromParentStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createChildRepresentationFromParentStmt: %w", cerr)
+		}
+	}
 	if q.createDocumentStmt != nil {
 		if cerr := q.createDocumentStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createDocumentStmt: %w", cerr)
 		}
 	}
-	if q.getChunksForIDsStmt != nil {
-		if cerr := q.getChunksForIDsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getChunksForIDsStmt: %w", cerr)
+	if q.createExtractionStmt != nil {
+		if cerr := q.createExtractionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createExtractionStmt: %w", cerr)
+		}
+	}
+	if q.createExtractionNodeStmt != nil {
+		if cerr := q.createExtractionNodeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createExtractionNodeStmt: %w", cerr)
+		}
+	}
+	if q.createRepresentationStmt != nil {
+		if cerr := q.createRepresentationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createRepresentationStmt: %w", cerr)
+		}
+	}
+	if q.getChunkBatchAfterIDStmt != nil {
+		if cerr := q.getChunkBatchAfterIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getChunkBatchAfterIDStmt: %w", cerr)
+		}
+	}
+	if q.getDocumentIDsAfterIDStmt != nil {
+		if cerr := q.getDocumentIDsAfterIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDocumentIDsAfterIDStmt: %w", cerr)
+		}
+	}
+	if q.getLatestExtractionOfDocStmt != nil {
+		if cerr := q.getLatestExtractionOfDocStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLatestExtractionOfDocStmt: %w", cerr)
+		}
+	}
+	if q.headChunksStmt != nil {
+		if cerr := q.headChunksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing headChunksStmt: %w", cerr)
+		}
+	}
+	if q.headDocumentsStmt != nil {
+		if cerr := q.headDocumentsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing headDocumentsStmt: %w", cerr)
+		}
+	}
+	if q.headExtractionNodesStmt != nil {
+		if cerr := q.headExtractionNodesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing headExtractionNodesStmt: %w", cerr)
+		}
+	}
+	if q.headExtractionsStmt != nil {
+		if cerr := q.headExtractionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing headExtractionsStmt: %w", cerr)
+		}
+	}
+	if q.headRepresentationsStmt != nil {
+		if cerr := q.headRepresentationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing headRepresentationsStmt: %w", cerr)
 		}
 	}
 	if q.insertChunkStmt != nil {
 		if cerr := q.insertChunkStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing insertChunkStmt: %w", cerr)
+		}
+	}
+	if q.retrievalChunksByIDsStmt != nil {
+		if cerr := q.retrievalChunksByIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing retrievalChunksByIDsStmt: %w", cerr)
 		}
 	}
 	return err
@@ -90,19 +226,53 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                  DBTX
-	tx                  *sql.Tx
-	createDocumentStmt  *sql.Stmt
-	getChunksForIDsStmt *sql.Stmt
-	insertChunkStmt     *sql.Stmt
+	db                                      DBTX
+	tx                                      *sql.Tx
+	countChunksStmt                         *sql.Stmt
+	countDocumentsStmt                      *sql.Stmt
+	countExtractionNodesStmt                *sql.Stmt
+	countExtractionsStmt                    *sql.Stmt
+	countRepresentationsStmt                *sql.Stmt
+	createChildRepresentationFromParentStmt *sql.Stmt
+	createDocumentStmt                      *sql.Stmt
+	createExtractionStmt                    *sql.Stmt
+	createExtractionNodeStmt                *sql.Stmt
+	createRepresentationStmt                *sql.Stmt
+	getChunkBatchAfterIDStmt                *sql.Stmt
+	getDocumentIDsAfterIDStmt               *sql.Stmt
+	getLatestExtractionOfDocStmt            *sql.Stmt
+	headChunksStmt                          *sql.Stmt
+	headDocumentsStmt                       *sql.Stmt
+	headExtractionNodesStmt                 *sql.Stmt
+	headExtractionsStmt                     *sql.Stmt
+	headRepresentationsStmt                 *sql.Stmt
+	insertChunkStmt                         *sql.Stmt
+	retrievalChunksByIDsStmt                *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                  tx,
-		tx:                  tx,
-		createDocumentStmt:  q.createDocumentStmt,
-		getChunksForIDsStmt: q.getChunksForIDsStmt,
-		insertChunkStmt:     q.insertChunkStmt,
+		db:                                      tx,
+		tx:                                      tx,
+		countChunksStmt:                         q.countChunksStmt,
+		countDocumentsStmt:                      q.countDocumentsStmt,
+		countExtractionNodesStmt:                q.countExtractionNodesStmt,
+		countExtractionsStmt:                    q.countExtractionsStmt,
+		countRepresentationsStmt:                q.countRepresentationsStmt,
+		createChildRepresentationFromParentStmt: q.createChildRepresentationFromParentStmt,
+		createDocumentStmt:                      q.createDocumentStmt,
+		createExtractionStmt:                    q.createExtractionStmt,
+		createExtractionNodeStmt:                q.createExtractionNodeStmt,
+		createRepresentationStmt:                q.createRepresentationStmt,
+		getChunkBatchAfterIDStmt:                q.getChunkBatchAfterIDStmt,
+		getDocumentIDsAfterIDStmt:               q.getDocumentIDsAfterIDStmt,
+		getLatestExtractionOfDocStmt:            q.getLatestExtractionOfDocStmt,
+		headChunksStmt:                          q.headChunksStmt,
+		headDocumentsStmt:                       q.headDocumentsStmt,
+		headExtractionNodesStmt:                 q.headExtractionNodesStmt,
+		headExtractionsStmt:                     q.headExtractionsStmt,
+		headRepresentationsStmt:                 q.headRepresentationsStmt,
+		insertChunkStmt:                         q.insertChunkStmt,
+		retrievalChunksByIDsStmt:                q.retrievalChunksByIDsStmt,
 	}
 }
