@@ -1,3 +1,6 @@
+###############
+# rag-cli
+###############
 build:
 	#!/usr/bin/env bash
 	set -euxo pipefail
@@ -6,24 +9,35 @@ build:
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
 
-mw: build
-	./main mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
+cleanup:
+	rm -f data/data.db
 
-extract input-dir output-dir: build
-	./main extract -i {{input-dir}} -o {{output-dir}}
+extract input-dir: build
+	./main extract -i {{input-dir}}
 
-chunk input-dir output-dir: build
-	./main chunk -i {{input-dir}} -o {{output-dir}}
+chunk: build
+	./main chunk
 
-embed input-dir output-dir: build
-	./main embed -i {{input-dir}} -o {{output-dir}}
+embed: build
+	./main embed
 
-load-db: build
-	rm -f ./data/data.db*
-	./main load-db
+retrieve user-query: build
+	./main retrieve -q '{{user-query}}'
 
-test: build
-	./main test
+inspect: build
+	./main inspect
 
 serve: build
 	./main serve mcp
+
+
+###############
+# scrape-cli
+###############
+scrape-build:
+	go build -o ./scrape cmd/scrape
+	chmod a+x ./scrape
+
+mw: scrape-build
+	./scrape mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
+

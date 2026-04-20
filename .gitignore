@@ -2,6 +2,7 @@
 build
 data
 main
+scrape
 .kreuzberg
 venv
 .venv

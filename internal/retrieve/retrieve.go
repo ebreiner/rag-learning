@@ -4,9 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"rag/internal/db/normalize"
-	querries "rag/internal/db/retrieve"
 	"rag/internal/embedding"
+	search "rag/internal/platform/sqlite"
 	"sort"
 )
 
@@ -21,7 +20,7 @@ const (
 type Query struct {
 	Query      string
 	normalized string
-	embedding  []float64
+	embedding  []float32
 	Strategy   QueryStrategy
 	K          uint16
 	ctx        context.Context
@@ -30,7 +29,7 @@ type Query struct {
 
 type QueryResult struct {
 	Query   string
-	Results querries.ChunkList
+	Results search.ChunkList
 }
 
 func NewQuery(ctx context.Context, db *sql.DB) Query {
@@ -42,8 +41,8 @@ func NewQuery(ctx context.Context, db *sql.DB) Query {
 
 func (q *Query) Run() (QueryResult, error) {
 	result := QueryResult{}
-	chunkIDs := make(querries.ChunkList)
-	q.normalized = normalize.NormalizeText(q.Query)
+	chunkIDs := make(search.ChunkList)
+	q.normalized = search.NormalizeText(q.Query)
 	var queryErr error
 	switch q.Strategy {
 	case Embedding:
@@ -58,7 +57,7 @@ func (q *Query) Run() (QueryResult, error) {
 	if queryErr != nil {
 		return result, fmt.Errorf("query failed: %s", queryErr.Error())
 	}
-	chunks, err := querries.ChunksForIDs(q.ctx, q.db, chunkIDs)
+	chunks, err := search.ChunksForIDs(q.ctx, q.db, chunkIDs)
 	if err != nil {
 		return result, fmt.Errorf("error retrieving chunks from db: %s", err.Error())
 	}
@@ -67,15 +66,24 @@ func (q *Query) Run() (QueryResult, error) {
 	return result, nil
 }
 
-func (q *Query) byEmbedding() (querries.ChunkList, error) {
-	chunks := make(querries.ChunkList)
+func (q *Query) byEmbedding() (search.ChunkList, error) {
+	chunks := make(search.ChunkList)
 	embedings, err := embedding.EmbedQuery(q.Query)
+	castEmbeddings := make([][]float32, len(embedings))
+	for x := range embedings {
+		castList := make([]float32, len(embedings[x]))
+		for y := range embedings[x] {
+			cast := float32(embedings[x][y])
+			castList = append(castList, cast)
+		}
+		castEmbeddings = append(castEmbeddings, castList)
+	}
 	if err != nil {
 		return chunks, fmt.Errorf("error embedding query: %s", err.Error())
 	}
-	q.embedding = embedings[0]
+	q.embedding = castEmbeddings[0]
 
-	chunks, err = querries.TopKByVec(q.db, 25, q.embedding, q.ctx)
+	chunks, err = search.TopKByVec(q.db, 25, q.embedding, q.ctx)
 	if err != nil {
 		return chunks, fmt.Errorf("error running ann: %s", err.Error())
 	} else {
@@ -83,8 +91,8 @@ func (q *Query) byEmbedding() (querries.ChunkList, error) {
 	}
 }
 
-func (q *Query) byFTS() (querries.ChunkList, error) {
-	chunks, err := querries.TopKByFts(q.db, q.K, q.normalized, q.ctx)
+func (q *Query) byFTS() (search.ChunkList, error) {
+	chunks, err := search.TopKByFts(q.db, q.K, q.normalized, q.ctx)
 	if err != nil {
 		return chunks, fmt.Errorf("error running fts: %s", err.Error())
 	} else {
@@ -92,8 +100,8 @@ func (q *Query) byFTS() (querries.ChunkList, error) {
 	}
 }
 
-func (q *Query) byHybrid() (querries.ChunkList, error) {
-	chunks := make(querries.ChunkList)
+func (q *Query) byHybrid() (search.ChunkList, error) {
+	chunks := make(search.ChunkList)
 	// Increase candidate pool for RRF with score from fts and distance from embedding
 	var kRRF uint16
 	kRRF = q.K * 4
@@ -119,15 +127,15 @@ func (q *Query) CutQueryString() string {
 	return q.Query[:50]
 }
 
-func doRFF(fts, ann querries.ChunkList, kRRF uint16) querries.ChunkList {
+func doRFF(fts, ann search.ChunkList, kRRF uint16) search.ChunkList {
 	type scoredChunk struct {
-		chunk querries.Chunk
+		chunk search.Chunk
 		score float64
 	}
 	scores := map[int64]*scoredChunk{}
 
 	// Helper to add RRF score from one list
-	addScores := func(list querries.ChunkList) {
+	addScores := func(list search.ChunkList) {
 		for rank, c := range list {
 			if _, ok := scores[c.ID]; !ok {
 				// copy struct to avoid overwriting original
@@ -158,7 +166,7 @@ func doRFF(fts, ann querries.ChunkList, kRRF uint16) querries.ChunkList {
 	// Define threshold for don't being to confident when we're not
 	threshold := 1.0 / 60 / 5
 	// Build output ChunkList, update rank
-	output := make(querries.ChunkList, len(resultSlice))
+	output := make(search.ChunkList, len(resultSlice))
 	for i, chunk := range resultSlice {
 		if chunk.score < threshold {
 			break

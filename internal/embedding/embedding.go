@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"rag/internal/types"
+	"rag/internal/ingest"
 	"rag/internal/writer"
 	"sync"
 )
@@ -55,7 +55,7 @@ func EmbedInputDir(inputDir, outputDir string) error {
 				errChan <- writer.WriteError{OutputPath: entry.Name(), Err: fmt.Sprintf("error reading file %s: %s", entry.Name(), err.Error())}
 				return
 			}
-			var doc types.Document
+			var doc ingest.Document
 			if err := json.Unmarshal(content, &doc); err != nil {
 				errChan <- writer.WriteError{OutputPath: entry.Name(), Err: fmt.Sprintf("cannot unmarshal json from %s: %s", entry.Name(), err.Error())}
 				return
@@ -146,7 +146,7 @@ func embedStrings(inputs []embedding) ([]embedding, error) {
 	return embeddings, nil
 }
 
-func embedDoc(doc types.Document, resultChan chan writer.ResultMessage, errChan chan writer.WriteError) {
+func embedDoc(doc ingest.Document, resultChan chan writer.ResultMessage, errChan chan writer.WriteError) {
 	errHelper := func(errString string) {
 		errChan <- writer.WriteError{
 			Err: errString,
@@ -174,7 +174,7 @@ func embedDoc(doc types.Document, resultChan chan writer.ResultMessage, errChan 
 		}
 	}
 
-	var docs []types.Document
+	var docs []ingest.Document
 	docs = append(docs, doc)
 
 	resultChan <- writer.ResultMessage{Documents: docs, FileExtension: "jsonl"}
