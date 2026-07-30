@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"rag/cmd/cli/cmd"
+	"rag/internal/platform/config"
 
 	"github.com/spf13/cobra"
 )
@@ -14,13 +15,13 @@ func NewRootCmd() *cobra.Command {
 		Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application`,
 	}
+	config.RegisterFlags(root.PersistentFlags(), config.GlobalsList())
 
 	return root
 }
 
 func Execute() {
 	rootCmd := NewRootCmd()
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.AddCommand(
 		cmd.NewExtractionCmd(),

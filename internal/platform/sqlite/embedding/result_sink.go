@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"rag/internal/embedding/step"
-	"rag/internal/platform/sqlite"
 )
 
 type ResultSink struct {
@@ -15,12 +14,8 @@ type ResultSink struct {
 	ctx      context.Context
 }
 
-func NewEmbedingsResultSink(ctx context.Context) (ResultSink, error) {
+func NewEmbedingsResultSink(db *sql.DB, ctx context.Context) (ResultSink, error) {
 	sink := ResultSink{}
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return sink, err
-	}
 	sink.dbClient = db
 	sink.ctx = ctx
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/querries"
 	"rag/internal/retrieval/step"
 )
@@ -15,13 +14,8 @@ type ChunkHydrator struct {
 	ctx context.Context
 }
 
-func NewChunkHydrator(ctx context.Context) (ChunkHydrator, error) {
+func NewChunkHydrator(db *sql.DB, ctx context.Context) (ChunkHydrator, error) {
 	hydrator := ChunkHydrator{}
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return hydrator, err
-	}
-
 	hydrator.db = db
 	hydrator.ctx = ctx
 	hydrator.q = querries.New(hydrator.db)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"rag/internal/inspect"
+	"rag/internal/platform/config"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/chunk"
 	"rag/internal/platform/sqlite/documents"
@@ -24,6 +25,12 @@ func NewInspectCmd() *cobra.Command {
 		Long: `Dump some rows of the specified result type or print stats about the result types.
 	`,
 		Run: func(cmd *cobra.Command, args []string) {
+			globals := config.GlobalOptions
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+
 			typeFlag := cmd.Flag("type")
 			resultType := typeFlag.Value.String()
 
@@ -41,7 +48,7 @@ func NewInspectCmd() *cobra.Command {
 			if err != nil {
 				log.Fatalf(err.Error())
 			}
-			err = runInspect(runStats, limit, format, resultType)
+			err = runInspect(runStats, limit, format, dbPath, resultType)
 			if err != nil {
 				log.Fatalf("error running inspector: %s", err.Error())
 			}
@@ -54,11 +61,10 @@ func NewInspectCmd() *cobra.Command {
 	inspectCmd.Flags().Bool("stats", false, "stats")
 
 	return inspectCmd
-
 }
 
-func runInspect(runStats bool, limit int, format string, resultType string) error {
-	inspector, err := newInspector(resultType, limit, format)
+func runInspect(runStats bool, limit int, format, dbPath, resultType string) error {
+	inspector, err := newInspector(limit, dbPath, resultType, format)
 	if err != nil {
 		return err
 	}
@@ -95,11 +101,11 @@ func stats(inspector inspect.Inspector) error {
 	return nil
 }
 
-func newInspector(resultType string, limit int, format string) (inspect.Inspector, error) {
+func newInspector(limit int, dbPath, resultType, format string) (inspect.Inspector, error) {
 	ctx := context.Background()
 	var inspector inspect.Inspector
 
-	db, err := sqlite.NewConn()
+	db, err := sqlite.NewConn(dbPath)
 	if err != nil {
 		return inspector, err
 	}

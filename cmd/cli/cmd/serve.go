@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient"
+	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/retrieval/step"
 
@@ -19,7 +22,22 @@ func NewServeCmd() *cobra.Command {
 		Use:   "mcp",
 		Short: "serve hybrid retrieval mcp",
 		Run: func(cmd *cobra.Command, args []string) {
-			serveMCP()
+			globals := config.GlobalOptions
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			db, err := sqlite.NewConn(dbPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			serveMCP(db, xbergBaseURL)
 		},
 	}
 
@@ -51,7 +69,7 @@ to quickly create a Cobra application.`,
 	return serveCmd
 }
 
-func serveMCP() {
+func serveMCP(db *sql.DB, xbergBaseURL string) {
 	s := server.NewMCPServer(
 		"rag",
 		"0.0.1",
@@ -87,17 +105,17 @@ func serveMCP() {
 		}
 		fmt.Printf("k: %d, query: %s", k, retrievalQuery)
 
-		hydrator, err := retrieval.NewChunkHydrator(ctx)
+		hydrator, err := retrieval.NewChunkHydrator(db, ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		retriever, err := retrieval.NewSQLiteRetriever(ctx)
+		retriever, err := retrieval.NewSQLiteRetriever(db, ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		client, err := embedclient.NewKreuzbergClient()
+		client, err := embedclient.NewKreuzbergClient(xbergBaseURL)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

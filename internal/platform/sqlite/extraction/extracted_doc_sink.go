@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"rag/internal/extract/step"
-	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/querries"
 	"time"
 )
@@ -18,12 +17,8 @@ type ExtractedDocSink struct {
 	ctx      context.Context
 }
 
-func NewExtractedDocSink(ctx context.Context) (ExtractedDocSink, error) {
+func NewExtractedDocSink(db *sql.DB, ctx context.Context) (ExtractedDocSink, error) {
 	sink := ExtractedDocSink{}
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return sink, err
-	}
 	sink.dbClient = db
 	sink.ctx = ctx
 

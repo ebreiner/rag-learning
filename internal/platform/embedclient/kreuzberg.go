@@ -6,12 +6,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
-type ClientKreuzberg struct{}
+type ClientKreuzberg struct {
+	BaseURL string
+}
 
-func NewKreuzbergClient() (ClientKreuzberg, error) {
-	return ClientKreuzberg{}, nil
+func NewKreuzbergClient(xbergBaseURL string) (ClientKreuzberg, error) {
+	client := ClientKreuzberg{}
+	if _, err := url.Parse(xbergBaseURL); err != nil {
+		return client, err
+	}
+	client.BaseURL = xbergBaseURL
+
+	return client, nil
 }
 
 func (c ClientKreuzberg) Embed(texts []string) ([][]float64, error) {
@@ -27,7 +36,7 @@ func (c ClientKreuzberg) Embed(texts []string) ([][]float64, error) {
 	if err != nil {
 		return embeddings, fmt.Errorf("error marshaling payload: %s", err.Error())
 	}
-	httpResp, err := http.Post("http://127.0.0.1:8000/embed", "application/json", bytes.NewBufferString(string(bytePayload)))
+	httpResp, err := http.Post(c.BaseURL+"/embed", "application/json", bytes.NewBufferString(string(bytePayload)))
 	if err != nil {
 		return embeddings, fmt.Errorf("error received for embedding request: %s", err.Error())
 	}
@@ -49,6 +58,7 @@ func (c ClientKreuzberg) Embed(texts []string) ([][]float64, error) {
 		Model      string      `json:"model"`
 		Dimension  int32       `json:"dimensions"`
 	}
+
 	if err := json.Unmarshal(body, &embedResp); err != nil {
 		return embeddings, fmt.Errorf("cannot unmarshal embedding response: %s", err.Error())
 	}

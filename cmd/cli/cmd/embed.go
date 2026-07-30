@@ -4,7 +4,9 @@ import (
 	"context"
 	"log"
 	"rag/internal/embedding/step"
+	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient"
+	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/embedding"
 
 	"github.com/spf13/cobra"
@@ -22,16 +24,32 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := context.Background()
-			sink, err := embedding.NewEmbedingsResultSink(ctx)
+
+			globals := config.GlobalOptions
+			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			db, err := sqlite.NewConn(dbPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			sink, err := embedding.NewEmbedingsResultSink(db, ctx)
 			if err != nil {
 				log.Fatal(err.Error())
 			}
-			chunkSource, err := embedding.NewChunkSource(ctx)
+			chunkSource, err := embedding.NewChunkSource(db, ctx)
 			source := &chunkSource
 			if err != nil {
 				log.Fatal(err.Error())
 			}
-			client, err := embedclient.NewKreuzbergClient()
+			client, err := embedclient.NewKreuzbergClient(xbergBaseURL)
 			if err != nil {
 				log.Fatal(err.Error())
 			}
@@ -42,9 +60,6 @@ to quickly create a Cobra application.`,
 			}
 		},
 	}
-
-	embedCmd.Flags().StringP("input-dir", "i", "./data/input", "--input-dir")
-	embedCmd.Flags().StringP("output-dir", "o", "./data/output", "--output-dir")
 
 	return embedCmd
 }

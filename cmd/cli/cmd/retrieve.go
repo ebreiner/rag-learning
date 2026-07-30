@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient"
+	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/retrieval/step"
 
@@ -26,13 +29,29 @@ to quickly create a Cobra application.`,
 			userQueryFlag := cmd.Flag("query")
 			userQuery := userQueryFlag.Value.String()
 			if len(userQuery) == 0 {
-				log.Fatalf("Missing query string --query 'query string'")
+				log.Fatal("Missing query string --query 'query string'")
+			}
+
+			globals := config.GlobalOptions
+			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			db, err := sqlite.NewConn(dbPath)
+			if err != nil {
+				log.Fatal(err)
 			}
 
 			retrievalTypeFlag := cmd.Flag("retrieval-type")
 			retrievalType := retrievalTypeFlag.Value.String()
 
-			err := retrieveChunks(userQuery, retrievalType)
+			err = retrieveChunks(db, xbergBaseURL, userQuery, retrievalType)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -45,7 +64,7 @@ to quickly create a Cobra application.`,
 	return retrieveCmd
 }
 
-func retrieveChunks(query, retrievalType string) error {
+func retrieveChunks(db *sql.DB, xbergURL, query, retrievalType string) error {
 	var strategy step.RetrievalStrategy
 	switch retrievalType {
 	case "fts":
@@ -59,17 +78,17 @@ func retrieveChunks(query, retrievalType string) error {
 	}
 
 	ctx := context.Background()
-	hydrator, err := retrieval.NewChunkHydrator(ctx)
+	hydrator, err := retrieval.NewChunkHydrator(db, ctx)
 	if err != nil {
 		return err
 	}
 
-	retriever, err := retrieval.NewSQLiteRetriever(ctx)
+	retriever, err := retrieval.NewSQLiteRetriever(db, ctx)
 	if err != nil {
 		return err
 	}
 
-	client, err := embedclient.NewKreuzbergClient()
+	client, err := embedclient.NewKreuzbergClient(xbergURL)
 	if err != nil {
 		return err
 	}
