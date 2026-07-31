@@ -46,7 +46,7 @@ func NewInspectCmd() *cobra.Command {
 
 			runStats, err := cmd.Flags().GetBool("stats")
 			if err != nil {
-				log.Fatalf(err.Error())
+				log.Fatal(err)
 			}
 			err = runInspect(runStats, limit, format, dbPath, resultType)
 			if err != nil {
@@ -61,6 +61,7 @@ func NewInspectCmd() *cobra.Command {
 	inspectCmd.Flags().Bool("stats", false, "stats")
 
 	return inspectCmd
+
 }
 
 func runInspect(runStats bool, limit int, format, dbPath, resultType string) error {
