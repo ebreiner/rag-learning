@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -13,6 +14,7 @@ type Option struct {
 	FlagLong  string
 	FlagShort string
 	FlagUsage string
+	IsPath    bool
 }
 
 type Globals struct {
@@ -22,9 +24,9 @@ type Globals struct {
 }
 
 var GlobalOptions = Globals{
-	XBergURL: Option{FlagLong: "xberg-url", FlagUsage: "--xberg-url https://stuff.foo.net/kreuzberg", Default: "http://localhost:8000"},
-	DBPath:   Option{FlagLong: "db-path", FlagUsage: "--db-path /path/to/db", Default: "./data.db"},
-	LogPath:  Option{FlagLong: "log-path", FlagUsage: "--log-path /path/to/foo.log", Default: "./rag-cli.log"},
+	XBergURL: Option{FlagLong: "xberg-url", FlagUsage: "--xberg-url https://stuff.foo.net/kreuzberg", Default: "http://localhost:8000", IsPath: false},
+	DBPath:   Option{FlagLong: "db-path", FlagUsage: "--db-path /path/to/db", Default: "./data.db", IsPath: true},
+	LogPath:  Option{FlagLong: "log-path", FlagUsage: "--log-path /path/to/foo.log", Default: "./rag-cli.log", IsPath: true},
 }
 
 func GlobalsList() []Option {
@@ -56,8 +58,27 @@ func ResolveGlobal(cmd *cobra.Command, option Option) (string, error) {
 		if value == "" {
 			return value, fmt.Errorf("empty flag '%s'", option.FlagLong)
 		}
-		return value, nil
 	} else {
-		return option.Default, nil
+		value = option.Default
+	}
+
+	if option.IsPath {
+		abs, err := resolvePath(value)
+		if err != nil {
+			return "", err
+		}
+
+		value = abs
+	}
+
+	return value, nil
+}
+
+func resolvePath(toResolve string) (string, error) {
+	abs, err := filepath.Abs(toResolve)
+	if err != nil {
+		return "", err
+	} else {
+		return abs, nil
 	}
 }
