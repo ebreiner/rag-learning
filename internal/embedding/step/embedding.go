@@ -5,7 +5,7 @@ import (
 )
 
 // TODO: remove all empty string skipping or make it representabl in db, if not removable fully in extractio
-func Embed(sink EmbedingsSink, source ChunkSource, client EmbedClient) error {
+func Embed(sink EmbeddingsSink, source ChunkSource, client EmbedClient) error {
 	var limit int64 = 10
 
 	for {

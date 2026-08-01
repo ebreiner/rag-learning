@@ -14,7 +14,7 @@ type ResultSink struct {
 	ctx      context.Context
 }
 
-func NewEmbedingsResultSink(db *sql.DB, ctx context.Context) (ResultSink, error) {
+func NewEmbeddingsResultSink(db *sql.DB, ctx context.Context) (ResultSink, error) {
 	sink := ResultSink{}
 	sink.dbClient = db
 	sink.ctx = ctx
@@ -27,6 +27,7 @@ func (s ResultSink) SaveEmbeddings(embeddings []step.EmbeddingToSave) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 
 	for _, embedding := range embeddings {
 		packed, err := packEmbedding(embedding.Vector)

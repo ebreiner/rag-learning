@@ -69,20 +69,26 @@ func sendDocToKreuzberg(sourceDoc step.SourceDoc, baseURL string) ([]byte, error
 		return result, err
 	}
 
-	req, err := http.NewRequest("POST", baseURL+"/extract", form)
+	extractURL, err := url.Parse(baseURL)
+	if err != nil {
+		return result, err
+	}
+	extractURL = extractURL.JoinPath("/extract")
+	req, err := http.NewRequest("POST", extractURL.String(), form)
 	if err != nil {
 		return result, err
 	}
 
 	req.Header.Set("Content-Type", contentType)
-	http.DefaultClient.Timeout = time.Second * 30
+	client := http.Client{}
+	client.Timeout = time.Second * 30
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return result, err
 	}
 	if resp.StatusCode != 200 {
-		return result, err
+		return result, fmt.Errorf("extraction failed: non 200 response code for extraction request")
 	}
 
 	result, err = io.ReadAll(resp.Body)
