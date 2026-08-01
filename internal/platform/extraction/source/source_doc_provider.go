@@ -51,9 +51,7 @@ func (s *DocSource) NextSourceDoc() (step.SourceDoc, error) {
 	if err != nil {
 		return doc, err
 	}
-	additional := make(map[string]string)
-	additional["content_sha256"] = hash
-	doc.Additional = additional
+	doc.SHA256 = hash
 	doc.Name = name
 	doc.SourcePath = s.InputPaths[s.Index]
 	s.Index++

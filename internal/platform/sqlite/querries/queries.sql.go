@@ -113,9 +113,10 @@ const createDocument = `-- name: CreateDocument :one
 INSERT INTO documents (
 	created_at,
 	name,
+	sha256,
 	metadata_json
 ) VALUES (
-	?,?,?
+	?,?,?,?
 )
 RETURNING id
 `
@@ -123,12 +124,18 @@ RETURNING id
 type CreateDocumentParams struct {
 	CreatedAt    time.Time
 	Name         string
+	Sha256       string
 	MetadataJson sql.NullString
 }
 
 // TODO: in pakete auftrennen
 func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) (int64, error) {
-	row := q.queryRow(ctx, q.createDocumentStmt, createDocument, arg.CreatedAt, arg.Name, arg.MetadataJson)
+	row := q.queryRow(ctx, q.createDocumentStmt, createDocument,
+		arg.CreatedAt,
+		arg.Name,
+		arg.Sha256,
+		arg.MetadataJson,
+	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -240,6 +247,24 @@ func (q *Queries) CreateRepresentation(ctx context.Context, arg CreateRepresenta
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const existsDocument = `-- name: ExistsDocument :one
+SELECT  id, sha256
+FROM documents
+WHERE sha256 = ?
+`
+
+type ExistsDocumentRow struct {
+	ID     int64
+	Sha256 string
+}
+
+func (q *Queries) ExistsDocument(ctx context.Context, sha256 string) (ExistsDocumentRow, error) {
+	row := q.queryRow(ctx, q.existsDocumentStmt, existsDocument, sha256)
+	var i ExistsDocumentRow
+	err := row.Scan(&i.ID, &i.Sha256)
+	return i, err
 }
 
 const getChunkBatchAfterID = `-- name: GetChunkBatchAfterID :many
@@ -448,7 +473,7 @@ func (q *Queries) HeadChunks(ctx context.Context, limit int64) ([]Chunk, error) 
 }
 
 const headDocuments = `-- name: HeadDocuments :many
-SELECT id, created_at, name, metadata_json
+SELECT id, created_at, name, sha256, metadata_json
 FROM documents
 ORDER BY id
 LIMIT ?
@@ -467,6 +492,7 @@ func (q *Queries) HeadDocuments(ctx context.Context, limit int64) ([]Document, e
 			&i.ID,
 			&i.CreatedAt,
 			&i.Name,
+			&i.Sha256,
 			&i.MetadataJson,
 		); err != nil {
 			return nil, err

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY,
   created_at DATETIME NOT NULL,
   name TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
   metadata_json TEXT,
 
   CHECK(metadata_json IS NULL OR json_valid(metadata_json))

@@ -22,6 +22,7 @@ type Document struct {
 	ID           int64
 	CreatedAt    time.Time
 	Name         string
+	Sha256       string
 	MetadataJson sql.NullString
 }
 

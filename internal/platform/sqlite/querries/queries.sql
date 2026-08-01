@@ -4,11 +4,17 @@
 INSERT INTO documents (
 	created_at,
 	name,
+	sha256,
 	metadata_json
 ) VALUES (
-	?,?,?
+	?,?,?,?
 )
 RETURNING id;
+
+-- name: ExistsDocument :one
+SELECT  id, sha256
+FROM documents
+WHERE sha256 = ?;
 
 
 -- name: CreateRepresentation :one
