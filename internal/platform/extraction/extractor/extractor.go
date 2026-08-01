@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"rag/internal/extract/step"
@@ -14,16 +15,23 @@ import (
 )
 
 type KreuzbergExtractor struct {
+	BaseURL string
 }
 
-func NewKreuzbergExtractor() (KreuzbergExtractor, error) {
-	return KreuzbergExtractor{}, nil
+func NewKreuzbergExtractor(xbergURL string) (KreuzbergExtractor, error) {
+	extractor := KreuzbergExtractor{}
+	_, err := url.Parse(xbergURL)
+	if err != nil {
+		return extractor, err
+	}
+	extractor.BaseURL = xbergURL
+	return extractor, nil
 }
 
 func (e *KreuzbergExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.ExtractedDoc, error) {
 	extDoc := step.ExtractedDoc{}
 
-	body, err := sendDocToKreuzberg(sourceDoc)
+	body, err := sendDocToKreuzberg(sourceDoc, e.BaseURL)
 	if err != nil {
 		return extDoc, err
 	}
@@ -54,14 +62,14 @@ func (e *KreuzbergExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.Ex
 	return extDoc, nil
 }
 
-func sendDocToKreuzberg(sourceDoc step.SourceDoc) ([]byte, error) {
+func sendDocToKreuzberg(sourceDoc step.SourceDoc, baseURL string) ([]byte, error) {
 	var result []byte
 	contentType, form, err := encodeIntoForm(sourceDoc.SourcePath)
 	if err != nil {
 		return result, err
 	}
 
-	req, err := http.NewRequest("POST", "http://127.0.0.1:8000/extract", form)
+	req, err := http.NewRequest("POST", baseURL+"/extract", form)
 	if err != nil {
 		return result, err
 	}

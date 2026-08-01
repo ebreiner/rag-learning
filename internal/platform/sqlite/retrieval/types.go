@@ -3,7 +3,6 @@ package retrieval
 import (
 	"context"
 	"database/sql"
-	"rag/internal/platform/sqlite"
 )
 
 type SQLiteRetriever struct {
@@ -11,14 +10,8 @@ type SQLiteRetriever struct {
 	db  *sql.DB
 }
 
-func NewSQLiteRetriever(ctx context.Context) (SQLiteRetriever, error) {
+func NewSQLiteRetriever(db *sql.DB, ctx context.Context) (SQLiteRetriever, error) {
 	retriever := SQLiteRetriever{ctx: ctx}
-
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return retriever, err
-	}
 	retriever.db = db
-
 	return retriever, nil
 }

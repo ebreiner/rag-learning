@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"rag/internal/chunk/step"
-	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/querries"
 	"time"
 )
@@ -16,12 +15,8 @@ type ResultSink struct {
 	ctx      context.Context
 }
 
-func NewResultSink(ctx context.Context) (ResultSink, error) {
+func NewResultSink(db *sql.DB, ctx context.Context) (ResultSink, error) {
 	store := ResultSink{}
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return store, err
-	}
 	store.dbClient = db
 	store.ctx = ctx
 

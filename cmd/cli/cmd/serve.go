@@ -1,11 +1,14 @@
-package cli
+package cmd
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient"
+	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/retrieval/step"
 
@@ -14,43 +17,59 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var serveCmd = &cobra.Command{
-	Use:   "serve",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
+func NewServeCmd() *cobra.Command {
+	mcpCmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "serve hybrid retrieval mcp",
+		Run: func(cmd *cobra.Command, args []string) {
+			globals := config.GlobalOptions
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			db, err := sqlite.NewConn(dbPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			serveMCP(db, xbergBaseURL)
+		},
+	}
+
+	openAPICmd := &cobra.Command{
+		Use:   "open-api",
+		Short: "serve hybrid retrieval as open api http",
+		Long:  "this could be an open api for hybrid retrieval, but it's not implemented yet.",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("serve open-api called")
+		},
+	}
+
+	serveCmd := &cobra.Command{
+		Use:   "serve",
+		Short: "A brief description of your command",
+		Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("call 'serve mcp' or 'serve open-api'")
-	},
-}
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("call 'serve mcp' or 'serve open-api'")
+		},
+	}
 
-var mcpCmd = &cobra.Command{
-	Use:   "mcp",
-	Short: "serve hybrid retrieval mcp",
-	Run: func(cmd *cobra.Command, args []string) {
-		serveMCP()
-	},
-}
-
-var openAPICmd = &cobra.Command{
-	Use:   "open-api",
-	Short: "serve hybrid retrieval as open api http",
-	Long:  "this could be an open api for hybrid retrieval, but it's not implemented yet.",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("serve open-api called")
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(serveCmd)
 	serveCmd.AddCommand(openAPICmd, mcpCmd)
+
+	return serveCmd
 }
 
-func serveMCP() {
+func serveMCP(db *sql.DB, xbergBaseURL string) {
 	s := server.NewMCPServer(
 		"rag",
 		"0.0.1",
@@ -86,17 +105,17 @@ func serveMCP() {
 		}
 		fmt.Printf("k: %d, query: %s", k, retrievalQuery)
 
-		hydrator, err := retrieval.NewChunkHydrator(ctx)
+		hydrator, err := retrieval.NewChunkHydrator(db, ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		retriever, err := retrieval.NewSQLiteRetriever(ctx)
+		retriever, err := retrieval.NewSQLiteRetriever(db, ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		client, err := embedclient.NewKreuzbergClient()
+		client, err := embedclient.NewKreuzbergClient(xbergBaseURL)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

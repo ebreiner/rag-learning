@@ -2,28 +2,38 @@ package cli
 
 import (
 	"os"
+	"rag/cmd/cli/cmd"
+	"rag/internal/platform/config"
 
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "rag",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+func NewRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "rag-cli",
+		Short: "A brief description of your application",
+		Long: `A longer description that spans multiple lines and likely contains
+examples and usage of using your application`,
+	}
+	config.RegisterFlags(root.PersistentFlags(), config.GlobalsList())
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	return root
 }
 
 func Execute() {
+	rootCmd := NewRootCmd()
+
+	rootCmd.AddCommand(
+		cmd.NewExtractionCmd(),
+		cmd.NewChunkCmd(),
+		cmd.NewEmbedCmd(),
+		cmd.NewRetrieveCmd(),
+		cmd.NewInspectCmd(),
+		cmd.NewServeCmd(),
+	)
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func init() {
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

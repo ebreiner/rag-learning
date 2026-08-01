@@ -18,6 +18,7 @@ type ExtractedDoc struct {
 	Nodes    []Node
 }
 
+// TODO: decouple from kreuzberg completly
 type Node struct {
 	ID              string
 	NodeType        string

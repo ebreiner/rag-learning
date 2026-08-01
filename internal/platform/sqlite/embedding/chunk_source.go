@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"rag/internal/embedding/step"
-	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/querries"
 )
 
@@ -15,12 +14,8 @@ type ChunksSource struct {
 	lastID   int64
 }
 
-func NewChunkSource(ctx context.Context) (ChunksSource, error) {
+func NewChunkSource(db *sql.DB, ctx context.Context) (ChunksSource, error) {
 	source := ChunksSource{}
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return source, err
-	}
 	source.dbClient = db
 	source.ctx = ctx
 	source.lastID = 0

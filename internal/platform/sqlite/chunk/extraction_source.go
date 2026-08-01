@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"rag/internal/chunk/step"
-	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/querries"
 )
 
@@ -17,12 +16,8 @@ type ExtractedDocSource struct {
 	lastID   int64
 }
 
-func NewExtractedDocSource(ctx context.Context) (ExtractedDocSource, error) {
+func NewExtractedDocSource(db *sql.DB, ctx context.Context) (ExtractedDocSource, error) {
 	source := ExtractedDocSource{}
-	db, err := sqlite.NewConn()
-	if err != nil {
-		return source, err
-	}
 	source.dbClient = db
 	source.ctx = ctx
 

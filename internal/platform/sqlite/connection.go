@@ -9,9 +9,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func NewConn() (*sql.DB, error) {
+func NewConn(dbPath string) (*sql.DB, error) {
 	sqlite_vec.Auto()
-	db, err := sql.Open("sqlite3", "file:./data/data.db")
+	db, err := sql.Open("sqlite3", "file:"+dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("erro opening db connection: %s", err.Error())
 	} else {

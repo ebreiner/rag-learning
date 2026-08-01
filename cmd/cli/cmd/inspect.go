@@ -1,10 +1,11 @@
-package cli
+package cmd
 
 import (
 	"context"
 	"fmt"
 	"log"
 	"rag/internal/inspect"
+	"rag/internal/platform/config"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/chunk"
 	"rag/internal/platform/sqlite/documents"
@@ -17,46 +18,54 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var inspectCmd = &cobra.Command{
-	Use:   "inspect",
-	Short: "dumps result rows a result type like chunk",
-	Long: `Dump some rows of the specified result type or print stats about the result types.
+func NewInspectCmd() *cobra.Command {
+	inspectCmd := &cobra.Command{
+		Use:   "inspect",
+		Short: "dumps result rows a result type like chunk",
+		Long: `Dump some rows of the specified result type or print stats about the result types.
 	`,
-	Run: func(cmd *cobra.Command, args []string) {
-		typeFlag := cmd.Flag("type")
-		resultType := typeFlag.Value.String()
+		Run: func(cmd *cobra.Command, args []string) {
+			globals := config.GlobalOptions
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		formatFlag := cmd.Flag("format")
-		format := formatFlag.Value.String()
+			typeFlag := cmd.Flag("type")
+			resultType := typeFlag.Value.String()
 
-		limitFlag := cmd.Flag("limit")
-		limitString := limitFlag.Value.String()
-		limit, err := strconv.Atoi(limitString)
-		if err != nil {
-			log.Fatalf("error parsing limit flag to int: %s", err)
-		}
+			formatFlag := cmd.Flag("format")
+			format := formatFlag.Value.String()
 
-		runStats, err := cmd.Flags().GetBool("stats")
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
-		err = runInspect(runStats, limit, format, resultType)
-		if err != nil {
-			log.Fatalf("error running inspector: %s", err.Error())
-		}
-	},
-}
+			limitFlag := cmd.Flag("limit")
+			limitString := limitFlag.Value.String()
+			limit, err := strconv.Atoi(limitString)
+			if err != nil {
+				log.Fatalf("error parsing limit flag to int: %s", err)
+			}
 
-func init() {
-	rootCmd.AddCommand(inspectCmd)
+			runStats, err := cmd.Flags().GetBool("stats")
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = runInspect(runStats, limit, format, dbPath, resultType)
+			if err != nil {
+				log.Fatalf("error running inspector: %s", err.Error())
+			}
+		},
+	}
+
 	inspectCmd.Flags().StringP("type", "t", "chunk", "--type doc|representation|chunk|embed|extraction|extraction-node")
 	inspectCmd.Flags().StringP("format", "f", "jsonl", "--format json|jsonl")
 	inspectCmd.Flags().IntP("limit", "l", 25, "integer")
 	inspectCmd.Flags().Bool("stats", false, "stats")
+
+	return inspectCmd
+
 }
 
-func runInspect(runStats bool, limit int, format string, resultType string) error {
-	inspector, err := newInspector(resultType, limit, format)
+func runInspect(runStats bool, limit int, format, dbPath, resultType string) error {
+	inspector, err := newInspector(limit, dbPath, resultType, format)
 	if err != nil {
 		return err
 	}
@@ -93,11 +102,11 @@ func stats(inspector inspect.Inspector) error {
 	return nil
 }
 
-func newInspector(resultType string, limit int, format string) (inspect.Inspector, error) {
+func newInspector(limit int, dbPath, resultType, format string) (inspect.Inspector, error) {
 	ctx := context.Background()
 	var inspector inspect.Inspector
 
-	db, err := sqlite.NewConn()
+	db, err := sqlite.NewConn(dbPath)
 	if err != nil {
 		return inspector, err
 	}
