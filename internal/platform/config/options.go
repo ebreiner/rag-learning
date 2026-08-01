@@ -63,7 +63,7 @@ func ResolveGlobal(cmd *cobra.Command, option Option) (string, error) {
 	}
 
 	if option.IsPath {
-		abs, err := resolvePath(value)
+		abs, err := ResolvePath(value)
 		if err != nil {
 			return "", err
 		}
@@ -74,7 +74,7 @@ func ResolveGlobal(cmd *cobra.Command, option Option) (string, error) {
 	return value, nil
 }
 
-func resolvePath(toResolve string) (string, error) {
+func ResolvePath(toResolve string) (string, error) {
 	abs, err := filepath.Abs(toResolve)
 	if err != nil {
 		return "", err

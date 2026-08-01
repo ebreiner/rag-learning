@@ -11,15 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"rag/internal/extract/step"
-	"time"
 )
 
 type KreuzbergExtractor struct {
 	BaseURL string
+	Client  *http.Client
 }
 
-func NewKreuzbergExtractor(xbergURL string) (KreuzbergExtractor, error) {
-	extractor := KreuzbergExtractor{}
+func NewKreuzbergExtractor(xbergURL string, client *http.Client) (KreuzbergExtractor, error) {
+	extractor := KreuzbergExtractor{Client: client}
 	_, err := url.Parse(xbergURL)
 	if err != nil {
 		return extractor, err
@@ -31,7 +31,7 @@ func NewKreuzbergExtractor(xbergURL string) (KreuzbergExtractor, error) {
 func (e *KreuzbergExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.ExtractedDoc, error) {
 	extDoc := step.ExtractedDoc{}
 
-	body, err := sendDocToKreuzberg(sourceDoc, e.BaseURL)
+	body, err := e.sendDocToKreuzberg(sourceDoc, e.BaseURL)
 	if err != nil {
 		return extDoc, err
 	}
@@ -62,7 +62,7 @@ func (e *KreuzbergExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.Ex
 	return extDoc, nil
 }
 
-func sendDocToKreuzberg(sourceDoc step.SourceDoc, baseURL string) ([]byte, error) {
+func (e *KreuzbergExtractor) sendDocToKreuzberg(sourceDoc step.SourceDoc, baseURL string) ([]byte, error) {
 	var result []byte
 	contentType, form, err := encodeIntoForm(sourceDoc.SourcePath)
 	if err != nil {
@@ -80,10 +80,8 @@ func sendDocToKreuzberg(sourceDoc step.SourceDoc, baseURL string) ([]byte, error
 	}
 
 	req.Header.Set("Content-Type", contentType)
-	client := http.Client{}
-	client.Timeout = time.Second * 30
 
-	resp, err := client.Do(req)
+	resp, err := e.Client.Do(req)
 	if err != nil {
 		return result, err
 	}
