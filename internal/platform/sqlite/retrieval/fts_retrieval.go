@@ -23,28 +23,30 @@ func (r *SQLiteRetriever) TopKByFTS(query string, k int64) (step.RetrievedChunkI
 	// Schadet nicht und kann Präzison erhöhen
 	terms = append(terms, query)
 	matchTerm := ""
+	quote := func(s string) string {
+		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	}
 	for idx, el := range terms {
 		if idx == len(terms)-1 {
-			matchTerm = matchTerm + fmt.Sprintf("%s'", el)
+			matchTerm = matchTerm + quote(el)
 			continue
 		}
 		if idx == 0 {
-			matchTerm = fmt.Sprintf("'%s OR ", el)
+			matchTerm = quote(el) + " OR "
 			continue
 		}
 
-		matchTerm = matchTerm + fmt.Sprintf("%s OR ", el)
+		matchTerm = matchTerm + quote(el) + " OR "
 	}
 
 	q := `
 	SELECT rowid, bm25(chunks_fts)
 	FROM chunks_fts
-	WHERE chunks_fts MATCH %s
+	WHERE chunks_fts MATCH ?
 	ORDER BY bm25(chunks_fts)
 	LIMIT ?
 	`
-	q = fmt.Sprintf(q, matchTerm)
-	rows, err := r.db.QueryContext(r.ctx, q, k)
+	rows, err := r.db.QueryContext(r.ctx, q, matchTerm, k)
 	if err != nil {
 		return chunkIDs, fmt.Errorf("error querring rows: %s", err.Error())
 	}

@@ -25,13 +25,14 @@ func (r *SQLiteRetriever) TopKByANN(embedding []float64, k int64) (step.Retrieve
 	LIMIT ?
 	`
 	rows, err := r.db.QueryContext(r.ctx, query, buf.Bytes(), k)
-	defer rows.Close()
 	if errors.Is(err, sql.ErrNoRows) {
 		return chunkIDs, fmt.Errorf("error: no rows found")
 	}
 	if err != nil {
 		return chunkIDs, fmt.Errorf("error querring rows: %s", err.Error())
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var id int64
 		var distance sql.NullFloat64

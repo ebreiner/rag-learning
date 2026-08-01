@@ -40,7 +40,7 @@ to quickly create a Cobra application.`,
 			if err != nil {
 				log.Fatal(err)
 			}
-			sink, err := embedding.NewEmbedingsResultSink(db, ctx)
+			sink, err := embedding.NewEmbeddingsResultSink(db, ctx)
 			if err != nil {
 				log.Fatal(err.Error())
 			}

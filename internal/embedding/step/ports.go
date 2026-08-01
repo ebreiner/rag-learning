@@ -8,6 +8,6 @@ type ChunkSource interface {
 	NextChunks(limit int64) ([]ChunkToEmbed, error)
 }
 
-type EmbedingsSink interface {
+type EmbeddingsSink interface {
 	SaveEmbeddings(embeddings []EmbeddingToSave) error
 }

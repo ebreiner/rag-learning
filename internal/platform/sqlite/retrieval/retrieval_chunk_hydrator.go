@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"rag/internal/platform/sqlite/querries"
 	"rag/internal/retrieval/step"
 )
@@ -23,8 +24,9 @@ func NewChunkHydrator(db *sql.DB, ctx context.Context) (ChunkHydrator, error) {
 	return hydrator, nil
 }
 
+// TODO: rank explizit über boundaries transportieren und nicht nur auf implizites ordering verlassen
 func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs) ([]step.RetrievedChunk, error) {
-	chunks := make([]step.RetrievedChunk, 0)
+	chunks := make([]step.RetrievedChunk, 0, len(chunkIDs))
 
 	rows, err := h.q.RetrievalChunksByIDs(h.ctx, chunkIDs)
 	if err != nil {
@@ -34,11 +36,19 @@ func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs) ([]step.R
 		return chunks, fmt.Errorf("query for chunk hydration did not return rows")
 	}
 
-	for idx, row := range rows {
-		var rank int64
-		rank = int64(idx) + 1
+	rowByID := make(map[int64]querries.RetrievalChunksByIDsRow, 0)
+	for _, row := range rows {
+		rowByID[row.ID] = row
+	}
+
+	for idx, id := range chunkIDs {
+		row, ok := rowByID[id]
+		if !ok {
+			log.Printf("chunk hydration failed: no row returned for chunk id %d, skipping chunk\n", id)
+			continue
+		}
 		chunk := step.RetrievedChunk{
-			Rank:     rank,
+			Rank:     int64(idx + 1),
 			DocTitle: row.Name,
 			Position: row.Position,
 			Text:     row.Text,
