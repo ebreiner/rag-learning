@@ -1,6 +1,6 @@
 CREATE VIRTUAL TABLE IF NOT EXISTS embeddings_balanced_1536 USING vec0(
   chunk_id INTEGER PRIMARY KEY,
-  embedding float[1536]
+  embedding float[768]
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
