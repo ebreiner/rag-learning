@@ -112,49 +112,48 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 			}
 			return err
 		}
-		for _, node := range doc.Nodes {
-			childrenJson := sql.NullString{}
-			var childrenIndexes struct {
-				ChildrenIndexes *[]int64 `json:"children_indexes"`
+		var walk func(node *step.Node, parentID string) error
+		walk = func(node *step.Node, parentID string) error {
+			contentJSON, err := marshalContent(node)
+			if err != nil {
+				return fmt.Errorf("marshaling content for node %s: %w", node.ID, err)
 			}
-			if node.ChildrenIndexes != nil {
-				childrenIndexes.ChildrenIndexes = node.ChildrenIndexes
-				marshal, err := json.Marshal(childrenIndexes)
-
-				if err != nil {
-					txErr := tx.Rollback()
-					if txErr != nil {
-						return fmt.Errorf("error rolling back transaction at marshaling children indexes: %s\noriginal error: %s", txErr, err)
-					}
-					return err
-				}
-
-				childrenJson.String = string(marshal)
-				childrenJson.Valid = true
+			provJSON, err := json.Marshal(node.Provenance)
+			if err != nil {
+				return fmt.Errorf("marshaling provenance for node %s: %w", node.ID, err)
 			}
 
 			param := querries.CreateExtractionNodeParams{
-				ExtractionID:        extID,
-				CreatedAt:           time.Now(),
-				NodeID:              node.ID,
-				NodeType:            node.NodeType,
-				ChildrenIndexesJson: childrenJson,
+				ExtractionID: extID,
+				CreatedAt:    time.Now(),
+				NodeID:       node.ID,
+				Kind:         string(node.Kind),
+				Layer:        string(node.Layer),
+			}
+			if parentID != "" {
+				param.ParentID = sql.NullString{String: parentID, Valid: true}
+			}
+			if contentJSON != nil {
+				param.ContentJson = sql.NullString{String: string(contentJSON), Valid: true}
+			}
+			if len(node.Provenance) > 0 {
+				param.ProvenanceJson = sql.NullString{String: string(provJSON), Valid: true}
 			}
 
-			if node.ParentIndex != nil {
-				param.ParentIndex = sql.NullInt64{Int64: *node.ParentIndex, Valid: true}
+			if err := q.CreateExtractionNode(e.ctx, param); err != nil {
+				return err
 			}
 
-			if node.Level != nil {
-				param.Level = sql.NullInt64{Int64: *node.Level, Valid: true}
+			for _, child := range node.Children {
+				if err := walk(child, node.ID); err != nil {
+					return err
+				}
 			}
+			return nil
+		}
 
-			if node.Text != nil {
-				param.Text = sql.NullString{String: *node.Text, Valid: true}
-			}
-
-			err = q.CreateExtractionNode(e.ctx, param)
-			if err != nil {
+		for _, root := range doc.RootNodes {
+			if err := walk(root, ""); err != nil {
 				txErr := tx.Rollback()
 				if txErr != nil {
 					return fmt.Errorf("error rolling back transaction at node insertion: %s\noriginal error: %s", txErr, err)
@@ -177,4 +176,25 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 	}
 
 	return nil
+}
+
+func marshalContent(node *step.Node) ([]byte, error) {
+	switch node.Kind {
+	case step.KindHeading:
+		return json.Marshal(node.Heading)
+	case step.KindParagraph:
+		return json.Marshal(node.Paragraph)
+	case step.KindCaption:
+		return json.Marshal(node.Caption)
+	case step.KindFootnote:
+		return json.Marshal(node.Footnote)
+	case step.KindListItem:
+		return json.Marshal(node.ListItem)
+	case step.KindTable:
+		return json.Marshal(node.Table)
+	case step.KindPicture:
+		return json.Marshal(node.Picture)
+	default:
+		return nil, nil
+	}
 }

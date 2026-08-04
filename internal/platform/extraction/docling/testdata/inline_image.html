@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inline Image</title>
+<style>
+  body { font-family: Georgia, serif; line-height: 1.5; margin: 2cm; }
+</style>
+</head>
+<body>
+
+<h1>Inline Image Size Check</h1>
+<p>This document tests whether an inline raster &lt;img&gt; embedded
+directly inside a flowing paragraph (not wrapped in a block-level
+&lt;figure&gt;, as picture.html does) is detected as a picture region at
+all, using a larger (300x180px, same size as the SVG in picture.html)
+image to rule out the small-image-in-kitchen_sink result being a size
+artifact. Here it is inline:
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAC0CAIAAAChXYa4AAACD0lEQVR4nO3TMQ0AMAzAsPIZgrEvtMHIMUsGkCez9wChyQvgcyaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIWZCiJkQYiaEmAkhZkKImRBiJoSYCSFmQoiZEGImhJgJIfYAXXen0Xc0dDoAAAAASUVORK5CYII=" alt="large inline swatch">
+right in the middle of this sentence, followed by more text after the
+image to confirm the paragraph continues flowing around/after it.</p>
+
+</body>
+</html>

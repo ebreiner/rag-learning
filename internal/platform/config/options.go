@@ -18,21 +18,24 @@ type Option struct {
 }
 
 type Globals struct {
-	XBergURL Option
-	DBPath   Option
-	LogPath  Option
+	XBergURL   Option
+	DoclingURL Option
+	DBPath     Option
+	LogPath    Option
 }
 
 var GlobalOptions = Globals{
-	XBergURL: Option{FlagLong: "xberg-url", FlagUsage: "--xberg-url https://stuff.foo.net/kreuzberg", Default: "http://localhost:8000", IsPath: false},
-	DBPath:   Option{FlagLong: "db-path", FlagUsage: "--db-path /path/to/db", Default: "./data.db", IsPath: true},
-	LogPath:  Option{FlagLong: "log-path", FlagUsage: "--log-path /path/to/foo.log", Default: "./rag-cli.log", IsPath: true},
+	XBergURL:   Option{FlagLong: "xberg-url", FlagUsage: "--xberg-url https://stuff.foo.net/kreuzberg", Default: "http://localhost:8000", IsPath: false},
+	DoclingURL: Option{FlagLong: "docling-url", FlagUsage: "--docling-url https://stuff.foo.net/docling", Default: "http://localhost:5001", IsPath: false},
+	DBPath:     Option{FlagLong: "db-path", FlagUsage: "--db-path /path/to/db", Default: "./data.db", IsPath: true},
+	LogPath:    Option{FlagLong: "log-path", FlagUsage: "--log-path /path/to/foo.log", Default: "./rag-cli.log", IsPath: true},
 }
 
 func GlobalsList() []Option {
 	return []Option{
 		GlobalOptions.DBPath,
 		GlobalOptions.XBergURL,
+		GlobalOptions.DoclingURL,
 		GlobalOptions.LogPath,
 	}
 }

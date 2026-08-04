@@ -1,0 +1,171 @@
+{
+  "document": {
+    "filename": "inline_image.pdf",
+    "md_content": null,
+    "json_content": {
+      "schema_name": "DoclingDocument",
+      "version": "1.10.0",
+      "name": "inline_image",
+      "origin": {
+        "mimetype": "application/pdf",
+        "binary_hash": 17594686273018161603,
+        "filename": "inline_image.pdf",
+        "uri": null
+      },
+      "furniture": {
+        "self_ref": "#/furniture",
+        "parent": null,
+        "children": [],
+        "content_layer": "furniture",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "body": {
+        "self_ref": "#/body",
+        "parent": null,
+        "children": [
+          {
+            "$ref": "#/texts/0"
+          },
+          {
+            "$ref": "#/texts/1"
+          },
+          {
+            "$ref": "#/texts/2"
+          }
+        ],
+        "content_layer": "body",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "groups": [],
+      "texts": [
+        {
+          "self_ref": "#/texts/0",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 725.0213572578125,
+                "r": 440.2549132500001,
+                "b": 696.8693572578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                23
+              ]
+            }
+          ],
+          "orig": "Inline Image Size Check",
+          "text": "Inline Image Size Check",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/1",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 674.8485600078125,
+                "r": 479.29091325000013,
+                "b": 570.8925600078126,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                352
+              ]
+            }
+          ],
+          "orig": "This document tests whether an inline raster <img> embedded directly inside a flowing paragraph (not wrapped in a block-level <figure>, as picture.html does) is detected as a picture region at all, using a larger (300x180px, same size as the SVG in picture.html) image to rule out the smallimage-in-kitchen_sink result being a size artifact. Here it is",
+          "text": "This document tests whether an inline raster <img> embedded directly inside a flowing paragraph (not wrapped in a block-level <figure>, as picture.html does) is detected as a picture region at all, using a larger (300x180px, same size as the SVG in picture.html) image to rule out the smallimage-in-kitchen_sink result being a size artifact. Here it is",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/2",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 445.0028572578125,
+                "r": 470.08691325,
+                "b": 377.0468572578126,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                144
+              ]
+            }
+          ],
+          "orig": "inline: right in the middle of this sentence, followed by more text after the image to confirm the paragraph continues flowing around/ after it.",
+          "text": "inline: right in the middle of this sentence, followed by more text after the image to confirm the paragraph continues flowing around/ after it.",
+          "formatting": null,
+          "hyperlink": null
+        }
+      ],
+      "pictures": [],
+      "tables": [],
+      "key_value_items": [],
+      "form_items": [],
+      "pages": {
+        "1": {
+          "size": {
+            "width": 595.2755737304688,
+            "height": 841.8897705078125
+          },
+          "image": null,
+          "page_no": 1
+        }
+      }
+    },
+    "html_content": null,
+    "text_content": null,
+    "doctags_content": null,
+    "doclang_content": null
+  },
+  "status": "success",
+  "errors": [],
+  "processing_time": 1.1868435709984624,
+  "timings": {},
+  "confidence": {
+    "parse_score": 1.0,
+    "layout_score": 0.7884178558985392,
+    "table_score": null,
+    "ocr_score": null,
+    "mean_score": 0.8942089279492695,
+    "low_score": 0.7989969631036122,
+    "mean_grade": "good",
+    "low_grade": "fair"
+  }
+}

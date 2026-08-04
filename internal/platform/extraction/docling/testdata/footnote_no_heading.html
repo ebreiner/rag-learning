@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Footnote v2</title>
+<style>
+  body { font-family: Georgia, serif; line-height: 1.5; margin: 2cm; }
+  sup a { text-decoration: none; }
+  .footnotes { margin-top: 3em; }
+  .footnotes hr { border: none; border-top: 1px solid #999; width: 30%; margin-left: 0; }
+  .footnotes p { margin-top: 1.5em; margin-bottom: 1.5em; font-size: 0.8em; }
+</style>
+</head>
+<body>
+
+<h1>Footnote Extraction Test v2</h1>
+<p>This variant drops the "Notes" &lt;h2&gt; heading entirely, to test
+whether that heading was what caused Docling's layout model to classify
+the footnote block as a new section rather than as a footnote<sup><a href="#fn1">1</a></sup>.
+The footnote block below is just an &lt;hr&gt; followed directly by
+small-font paragraphs, with a reference<sup><a href="#fn2">2</a></sup>
+here as well.</p>
+
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do
+eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip
+ex ea commodo consequat.</p>
+
+<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum
+dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non
+proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis
+praesentium voluptatum deleniti atque corrupti quos dolores et quas
+molestias excepturi sint occaecati cupiditate non provident.</p>
+
+<p>Similique sunt in culpa qui officia deserunt mollitia animi, id est
+laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita
+distinctio. Nam libero tempore, cum soluta nobis est eligendi optio
+cumque nihil impedit quo minus id quod maxime placeat facere possimus,
+omnis voluptas assumenda est omnis dolor repellendus.</p>
+
+<p>Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis
+voluptatibus maiores alias consequatur aut perferendis doloribus
+asperiores repellat. Neque porro quisquam est, qui dolorem ipsum quia
+dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius
+modi tempora incidunt ut labore et dolore magnam aliquam quaerat.</p>
+
+<div class="footnotes">
+  <hr>
+  <p id="fn1"><sup>1</sup> This is the text of the first footnote.</p>
+  <p id="fn2"><sup>2</sup> This is the text of the second footnote.</p>
+</div>
+
+</body>
+</html>

@@ -45,14 +45,13 @@ CREATE TABLE IF NOT EXISTS extraction_nodes (
   created_at DATETIME NOT NULL,
   extraction_id INTEGER NOT NULL,
   node_id TEXT NOT NULL,
-  node_type TEXT NOT NULL,
-  parent_index INTEGER,
-  children_indexes_json TEXT,
-  level INTEGER,
-  text TEXT,
-  page INTEGER,
+  parent_id TEXT,
+  kind TEXT NOT NULL,
+  layer TEXT NOT NULL,
+  content_json TEXT,
+  provenance_json TEXT,
 
-  CHECK (children_indexes_json IS NULL OR json_valid(children_indexes_json)),
+  CHECK (content_json IS NULL OR json_valid(content_json)),
+  CHECK (provenance_json IS NULL OR json_valid(provenance_json)),
   FOREIGN KEY(extraction_id) REFERENCES extractions(id)
 );
-

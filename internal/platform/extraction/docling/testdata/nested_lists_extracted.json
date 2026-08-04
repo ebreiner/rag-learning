@@ -1,0 +1,587 @@
+{
+  "document": {
+    "filename": "nested_lists.pdf",
+    "md_content": null,
+    "json_content": {
+      "schema_name": "DoclingDocument",
+      "version": "1.10.0",
+      "name": "nested_lists",
+      "origin": {
+        "mimetype": "application/pdf",
+        "binary_hash": 5263004696460879944,
+        "filename": "nested_lists.pdf",
+        "uri": null
+      },
+      "furniture": {
+        "self_ref": "#/furniture",
+        "parent": null,
+        "children": [],
+        "content_layer": "furniture",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "body": {
+        "self_ref": "#/body",
+        "parent": null,
+        "children": [
+          {
+            "$ref": "#/texts/0"
+          },
+          {
+            "$ref": "#/texts/1"
+          },
+          {
+            "$ref": "#/texts/2"
+          },
+          {
+            "$ref": "#/groups/0"
+          },
+          {
+            "$ref": "#/texts/8"
+          },
+          {
+            "$ref": "#/groups/1"
+          }
+        ],
+        "content_layer": "body",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "groups": [
+        {
+          "self_ref": "#/groups/0",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [
+            {
+              "$ref": "#/texts/3"
+            },
+            {
+              "$ref": "#/texts/4"
+            },
+            {
+              "$ref": "#/texts/5"
+            },
+            {
+              "$ref": "#/texts/6"
+            },
+            {
+              "$ref": "#/texts/7"
+            }
+          ],
+          "content_layer": "body",
+          "meta": null,
+          "name": "list",
+          "label": "list"
+        },
+        {
+          "self_ref": "#/groups/1",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [
+            {
+              "$ref": "#/texts/9"
+            },
+            {
+              "$ref": "#/texts/10"
+            },
+            {
+              "$ref": "#/texts/11"
+            },
+            {
+              "$ref": "#/texts/12"
+            },
+            {
+              "$ref": "#/texts/13"
+            }
+          ],
+          "content_layer": "body",
+          "meta": null,
+          "name": "list",
+          "label": "list"
+        }
+      ],
+      "texts": [
+        {
+          "self_ref": "#/texts/0",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 725.0213572578125,
+                "r": 435.52691325,
+                "b": 660.8693572578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                28
+              ]
+            }
+          ],
+          "orig": "Nested List Type-Switch Test",
+          "text": "Nested List Type-Switch Test",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/1",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 638.8485600078125,
+                "r": 476.0629132500002,
+                "b": 462.8925600078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                520
+              ]
+            }
+          ],
+          "orig": "This document exercises a list that switches type across nesting depth: an ordered list containing a nested unordered list, and (further down) an unordered list containing a nested ordered list. The plain lists.html fixture already nests same-type lists (ul-in-ul, ol-in-ol) and flattens them into a single group with only the bullet/number marker changing per item; this fixture checks whether a type switch across the nesting boundary changes that behavior - e.g. produces a separate child group, or a different label.",
+          "text": "This document exercises a list that switches type across nesting depth: an ordered list containing a nested unordered list, and (further down) an unordered list containing a nested ordered list. The plain lists.html fixture already nests same-type lists (ul-in-ul, ol-in-ol) and flattens them into a single group with only the bullet/number marker changing per item; this fixture checks whether a type switch across the nesting boundary changes that behavior - e.g. produces a separate child group, or a different label.",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/2",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 442.98273225781253,
+                "r": 383.66291325,
+                "b": 394.8687322578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                35
+              ]
+            }
+          ],
+          "orig": "Ordered containing nested unordered",
+          "text": "Ordered containing nested unordered",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/3",
+          "parent": {
+            "$ref": "#/groups/0"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 127.67924175,
+                "t": 374.96856000781247,
+                "r": 253.48691325,
+                "b": 361.01256000781245,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                21
+              ]
+            }
+          ],
+          "orig": "First ordered step 1.",
+          "text": "First ordered step 1.",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/4",
+          "parent": {
+            "$ref": "#/groups/0"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 127.67924175,
+                "t": 356.96856000781247,
+                "r": 456.82691325000013,
+                "b": 343.01256000781245,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                53
+              ]
+            }
+          ],
+          "orig": "Second ordered step, with a nested unordered list: 2.",
+          "text": "Second ordered step, with a nested unordered list: 2.",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/5",
+          "parent": {
+            "$ref": "#/groups/0"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 198.05033475,
+                "t": 332.96856000781247,
+                "r": 363.28691325000005,
+                "b": 319.01256000781245,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                25
+              ]
+            }
+          ],
+          "orig": "Nested unordered item A ◦",
+          "text": "Nested unordered item A ◦",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/6",
+          "parent": {
+            "$ref": "#/groups/0"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 198.05033475,
+                "t": 314.96856000781247,
+                "r": 363.44291325000006,
+                "b": 301.01256000781245,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                25
+              ]
+            }
+          ],
+          "orig": "Nested unordered item B ◦",
+          "text": "Nested unordered item B ◦",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/7",
+          "parent": {
+            "$ref": "#/groups/0"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 127.67924175,
+                "t": 296.96856000781247,
+                "r": 257.5909132500001,
+                "b": 283.01256000781245,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                21
+              ]
+            }
+          ],
+          "orig": "Third ordered step 3.",
+          "text": "Third ordered step 3.",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/8",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 263.1027322578125,
+                "r": 408.77291325,
+                "b": 214.98873225781244,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                35
+              ]
+            }
+          ],
+          "orig": "Unordered containing nested ordered",
+          "text": "Unordered containing nested ordered",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/9",
+          "parent": {
+            "$ref": "#/groups/1"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 132.05033475,
+                "t": 195.08856000781248,
+                "r": 270.32291325000006,
+                "b": 181.13256000781257,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                22
+              ]
+            }
+          ],
+          "orig": "First unordered item ·",
+          "text": "First unordered item ·",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/10",
+          "parent": {
+            "$ref": "#/groups/1"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 132.05033475,
+                "t": 177.08856000781248,
+                "r": 458.2069132500002,
+                "b": 163.13256000781257,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                52
+              ]
+            }
+          ],
+          "orig": "Second unordered item, with a nested ordered list: ·",
+          "text": "Second unordered item, with a nested ordered list: ·",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/11",
+          "parent": {
+            "$ref": "#/groups/1"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 193.67924175000002,
+                "t": 153.08856000781248,
+                "r": 385.4629132500001,
+                "b": 139.13256000781257,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                30
+              ]
+            }
+          ],
+          "orig": "Nested ordered sub-step one 1.",
+          "text": "Nested ordered sub-step one 1.",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/12",
+          "parent": {
+            "$ref": "#/groups/1"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 193.67924175000002,
+                "t": 135.08856000781248,
+                "r": 385.72691325000017,
+                "b": 121.13256000781257,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                30
+              ]
+            }
+          ],
+          "orig": "Nested ordered sub-step two 2.",
+          "text": "Nested ordered sub-step two 2.",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        },
+        {
+          "self_ref": "#/texts/13",
+          "parent": {
+            "$ref": "#/groups/1"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "list_item",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 132.05033475,
+                "t": 117.08856000781248,
+                "r": 274.42691325000004,
+                "b": 103.13256000781257,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                22
+              ]
+            }
+          ],
+          "orig": "Third unordered item ·",
+          "text": "Third unordered item ·",
+          "formatting": null,
+          "hyperlink": null,
+          "enumerated": false,
+          "marker": ""
+        }
+      ],
+      "pictures": [],
+      "tables": [],
+      "key_value_items": [],
+      "form_items": [],
+      "pages": {
+        "1": {
+          "size": {
+            "width": 595.2755737304688,
+            "height": 841.8897705078125
+          },
+          "image": null,
+          "page_no": 1
+        }
+      }
+    },
+    "html_content": null,
+    "text_content": null,
+    "doctags_content": null,
+    "doclang_content": null
+  },
+  "status": "success",
+  "errors": [],
+  "processing_time": 0.5610583620000398,
+  "timings": {},
+  "confidence": {
+    "parse_score": 1.0,
+    "layout_score": 0.9467966513974326,
+    "table_score": null,
+    "ocr_score": null,
+    "mean_score": 0.9733983256987163,
+    "low_score": 0.9494568188275609,
+    "mean_grade": "excellent",
+    "low_grade": "excellent"
+  }
+}

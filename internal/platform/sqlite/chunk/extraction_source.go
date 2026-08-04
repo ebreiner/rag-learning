@@ -3,6 +3,7 @@ package chunk
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"rag/internal/chunk/step"
@@ -66,10 +67,13 @@ func (e *ExtractedDocSource) NextExtraction() (step.ExtractionToChunk, error) {
 		nodes := make([]step.ExtractionNode, 0, len(rows))
 		for _, row := range rows {
 			node := step.ExtractionNode{
-				NodeType: row.NodeType,
+				NodeType: row.Kind,
 			}
-			if row.Text.Valid {
-				node.Text = row.Text.String
+			if row.ContentJson.Valid {
+				var content struct{ Text string }
+				if err := json.Unmarshal([]byte(row.ContentJson.String), &content); err == nil {
+					node.Text = content.Text
+				}
 			}
 			nodes = append(nodes, node)
 		}

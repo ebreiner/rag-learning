@@ -177,30 +177,28 @@ func (q *Queries) CreateExtraction(ctx context.Context, arg CreateExtractionPara
 
 const createExtractionNode = `-- name: CreateExtractionNode :exec
 INSERT INTO extraction_nodes (
-	extraction_id,
-	created_at,
-	node_id,
-	node_type,
-	parent_index,
-	children_indexes_json,
-	level,
-	text,
-	page
+      extraction_id,
+      created_at,
+      node_id,
+      parent_id,
+      kind,
+      layer,
+      content_json,
+      provenance_json
 ) VALUES (
-	?,?,?,?,?,?,?,?,?
+      ?,?,?,?,?,?,?,?
 )
 `
 
 type CreateExtractionNodeParams struct {
-	ExtractionID        int64
-	CreatedAt           time.Time
-	NodeID              string
-	NodeType            string
-	ParentIndex         sql.NullInt64
-	ChildrenIndexesJson sql.NullString
-	Level               sql.NullInt64
-	Text                sql.NullString
-	Page                sql.NullInt64
+	ExtractionID   int64
+	CreatedAt      time.Time
+	NodeID         string
+	ParentID       sql.NullString
+	Kind           string
+	Layer          string
+	ContentJson    sql.NullString
+	ProvenanceJson sql.NullString
 }
 
 func (q *Queries) CreateExtractionNode(ctx context.Context, arg CreateExtractionNodeParams) error {
@@ -208,12 +206,11 @@ func (q *Queries) CreateExtractionNode(ctx context.Context, arg CreateExtraction
 		arg.ExtractionID,
 		arg.CreatedAt,
 		arg.NodeID,
-		arg.NodeType,
-		arg.ParentIndex,
-		arg.ChildrenIndexesJson,
-		arg.Level,
-		arg.Text,
-		arg.Page,
+		arg.ParentID,
+		arg.Kind,
+		arg.Layer,
+		arg.ContentJson,
+		arg.ProvenanceJson,
 	)
 	return err
 }
@@ -369,7 +366,7 @@ SELECT
   le.mime_type,
   le.quality_score,
   le.metadata_json,
-  en.id, en.created_at, en.extraction_id, en.node_id, en.node_type, en.parent_index, en.children_indexes_json, en.level, en.text, en.page
+  en.id, en.created_at, en.extraction_id, en.node_id, en.parent_id, en.kind, en.layer, en.content_json, en.provenance_json
 FROM latest_extraction le
 JOIN extraction_nodes en
   ON en.extraction_id = le.extraction_id
@@ -387,12 +384,11 @@ type GetLatestExtractionOfDocRow struct {
 	CreatedAt               time.Time
 	ExtractionID_2          int64
 	NodeID                  string
-	NodeType                string
-	ParentIndex             sql.NullInt64
-	ChildrenIndexesJson     sql.NullString
-	Level                   sql.NullInt64
-	Text                    sql.NullString
-	Page                    sql.NullInt64
+	ParentID                sql.NullString
+	Kind                    string
+	Layer                   string
+	ContentJson             sql.NullString
+	ProvenanceJson          sql.NullString
 }
 
 func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64) ([]GetLatestExtractionOfDocRow, error) {
@@ -415,12 +411,11 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 			&i.CreatedAt,
 			&i.ExtractionID_2,
 			&i.NodeID,
-			&i.NodeType,
-			&i.ParentIndex,
-			&i.ChildrenIndexesJson,
-			&i.Level,
-			&i.Text,
-			&i.Page,
+			&i.ParentID,
+			&i.Kind,
+			&i.Layer,
+			&i.ContentJson,
+			&i.ProvenanceJson,
 		); err != nil {
 			return nil, err
 		}
@@ -509,7 +504,7 @@ func (q *Queries) HeadDocuments(ctx context.Context, limit int64) ([]Document, e
 }
 
 const headExtractionNodes = `-- name: HeadExtractionNodes :many
-SELECT id, created_at, extraction_id, node_id, node_type, parent_index, children_indexes_json, level, text, page
+SELECT id, created_at, extraction_id, node_id, parent_id, kind, layer, content_json, provenance_json
 FROM extraction_nodes
 ORDER BY id
 LIMIT ?
@@ -529,12 +524,11 @@ func (q *Queries) HeadExtractionNodes(ctx context.Context, limit int64) ([]Extra
 			&i.CreatedAt,
 			&i.ExtractionID,
 			&i.NodeID,
-			&i.NodeType,
-			&i.ParentIndex,
-			&i.ChildrenIndexesJson,
-			&i.Level,
-			&i.Text,
-			&i.Page,
+			&i.ParentID,
+			&i.Kind,
+			&i.Layer,
+			&i.ContentJson,
+			&i.ProvenanceJson,
 		); err != nil {
 			return nil, err
 		}

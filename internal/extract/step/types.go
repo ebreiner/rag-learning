@@ -14,19 +14,7 @@ type ExtractedMetadata struct {
 }
 
 type ExtractedDoc struct {
-	Source   SourceDoc
-	Metadata ExtractedMetadata
-	Nodes    []Node
-}
-
-// TODO: decouple from kreuzberg completly
-type Node struct {
-	ID              string
-	NodeType        string
-	ParentIndex     *int64
-	ChildrenIndexes *[]int64
-	Page            *int64
-
-	Level *int64
-	Text  *string
+	Source    SourceDoc
+	Metadata  ExtractedMetadata
+	RootNodes []*Node
 }

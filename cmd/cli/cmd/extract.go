@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"rag/internal/extract/step"
 	"rag/internal/platform/config"
-	"rag/internal/platform/extraction/extractor"
+	"rag/internal/platform/extraction/docling"
 	"rag/internal/platform/extraction/source"
 	"rag/internal/platform/httpclient"
 	"rag/internal/platform/sqlite"
@@ -29,7 +29,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			globals := config.GlobalOptions
-			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			doclingURL, err := config.ResolveGlobal(cmd, globals.DoclingURL)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -57,7 +57,7 @@ to quickly create a Cobra application.`,
 				}
 			}
 
-			err = createExtractions(inputDir, xbergBaseURL, dbPath, dumpDir)
+			err = createExtractions(inputDir, doclingURL, dbPath, dumpDir)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -71,7 +71,7 @@ to quickly create a Cobra application.`,
 	return extractCmd
 }
 
-func createExtractions(inputDir, xbergBaseURL, dbPath, dumpDir string) error {
+func createExtractions(inputDir, doclingURL, dbPath, dumpDir string) error {
 	ctx := context.Background()
 	sourceDocSource, err := source.NewSourceDocSource(inputDir, ctx)
 	if err != nil {
@@ -98,7 +98,7 @@ func createExtractions(inputDir, xbergBaseURL, dbPath, dumpDir string) error {
 		client = httpclient.New(timeout)
 	}
 
-	extractor, err := extractor.NewKreuzbergExtractor(xbergBaseURL, client)
+	extractor, err := docling.NewDoclingExtractor(doclingURL, client)
 	if err != nil {
 		return fmt.Errorf("error creating docs sink: %s", err.Error())
 	}

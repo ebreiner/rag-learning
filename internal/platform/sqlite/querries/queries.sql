@@ -53,17 +53,16 @@ RETURNING id;
 
 -- name: CreateExtractionNode :exec
 INSERT INTO extraction_nodes (
-	extraction_id,
-	created_at,
-	node_id,
-	node_type,
-	parent_index,
-	children_indexes_json,
-	level,
-	text,
-	page
+      extraction_id,
+      created_at,
+      node_id,
+      parent_id,
+      kind,
+      layer,
+      content_json,
+      provenance_json
 ) VALUES (
-	?,?,?,?,?,?,?,?,?
+      ?,?,?,?,?,?,?,?
 );
 
 
