@@ -54,6 +54,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createRepresentationStmt, err = db.PrepareContext(ctx, createRepresentation); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateRepresentation: %w", err)
 	}
+	if q.existsDocumentStmt, err = db.PrepareContext(ctx, existsDocument); err != nil {
+		return nil, fmt.Errorf("error preparing query ExistsDocument: %w", err)
+	}
 	if q.getChunkBatchAfterIDStmt, err = db.PrepareContext(ctx, getChunkBatchAfterID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChunkBatchAfterID: %w", err)
 	}
@@ -137,6 +140,11 @@ func (q *Queries) Close() error {
 	if q.createRepresentationStmt != nil {
 		if cerr := q.createRepresentationStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createRepresentationStmt: %w", cerr)
+		}
+	}
+	if q.existsDocumentStmt != nil {
+		if cerr := q.existsDocumentStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing existsDocumentStmt: %w", cerr)
 		}
 	}
 	if q.getChunkBatchAfterIDStmt != nil {
@@ -238,6 +246,7 @@ type Queries struct {
 	createExtractionStmt                    *sql.Stmt
 	createExtractionNodeStmt                *sql.Stmt
 	createRepresentationStmt                *sql.Stmt
+	existsDocumentStmt                      *sql.Stmt
 	getChunkBatchAfterIDStmt                *sql.Stmt
 	getDocumentIDsAfterIDStmt               *sql.Stmt
 	getLatestExtractionOfDocStmt            *sql.Stmt
@@ -264,6 +273,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createExtractionStmt:                    q.createExtractionStmt,
 		createExtractionNodeStmt:                q.createExtractionNodeStmt,
 		createRepresentationStmt:                q.createRepresentationStmt,
+		existsDocumentStmt:                      q.existsDocumentStmt,
 		getChunkBatchAfterIDStmt:                q.getChunkBatchAfterIDStmt,
 		getDocumentIDsAfterIDStmt:               q.getDocumentIDsAfterIDStmt,
 		getLatestExtractionOfDocStmt:            q.getLatestExtractionOfDocStmt,

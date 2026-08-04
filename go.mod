@@ -4,10 +4,11 @@ go 1.26
 
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
-	github.com/kreuzberg-dev/kreuzberg/packages/go/v4 v4.6.3
+	github.com/google/go-cmp v0.7.0
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
 	golang.org/x/term v0.40.0
 )
 
@@ -17,8 +18,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

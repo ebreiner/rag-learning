@@ -32,7 +32,7 @@ func NewServeCmd() *cobra.Command {
 				log.Fatal(err)
 			}
 
-			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.DoclingURL)
 			if err != nil {
 				log.Fatal(err)
 			}

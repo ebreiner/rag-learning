@@ -1,20 +1,19 @@
 package retrieval
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"fmt"
+	"rag/internal/platform/sqlite"
 	"rag/internal/retrieval/step"
 )
 
 func (r *SQLiteRetriever) TopKByANN(embedding []float64, k int64) (step.RetrievedChunkIDs, error) {
 	chunkIDs := make([]int64, 0)
 
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, embedding); err != nil {
-		return chunkIDs, fmt.Errorf("error converting embedding to buffer: %s", err.Error())
+	packed, err := sqlite.PackVector(embedding)
+	if err != nil {
+		return chunkIDs, err
 	}
 
 	query := `
@@ -24,7 +23,7 @@ func (r *SQLiteRetriever) TopKByANN(embedding []float64, k int64) (step.Retrieve
 	ORDER BY e.distance
 	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(r.ctx, query, buf.Bytes(), k)
+	rows, err := r.db.QueryContext(r.ctx, query, packed, k)
 	if errors.Is(err, sql.ErrNoRows) {
 		return chunkIDs, fmt.Errorf("error: no rows found")
 	}

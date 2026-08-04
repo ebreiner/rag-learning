@@ -22,6 +22,7 @@ type Document struct {
 	ID           int64
 	CreatedAt    time.Time
 	Name         string
+	Sha256       string
 	MetadataJson sql.NullString
 }
 
@@ -35,16 +36,15 @@ type Extraction struct {
 }
 
 type ExtractionNode struct {
-	ID                  int64
-	CreatedAt           time.Time
-	ExtractionID        int64
-	NodeID              string
-	NodeType            string
-	ParentIndex         sql.NullInt64
-	ChildrenIndexesJson sql.NullString
-	Level               sql.NullInt64
-	Text                sql.NullString
-	Page                sql.NullInt64
+	ID             int64
+	CreatedAt      time.Time
+	ExtractionID   int64
+	NodeID         string
+	ParentID       sql.NullString
+	Kind           string
+	Layer          string
+	ContentJson    sql.NullString
+	ProvenanceJson sql.NullString
 }
 
 type Representation struct {

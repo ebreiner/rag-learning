@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Table</title>
+<style>
+  body { font-family: Georgia, serif; line-height: 1.5; margin: 2cm; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #333; padding: 6px 10px; text-align: left; }
+  th { background: #eee; }
+  figcaption { font-style: italic; margin-top: 0.5em; }
+</style>
+</head>
+<body>
+
+<h1>Table Extraction Test</h1>
+<p>This document exercises table structure, including a spanning header
+cell and a spanning body cell, plus a caption.</p>
+
+<figure>
+<table>
+  <thead>
+    <tr>
+      <th colspan="2">Combined Header</th>
+      <th>Reference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Row 1, Col A</td>
+      <td>Row 1, Col B</td>
+      <td rowspan="2">Shared reference cell</td>
+    </tr>
+    <tr>
+      <td>Row 2, Col A</td>
+      <td>Row 2, Col B</td>
+    </tr>
+    <tr>
+      <td>Row 3, Col A</td>
+      <td>Row 3, Col B</td>
+      <td>Row 3, Col C</td>
+    </tr>
+  </tbody>
+</table>
+<figcaption>Table 1: A small table with a spanning header cell and a spanning body cell.</figcaption>
+</figure>
+
+</body>
+</html>

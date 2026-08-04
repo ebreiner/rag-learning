@@ -1,0 +1,137 @@
+{
+  "document": {
+    "filename": "footnote_minimal.pdf",
+    "md_content": null,
+    "json_content": {
+      "schema_name": "DoclingDocument",
+      "version": "1.10.0",
+      "name": "footnote_minimal",
+      "origin": {
+        "mimetype": "application/pdf",
+        "binary_hash": 16899614198404275097,
+        "filename": "footnote_minimal.pdf",
+        "uri": null
+      },
+      "furniture": {
+        "self_ref": "#/furniture",
+        "parent": null,
+        "children": [],
+        "content_layer": "furniture",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "body": {
+        "self_ref": "#/body",
+        "parent": null,
+        "children": [
+          {
+            "$ref": "#/texts/0"
+          },
+          {
+            "$ref": "#/texts/1"
+          }
+        ],
+        "content_layer": "body",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "groups": [],
+      "texts": [
+        {
+          "self_ref": "#/texts/0",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 724.8479122578125,
+                "r": 470.5332689999999,
+                "b": 692.8919122578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                118
+              ]
+            }
+          ],
+          "orig": "A minimal document with a single footnote reference 1  and nothing else on the page besides the footnote block itself.",
+          "text": "A minimal document with a single footnote reference 1  and nothing else on the page besides the footnote block itself.",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/1",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 672.1151925078125,
+                "r": 233.35347975,
+                "b": 659.7185925078124,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                29
+              ]
+            }
+          ],
+          "orig": "1  This is the only footnote.",
+          "text": "1  This is the only footnote.",
+          "formatting": null,
+          "hyperlink": null
+        }
+      ],
+      "pictures": [],
+      "tables": [],
+      "key_value_items": [],
+      "form_items": [],
+      "pages": {
+        "1": {
+          "size": {
+            "width": 595.2755737304688,
+            "height": 841.8897705078125
+          },
+          "image": null,
+          "page_no": 1
+        }
+      }
+    },
+    "html_content": null,
+    "text_content": null,
+    "doctags_content": null,
+    "doclang_content": null
+  },
+  "status": "success",
+  "errors": [],
+  "processing_time": 0.5482729680006742,
+  "timings": {},
+  "confidence": {
+    "parse_score": 1.0,
+    "layout_score": 0.9539704322814941,
+    "table_score": null,
+    "ocr_score": null,
+    "mean_score": 0.9769852161407471,
+    "low_score": 0.9562719106674195,
+    "mean_grade": "excellent",
+    "low_grade": "excellent"
+  }
+}

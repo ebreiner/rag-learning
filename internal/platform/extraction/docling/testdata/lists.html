@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lists</title>
+<style>
+  body { font-family: Georgia, serif; line-height: 1.5; margin: 2cm; }
+  li > ul, li > ol { margin-left: 3em; margin-top: 0.5em; }
+</style>
+</head>
+<body>
+
+<h1>List Extraction Test</h1>
+<p>This document exercises ordered, unordered, and nested list handling —
+the nested lists are the fixture responsible for proving real multi-depth
+parent/child graph wiring (a plain list-in-list is a genuine structural
+nesting, unlike headings which appear to be flat siblings under body).</p>
+
+<h2>Unordered, top-level</h2>
+<ul>
+  <li>First unordered item</li>
+  <li>Second unordered item</li>
+  <li>Third unordered item, with a nested list:
+    <ul>
+      <li>Nested unordered item A</li>
+      <li>Nested unordered item B</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Ordered, top-level</h2>
+<ol>
+  <li>First ordered step</li>
+  <li>Second ordered step</li>
+  <li>Third ordered step, with a nested list:
+    <ol>
+      <li>Nested ordered sub-step one</li>
+      <li>Nested ordered sub-step two</li>
+    </ol>
+  </li>
+</ol>
+
+</body>
+</html>

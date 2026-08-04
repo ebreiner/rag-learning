@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Furniture</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2.5cm 2cm 2.5cm 2cm;
+
+    @top-center {
+      content: "RAG Learning — Furniture Extraction Test";
+      font-size: 9pt;
+      color: #555;
+    }
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9pt;
+      color: #555;
+    }
+  }
+
+  body { font-family: Georgia, serif; line-height: 1.5; }
+  h1 { page-break-before: always; }
+  h1:first-of-type { page-break-before: avoid; }
+</style>
+</head>
+<body>
+
+<h1>Furniture Extraction Test — Section One</h1>
+<p>This document confirms that the running header/footer defined via
+CSS @page margin boxes gets classified by docling as furniture-layer
+content (page_header/page_footer), distinct from this body text.</p>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do
+eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+
+<h1>Furniture Extraction Test — Section Two</h1>
+<p>Second page, forced via page-break-before on this heading. Ut enim ad
+minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip
+ex ea commodo consequat.</p>
+<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum
+dolore eu fugiat nulla pariatur.</p>
+
+<h1>Furniture Extraction Test — Section Three</h1>
+<p>Third page. Excepteur sint occaecat cupidatat non proident, sunt in
+culpa qui officia deserunt mollit anim id est laborum.</p>
+<p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem
+accusantium doloremque laudantium, totam rem aperiam.</p>
+
+</body>
+</html>

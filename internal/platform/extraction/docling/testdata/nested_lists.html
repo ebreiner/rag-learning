@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nested Lists</title>
+<style>
+  body { font-family: Georgia, serif; line-height: 1.5; margin: 2cm; }
+  li > ul, li > ol { margin-left: 3em; margin-top: 0.5em; }
+</style>
+</head>
+<body>
+
+<h1>Nested List Type-Switch Test</h1>
+<p>This document exercises a list that switches type across nesting
+depth: an ordered list containing a nested unordered list, and (further
+down) an unordered list containing a nested ordered list. The plain
+lists.html fixture already nests same-type lists (ul-in-ul, ol-in-ol)
+and flattens them into a single group with only the bullet/number marker
+changing per item; this fixture checks whether a type switch across the
+nesting boundary changes that behavior — e.g. produces a separate child
+group, or a different label.</p>
+
+<h2>Ordered containing nested unordered</h2>
+<ol>
+  <li>First ordered step</li>
+  <li>Second ordered step, with a nested unordered list:
+    <ul>
+      <li>Nested unordered item A</li>
+      <li>Nested unordered item B</li>
+    </ul>
+  </li>
+  <li>Third ordered step</li>
+</ol>
+
+<h2>Unordered containing nested ordered</h2>
+<ul>
+  <li>First unordered item</li>
+  <li>Second unordered item, with a nested ordered list:
+    <ol>
+      <li>Nested ordered sub-step one</li>
+      <li>Nested ordered sub-step two</li>
+    </ol>
+  </li>
+  <li>Third unordered item</li>
+</ul>
+
+</body>
+</html>

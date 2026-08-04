@@ -27,9 +27,6 @@ retrieve user-query: build
 inspect: build
 	./main inspect
 
-serve: build
-	./main serve mcp
-
 
 ###############
 # scrape-cli

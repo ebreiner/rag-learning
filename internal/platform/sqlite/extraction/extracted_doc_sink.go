@@ -6,7 +6,9 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"rag/internal/extract/step"
 	"rag/internal/platform/sqlite/querries"
 	"time"
@@ -31,136 +33,168 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 		return err
 	}
 	q := querries.New(tx)
+	defer tx.Rollback()
 
-	docParam := querries.CreateDocumentParams{
-		CreatedAt: time.Now(),
-		Name:      doc.Source.Name,
-	}
-	if len(doc.Source.Additional) > 0 {
-		docAdditotionalMetadata, err := json.Marshal(doc.Source.Additional)
-		if err != nil {
-			txErr := tx.Rollback()
-			if txErr != nil {
-				return fmt.Errorf("error rolling back transaction: %s\noriginal error: %s", txErr, err)
-			}
-			return err
+	_, err = q.ExistsDocument(e.ctx, doc.Source.SHA256)
+	if err == nil {
+		log.Printf("warning: duplicate document, skipping %s\n", doc.Source.Name)
+		return nil
+	} else if errors.Is(err, sql.ErrNoRows) {
+
+		docParam := querries.CreateDocumentParams{
+			CreatedAt: time.Now(),
+			Name:      doc.Source.Name,
+			Sha256:    doc.Source.SHA256,
 		}
-		metadataString := string(docAdditotionalMetadata)
-
-		docParam.MetadataJson = sql.NullString{String: metadataString, Valid: true}
-	}
-
-	docID, err := q.CreateDocument(e.ctx, docParam)
-	if err != nil {
-		txErr := tx.Rollback()
-		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at doc creation: %s\noriginal error: %s", txErr, err)
-		}
-		return err
-	}
-	representationParam := querries.CreateRepresentationParams{
-		DocumentID: docID,
-		Stage:      "extract",
-		CreatedAt:  time.Now(),
-	}
-
-	reprID, err := q.CreateRepresentation(e.ctx, representationParam)
-	if err != nil {
-		txErr := tx.Rollback()
-		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at representation creation: %s\noriginal error: %s", txErr, err)
-		}
-		return err
-	}
-
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, doc.Metadata.QualityScore); err != nil {
-		txErr := tx.Rollback()
-		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at buffer write: %s\noriginal error: %s", txErr, err)
-		}
-
-		return fmt.Errorf("error converting embedding to buffer: %s", err.Error())
-	}
-
-	extractionParam := querries.CreateExtractionParams{
-		RepresentationID: reprID,
-		MimeType:         doc.Metadata.MimeType,
-		QualityScore:     buf.Bytes(),
-		CreatedAt:        time.Now(),
-		MetadataJson:     sql.NullString{String: string(doc.Metadata.Additional)},
-	}
-	if len(doc.Metadata.Additional) > 0 {
-		extractionParam.MetadataJson.Valid = true
-	}
-
-	extID, err := q.CreateExtraction(e.ctx, extractionParam)
-	if err != nil {
-		txErr := tx.Rollback()
-		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at extraction creation: %s\noriginal error: %s", txErr, err)
-		}
-		return err
-	}
-	for _, node := range doc.Nodes {
-		childrenJson := sql.NullString{}
-		var childrenIndexes struct {
-			ChildrenIndexes *[]int64 `json:"children_indexes"`
-		}
-		if node.ChildrenIndexes != nil {
-			childrenIndexes.ChildrenIndexes = node.ChildrenIndexes
-			marshal, err := json.Marshal(childrenIndexes)
-
+		if len(doc.Source.Additional) > 0 {
+			docAdditotionalMetadata, err := json.Marshal(doc.Source.Additional)
 			if err != nil {
 				txErr := tx.Rollback()
 				if txErr != nil {
-					return fmt.Errorf("error rolling back transaction at marshaling children indexes: %s\noriginal error: %s", txErr, err)
+					return fmt.Errorf("error rolling back transaction: %s\noriginal error: %s", txErr, err)
 				}
 				return err
 			}
+			metadataString := string(docAdditotionalMetadata)
 
-			childrenJson.String = string(marshal)
-			childrenJson.Valid = true
+			docParam.MetadataJson = sql.NullString{String: metadataString, Valid: true}
 		}
 
-		param := querries.CreateExtractionNodeParams{
-			ExtractionID:        extID,
-			CreatedAt:           time.Now(),
-			NodeID:              node.ID,
-			NodeType:            node.NodeType,
-			ChildrenIndexesJson: childrenJson,
-		}
-
-		if node.ParentIndex != nil {
-			param.ParentIndex = sql.NullInt64{Int64: *node.ParentIndex, Valid: true}
-		}
-
-		if node.Level != nil {
-			param.Level = sql.NullInt64{Int64: *node.Level, Valid: true}
-		}
-
-		if node.Text != nil {
-			param.Text = sql.NullString{String: *node.Text, Valid: true}
-		}
-
-		err = q.CreateExtractionNode(e.ctx, param)
+		docID, err := q.CreateDocument(e.ctx, docParam)
 		if err != nil {
 			txErr := tx.Rollback()
 			if txErr != nil {
-				return fmt.Errorf("error rolling back transaction at node insertion: %s\noriginal error: %s", txErr, err)
+				return fmt.Errorf("error rolling back transaction at doc creation: %s\noriginal error: %s", txErr, err)
 			}
 			return err
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		txErr := tx.Rollback()
-		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at comitting: %s\noriginal error: %s", txErr, err)
+		representationParam := querries.CreateRepresentationParams{
+			DocumentID: docID,
+			Stage:      "extract",
+			CreatedAt:  time.Now(),
 		}
+
+		reprID, err := q.CreateRepresentation(e.ctx, representationParam)
+		if err != nil {
+			txErr := tx.Rollback()
+			if txErr != nil {
+				return fmt.Errorf("error rolling back transaction at representation creation: %s\noriginal error: %s", txErr, err)
+			}
+			return err
+		}
+
+		buf := new(bytes.Buffer)
+		if err := binary.Write(buf, binary.LittleEndian, doc.Metadata.QualityScore); err != nil {
+			txErr := tx.Rollback()
+			if txErr != nil {
+				return fmt.Errorf("error rolling back transaction at buffer write: %s\noriginal error: %s", txErr, err)
+			}
+
+			return fmt.Errorf("error converting embedding to buffer: %s", err.Error())
+		}
+
+		extractionParam := querries.CreateExtractionParams{
+			RepresentationID: reprID,
+			MimeType:         doc.Metadata.MimeType,
+			QualityScore:     buf.Bytes(),
+			CreatedAt:        time.Now(),
+			MetadataJson:     sql.NullString{String: string(doc.Metadata.Additional)},
+		}
+		if len(doc.Metadata.Additional) > 0 {
+			extractionParam.MetadataJson.Valid = true
+		}
+
+		extID, err := q.CreateExtraction(e.ctx, extractionParam)
+		if err != nil {
+			txErr := tx.Rollback()
+			if txErr != nil {
+				return fmt.Errorf("error rolling back transaction at extraction creation: %s\noriginal error: %s", txErr, err)
+			}
+			return err
+		}
+		var walk func(node *step.Node, parentID string) error
+		walk = func(node *step.Node, parentID string) error {
+			contentJSON, err := marshalContent(node)
+			if err != nil {
+				return fmt.Errorf("marshaling content for node %s: %w", node.ID, err)
+			}
+			provJSON, err := json.Marshal(node.Provenance)
+			if err != nil {
+				return fmt.Errorf("marshaling provenance for node %s: %w", node.ID, err)
+			}
+
+			param := querries.CreateExtractionNodeParams{
+				ExtractionID: extID,
+				CreatedAt:    time.Now(),
+				NodeID:       node.ID,
+				Kind:         string(node.Kind),
+				Layer:        string(node.Layer),
+			}
+			if parentID != "" {
+				param.ParentID = sql.NullString{String: parentID, Valid: true}
+			}
+			if contentJSON != nil {
+				param.ContentJson = sql.NullString{String: string(contentJSON), Valid: true}
+			}
+			if len(node.Provenance) > 0 {
+				param.ProvenanceJson = sql.NullString{String: string(provJSON), Valid: true}
+			}
+
+			if err := q.CreateExtractionNode(e.ctx, param); err != nil {
+				return err
+			}
+
+			for _, child := range node.Children {
+				if err := walk(child, node.ID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		for _, root := range doc.RootNodes {
+			if err := walk(root, ""); err != nil {
+				txErr := tx.Rollback()
+				if txErr != nil {
+					return fmt.Errorf("error rolling back transaction at node insertion: %s\noriginal error: %s", txErr, err)
+				}
+				return err
+			}
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			txErr := tx.Rollback()
+			if txErr != nil {
+				return fmt.Errorf("error rolling back transaction at comitting: %s\noriginal error: %s", txErr, err)
+			}
+			return err
+		}
+
+	} else {
 		return err
 	}
 
 	return nil
+}
+
+func marshalContent(node *step.Node) ([]byte, error) {
+	switch node.Kind {
+	case step.KindHeading:
+		return json.Marshal(node.Heading)
+	case step.KindParagraph:
+		return json.Marshal(node.Paragraph)
+	case step.KindCaption:
+		return json.Marshal(node.Caption)
+	case step.KindFootnote:
+		return json.Marshal(node.Footnote)
+	case step.KindListItem:
+		return json.Marshal(node.ListItem)
+	case step.KindTable:
+		return json.Marshal(node.Table)
+	case step.KindPicture:
+		return json.Marshal(node.Picture)
+	default:
+		return nil, nil
+	}
 }

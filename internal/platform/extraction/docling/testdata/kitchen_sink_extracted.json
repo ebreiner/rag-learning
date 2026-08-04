@@ -1,0 +1,833 @@
+{
+  "document": {
+    "filename": "kitchen_sink.pdf",
+    "md_content": null,
+    "json_content": {
+      "schema_name": "DoclingDocument",
+      "version": "1.10.0",
+      "name": "kitchen_sink",
+      "origin": {
+        "mimetype": "application/pdf",
+        "binary_hash": 14431953658679847202,
+        "filename": "kitchen_sink.pdf",
+        "uri": null
+      },
+      "furniture": {
+        "self_ref": "#/furniture",
+        "parent": null,
+        "children": [],
+        "content_layer": "furniture",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "body": {
+        "self_ref": "#/body",
+        "parent": null,
+        "children": [
+          {
+            "$ref": "#/texts/0"
+          },
+          {
+            "$ref": "#/texts/1"
+          },
+          {
+            "$ref": "#/texts/2"
+          },
+          {
+            "$ref": "#/texts/3"
+          },
+          {
+            "$ref": "#/texts/4"
+          },
+          {
+            "$ref": "#/texts/5"
+          },
+          {
+            "$ref": "#/texts/6"
+          },
+          {
+            "$ref": "#/texts/7"
+          },
+          {
+            "$ref": "#/texts/8"
+          },
+          {
+            "$ref": "#/texts/9"
+          },
+          {
+            "$ref": "#/tables/0"
+          },
+          {
+            "$ref": "#/tables/1"
+          }
+        ],
+        "content_layer": "body",
+        "meta": null,
+        "name": "_root_",
+        "label": "unspecified"
+      },
+      "groups": [],
+      "texts": [
+        {
+          "self_ref": "#/texts/0",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 725.0213572578125,
+                "r": 335.3989132500001,
+                "b": 696.8693572578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                15
+              ]
+            }
+          ],
+          "orig": "Kitchen Sink H1",
+          "text": "Kitchen Sink H1",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/1",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 673.9227322578125,
+                "r": 279.78491325,
+                "b": 652.8087322578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                15
+              ]
+            }
+          ],
+          "orig": "Kitchen Sink H2",
+          "text": "Kitchen Sink H2",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/2",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 632.6305860078126,
+                "r": 243.07967324999998,
+                "b": 616.1616660078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                15
+              ]
+            }
+          ],
+          "orig": "Kitchen Sink H3",
+          "text": "Kitchen Sink H3",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/3",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "section_header",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 595.9441072578124,
+                "r": 224.17091325,
+                "b": 581.8681072578125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                15
+              ]
+            }
+          ],
+          "orig": "Kitchen Sink H4",
+          "text": "Kitchen Sink H4",
+          "formatting": null,
+          "hyperlink": null,
+          "level": 1
+        },
+        {
+          "self_ref": "#/texts/4",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 561.6444285078126,
+                "r": 205.26215325000004,
+                "b": 549.9613485078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                15
+              ]
+            }
+          ],
+          "orig": "Kitchen Sink H5",
+          "text": "Kitchen Sink H5",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/5",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 528.2855610078125,
+                "r": 187.46567325,
+                "b": 518.8546410078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                15
+              ]
+            }
+          ],
+          "orig": "Kitchen Sink H6",
+          "text": "Kitchen Sink H6",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/6",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 496.78896000781253,
+                "r": 479.32691324999985,
+                "b": 344.8329600078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                414
+              ]
+            }
+          ],
+          "orig": "This document mixes several element types in one pass: a blockquote, a code block, all heading levels, an inline image inside a paragraph, and a table with a native <caption> element (rather than a figcaption wrapper, as used in table.html). Here is an inline image in the middle of a sentence, testing whether inline images inside flowing text are detected as picture regions the same way a block-level figure is.",
+          "text": "This document mixes several element types in one pass: a blockquote, a code block, all heading levels, an inline image inside a paragraph, and a table with a native <caption> element (rather than a figcaption wrapper, as used in table.html). Here is an inline image in the middle of a sentence, testing whether inline images inside flowing text are detected as picture regions the same way a block-level figure is.",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/7",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "text",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 127.19291325,
+                "t": 328.78896000781253,
+                "r": 472.15691325,
+                "b": 278.8329600078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                167
+              ]
+            }
+          ],
+          "orig": "This is a blockquote. It should be tested for whether Docling assigns it a distinct label, such as a hypothetical \"quote\" label, or whether it collapses to plain text.",
+          "text": "This is a blockquote. It should be tested for whether Docling assigns it a distinct label, such as a hypothetical \"quote\" label, or whether it collapses to plain text.",
+          "formatting": null,
+          "hyperlink": null
+        },
+        {
+          "self_ref": "#/texts/8",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "code",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 123.14291324999999,
+                "t": 252.72930150781258,
+                "r": 294.5029132500003,
+                "b": 195.28290150781243,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                56
+              ]
+            }
+          ],
+          "orig": "def greet(name): print(f\"Hello, {name}!\") greet(\"world\")",
+          "text": "def greet(name): print(f\"Hello, {name}!\") greet(\"world\")",
+          "formatting": null,
+          "hyperlink": null,
+          "captions": [],
+          "references": [],
+          "footnotes": [],
+          "image": null,
+          "code_language": "unknown"
+        },
+        {
+          "self_ref": "#/texts/9",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "caption",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.94291325,
+                "t": 169.1889600078125,
+                "r": 462.9109132499999,
+                "b": 137.2329600078125,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                87
+              ]
+            }
+          ],
+          "orig": "Table A: A table using a native HTML <caption> element instead of a figcaption wrapper.",
+          "text": "Table A: A table using a native HTML <caption> element instead of a figcaption wrapper.",
+          "formatting": null,
+          "hyperlink": null
+        }
+      ],
+      "pictures": [],
+      "tables": [
+        {
+          "self_ref": "#/tables/0",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "table",
+          "prov": [
+            {
+              "page_no": 1,
+              "bbox": {
+                "l": 112.33238983154297,
+                "t": 129.7230224609375,
+                "r": 482.3500061035156,
+                "b": 72.92816162109375,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                0
+              ]
+            }
+          ],
+          "captions": [],
+          "references": [],
+          "footnotes": [],
+          "image": null,
+          "data": {
+            "table_cells": [
+              {
+                "bbox": {
+                  "l": 121.19291325,
+                  "t": 719.89526325,
+                  "r": 145.97291324999998,
+                  "b": 733.97126325,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 0,
+                "end_row_offset_idx": 1,
+                "start_col_offset_idx": 0,
+                "end_col_offset_idx": 1,
+                "text": "Key",
+                "column_header": true,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              },
+              {
+                "bbox": {
+                  "l": 299.46448499999997,
+                  "t": 719.89526325,
+                  "r": 336.37648499999995,
+                  "b": 733.97126325,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 0,
+                "end_row_offset_idx": 1,
+                "start_col_offset_idx": 1,
+                "end_col_offset_idx": 2,
+                "text": "Value",
+                "column_header": true,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              },
+              {
+                "bbox": {
+                  "l": 121.19291325,
+                  "t": 747.7008105,
+                  "r": 154.74491325000002,
+                  "b": 761.6568105,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 1,
+                "end_row_offset_idx": 2,
+                "start_col_offset_idx": 0,
+                "end_col_offset_idx": 1,
+                "text": "alpha",
+                "column_header": false,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              },
+              {
+                "bbox": {
+                  "l": 299.46448499999997,
+                  "t": 747.7008105,
+                  "r": 307.096485,
+                  "b": 761.6568105,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 1,
+                "end_row_offset_idx": 2,
+                "start_col_offset_idx": 1,
+                "end_col_offset_idx": 2,
+                "text": "1",
+                "column_header": false,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              }
+            ],
+            "num_rows": 2,
+            "num_cols": 2,
+            "orientation": "rot_0",
+            "grid": [
+              [
+                {
+                  "bbox": {
+                    "l": 121.19291325,
+                    "t": 719.89526325,
+                    "r": 145.97291324999998,
+                    "b": 733.97126325,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 0,
+                  "end_row_offset_idx": 1,
+                  "start_col_offset_idx": 0,
+                  "end_col_offset_idx": 1,
+                  "text": "Key",
+                  "column_header": true,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                },
+                {
+                  "bbox": {
+                    "l": 299.46448499999997,
+                    "t": 719.89526325,
+                    "r": 336.37648499999995,
+                    "b": 733.97126325,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 0,
+                  "end_row_offset_idx": 1,
+                  "start_col_offset_idx": 1,
+                  "end_col_offset_idx": 2,
+                  "text": "Value",
+                  "column_header": true,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                }
+              ],
+              [
+                {
+                  "bbox": {
+                    "l": 121.19291325,
+                    "t": 747.7008105,
+                    "r": 154.74491325000002,
+                    "b": 761.6568105,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 1,
+                  "end_row_offset_idx": 2,
+                  "start_col_offset_idx": 0,
+                  "end_col_offset_idx": 1,
+                  "text": "alpha",
+                  "column_header": false,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                },
+                {
+                  "bbox": {
+                    "l": 299.46448499999997,
+                    "t": 747.7008105,
+                    "r": 307.096485,
+                    "b": 761.6568105,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 1,
+                  "end_row_offset_idx": 2,
+                  "start_col_offset_idx": 1,
+                  "end_col_offset_idx": 2,
+                  "text": "1",
+                  "column_header": false,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                }
+              ]
+            ]
+          },
+          "annotations": []
+        },
+        {
+          "self_ref": "#/tables/1",
+          "parent": {
+            "$ref": "#/body"
+          },
+          "children": [],
+          "content_layer": "body",
+          "meta": null,
+          "label": "table",
+          "prov": [
+            {
+              "page_no": 2,
+              "bbox": {
+                "l": 112.27610778808594,
+                "t": 785.978946685791,
+                "r": 482.50775146484375,
+                "b": 729.1889801025391,
+                "coord_origin": "BOTTOMLEFT"
+              },
+              "charspan": [
+                0,
+                0
+              ]
+            }
+          ],
+          "captions": [],
+          "references": [],
+          "footnotes": [],
+          "image": null,
+          "data": {
+            "table_cells": [
+              {
+                "bbox": {
+                  "l": 121.19291325,
+                  "t": 63.46275000000003,
+                  "r": 145.97291324999998,
+                  "b": 77.53875000000005,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 0,
+                "end_row_offset_idx": 1,
+                "start_col_offset_idx": 0,
+                "end_col_offset_idx": 1,
+                "text": "Key",
+                "column_header": true,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              },
+              {
+                "bbox": {
+                  "l": 299.46448499999997,
+                  "t": 63.46275000000003,
+                  "r": 336.37648499999995,
+                  "b": 77.53875000000005,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 0,
+                "end_row_offset_idx": 1,
+                "start_col_offset_idx": 1,
+                "end_col_offset_idx": 2,
+                "text": "Value",
+                "column_header": true,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              },
+              {
+                "bbox": {
+                  "l": 121.19291325,
+                  "t": 91.26829650000002,
+                  "r": 147.95291325,
+                  "b": 105.22429650000004,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 1,
+                "end_row_offset_idx": 2,
+                "start_col_offset_idx": 0,
+                "end_col_offset_idx": 1,
+                "text": "beta",
+                "column_header": false,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              },
+              {
+                "bbox": {
+                  "l": 299.46448499999997,
+                  "t": 91.26829650000002,
+                  "r": 307.096485,
+                  "b": 105.22429650000004,
+                  "coord_origin": "TOPLEFT"
+                },
+                "row_span": 1,
+                "col_span": 1,
+                "start_row_offset_idx": 1,
+                "end_row_offset_idx": 2,
+                "start_col_offset_idx": 1,
+                "end_col_offset_idx": 2,
+                "text": "2",
+                "column_header": false,
+                "row_header": false,
+                "row_section": false,
+                "fillable": false
+              }
+            ],
+            "num_rows": 2,
+            "num_cols": 2,
+            "orientation": "rot_0",
+            "grid": [
+              [
+                {
+                  "bbox": {
+                    "l": 121.19291325,
+                    "t": 63.46275000000003,
+                    "r": 145.97291324999998,
+                    "b": 77.53875000000005,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 0,
+                  "end_row_offset_idx": 1,
+                  "start_col_offset_idx": 0,
+                  "end_col_offset_idx": 1,
+                  "text": "Key",
+                  "column_header": true,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                },
+                {
+                  "bbox": {
+                    "l": 299.46448499999997,
+                    "t": 63.46275000000003,
+                    "r": 336.37648499999995,
+                    "b": 77.53875000000005,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 0,
+                  "end_row_offset_idx": 1,
+                  "start_col_offset_idx": 1,
+                  "end_col_offset_idx": 2,
+                  "text": "Value",
+                  "column_header": true,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                }
+              ],
+              [
+                {
+                  "bbox": {
+                    "l": 121.19291325,
+                    "t": 91.26829650000002,
+                    "r": 147.95291325,
+                    "b": 105.22429650000004,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 1,
+                  "end_row_offset_idx": 2,
+                  "start_col_offset_idx": 0,
+                  "end_col_offset_idx": 1,
+                  "text": "beta",
+                  "column_header": false,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                },
+                {
+                  "bbox": {
+                    "l": 299.46448499999997,
+                    "t": 91.26829650000002,
+                    "r": 307.096485,
+                    "b": 105.22429650000004,
+                    "coord_origin": "TOPLEFT"
+                  },
+                  "row_span": 1,
+                  "col_span": 1,
+                  "start_row_offset_idx": 1,
+                  "end_row_offset_idx": 2,
+                  "start_col_offset_idx": 1,
+                  "end_col_offset_idx": 2,
+                  "text": "2",
+                  "column_header": false,
+                  "row_header": false,
+                  "row_section": false,
+                  "fillable": false
+                }
+              ]
+            ]
+          },
+          "annotations": []
+        }
+      ],
+      "key_value_items": [],
+      "form_items": [],
+      "pages": {
+        "1": {
+          "size": {
+            "width": 595.2755737304688,
+            "height": 841.8897705078125
+          },
+          "image": null,
+          "page_no": 1
+        },
+        "2": {
+          "size": {
+            "width": 595.2755737304688,
+            "height": 841.8897705078125
+          },
+          "image": null,
+          "page_no": 2
+        }
+      }
+    },
+    "html_content": null,
+    "text_content": null,
+    "doctags_content": null,
+    "doclang_content": null
+  },
+  "status": "success",
+  "errors": [],
+  "processing_time": 2.2596507700000075,
+  "timings": {},
+  "confidence": {
+    "parse_score": 1.0,
+    "layout_score": 0.9178963926705448,
+    "table_score": null,
+    "ocr_score": null,
+    "mean_score": 0.9589481963352724,
+    "low_score": 0.9220015730370175,
+    "mean_grade": "excellent",
+    "low_grade": "excellent"
+  }
+}

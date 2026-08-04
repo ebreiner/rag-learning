@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kitchen Sink</title>
+<style>
+  body { font-family: Georgia, serif; line-height: 1.5; margin: 2cm; }
+  blockquote { border-left: 3px solid #999; margin: 1em 0; padding-left: 1em; color: #444; }
+  pre { background: #f4f4f4; padding: 1em; font-family: "Courier New", monospace; font-size: 0.85em; }
+  code { font-family: "Courier New", monospace; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { border: 1px solid #333; padding: 6px 10px; text-align: left; }
+  th { background: #eee; }
+  caption { caption-side: top; font-style: italic; margin-bottom: 0.5em; }
+  img.inline { width: 40px; height: 40px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<h1>Kitchen Sink H1</h1>
+<h2>Kitchen Sink H2</h2>
+<h3>Kitchen Sink H3</h3>
+<h4>Kitchen Sink H4</h4>
+<h5>Kitchen Sink H5</h5>
+<h6>Kitchen Sink H6</h6>
+
+<p>This document mixes several element types in one pass: a blockquote,
+a code block, all heading levels, an inline image inside a paragraph,
+and a table with a native &lt;caption&gt; element (rather than a
+figcaption wrapper, as used in table.html). Here is an inline image
+<img class="inline" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAGklEQVR4nGPQztlANmIY1TyqeVTzqOaB1QwA9BT/AKgSFLUAAAAASUVORK5CYII="
+    alt="tiny inline swatch">
+in the middle of a sentence, testing whether inline images inside flowing
+text are detected as picture regions the same way a block-level figure is.</p>
+
+<blockquote>
+  <p>This is a blockquote. It should be tested for whether Docling assigns
+  it a distinct label, such as a hypothetical "quote" label, or whether it
+  collapses to plain text.</p>
+</blockquote>
+
+<pre><code>def greet(name):
+    print(f"Hello, {name}!")
+
+greet("world")
+</code></pre>
+
+<table>
+  <caption>Table A: A table using a native HTML &lt;caption&gt; element instead of a figcaption wrapper.</caption>
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>alpha</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>beta</td>
+      <td>2</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>
