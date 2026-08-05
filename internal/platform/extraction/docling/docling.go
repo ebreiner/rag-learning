@@ -44,6 +44,8 @@ func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.Extr
 		return step.ExtractedDoc{}, err
 	}
 
+	extDoc.MimeType = rawDoc.Origin.MimeType
+
 	extDoc.Source = sourceDoc
 
 	return extDoc, nil

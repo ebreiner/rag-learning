@@ -17,20 +17,21 @@ func TestUnmarshallNodeKindCounts(t *testing.T) {
 		wantTables   int
 		wantPictures int
 		wantPages    int
+		wantMimeType string
 	}{
-		{"baseline", "baseline_extracted.json", 15, 0, 0, 0, 2},
-		{"empty", "empty_extracted.json", 1, 0, 0, 0, 1},
-		{"footnote", "footnote_extracted.json", 9, 0, 0, 0, 2},
-		{"furniture", "furniture_extracted.json", 15, 0, 0, 0, 3},
-		{"lists", "lists_extracted.json", 14, 2, 0, 0, 1},
-		{"picture", "picture_extracted.json", 3, 0, 0, 1, 1},
-		{"table", "table_extracted.json", 3, 0, 1, 0, 1},
-		{"footnote_no_heading", "footnote_no_heading_extracted.json", 8, 0, 0, 0, 2},
-		{"footnote_minimal", "footnote_minimal_extracted.json", 2, 0, 0, 0, 1},
-		{"footnote_css_generated", "footnote_css_generated_extracted.json", 4, 1, 0, 0, 1},
-		{"nested_lists", "nested_lists_extracted.json", 14, 2, 0, 0, 1},
-		{"kitchen_sink", "kitchen_sink_extracted.json", 10, 0, 2, 0, 2},
-		{"inline_image", "inline_image_extracted.json", 3, 0, 0, 0, 1},
+		{"baseline", "baseline_extracted.json", 15, 0, 0, 0, 2, "application/pdf"},
+		{"empty", "empty_extracted.json", 1, 0, 0, 0, 1, "application/pdf"},
+		{"footnote", "footnote_extracted.json", 9, 0, 0, 0, 2, "application/pdf"},
+		{"furniture", "furniture_extracted.json", 15, 0, 0, 0, 3, "application/pdf"},
+		{"lists", "lists_extracted.json", 14, 2, 0, 0, 1, "application/pdf"},
+		{"picture", "picture_extracted.json", 3, 0, 0, 1, 1, "application/pdf"},
+		{"table", "table_extracted.json", 3, 0, 1, 0, 1, "application/pdf"},
+		{"footnote_no_heading", "footnote_no_heading_extracted.json", 8, 0, 0, 0, 2, "application/pdf"},
+		{"footnote_minimal", "footnote_minimal_extracted.json", 2, 0, 0, 0, 1, "application/pdf"},
+		{"footnote_css_generated", "footnote_css_generated_extracted.json", 4, 1, 0, 0, 1, "application/pdf"},
+		{"nested_lists", "nested_lists_extracted.json", 14, 2, 0, 0, 1, "application/pdf"},
+		{"kitchen_sink", "kitchen_sink_extracted.json", 10, 0, 2, 0, 2, "application/pdf"},
+		{"inline_image", "inline_image_extracted.json", 3, 0, 0, 0, 1, "application/pdf"},
 	}
 
 	for _, fixture := range tests {
@@ -51,6 +52,11 @@ func TestUnmarshallNodeKindCounts(t *testing.T) {
 			if got := len(doc.Pages); got != fixture.wantPages {
 				t.Errorf("Pages = %d, want %d", got, fixture.wantPages)
 			}
+
+			if got := doc.Origin.MimeType; got != fixture.wantMimeType {
+				t.Errorf("mime_type = %s, want %s", got, fixture.wantMimeType)
+			}
+
 		})
 	}
 }
