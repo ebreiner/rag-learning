@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   representation_id INTEGER NOT NULL,
   position INTEGER NOT NULL,
   text TEXT NOT NULL,
+  breadcrumb TEXT NOT NULL,
   embedded INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY(representation_id) REFERENCES representations(id)
 );

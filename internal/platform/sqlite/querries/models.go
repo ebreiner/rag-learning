@@ -15,6 +15,7 @@ type Chunk struct {
 	RepresentationID int64
 	Position         int64
 	Text             string
+	Breadcrumb       string
 	Embedded         int64
 }
 

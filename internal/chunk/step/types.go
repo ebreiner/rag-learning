@@ -1,8 +1,9 @@
 package step
 
 type ChunkToSave struct {
-	Text     string
-	Position int64
+	Text       string
+	Breadcrumb string
+	Position   int64
 }
 
 type ChunkResult struct {
@@ -12,10 +13,69 @@ type ChunkResult struct {
 
 type ExtractionToChunk struct {
 	ParentRepresentationID int64
-	Nodes                  []ExtractionNode
+	Roots                  []*ExtractionNode
 }
 
+type NodeKind string
+
+const (
+	KindHeading     NodeKind = "heading"
+	KindParagraph   NodeKind = "paragraph"
+	KindCaption     NodeKind = "caption"
+	KindFootnote    NodeKind = "footnote"
+	KindListItem    NodeKind = "list_item"
+	KindList        NodeKind = "list"
+	KindTable       NodeKind = "table"
+	KindPicture     NodeKind = "picture"
+	KindGroup       NodeKind = "group" // generic container
+	KindUnsupported NodeKind = "unsupported"
+)
+
+type ContentLayer string
+
+const (
+	LayerFurniture ContentLayer = "furniture"
+	LayerBody      ContentLayer = "body"
+)
+
 type ExtractionNode struct {
-	NodeType string
-	Text     string
+	ID        string
+	Kind      NodeKind
+	Parent    *ExtractionNode
+	Layer     ContentLayer
+	Children  []*ExtractionNode
+	Paragraph *ParagraphContent
+	Heading   *HeadingContent
+	List      *ListItemContent
+	Table     *TableContent
+}
+
+type TableContent struct {
+	Rows  int64
+	Cols  int64
+	Cells []TableCell
+}
+
+type TableCell struct {
+	Text           string
+	RowStart       int64
+	RowEnd         int64
+	ColStart       int64
+	ColEnd         int64
+	IsColumnHeader bool
+}
+
+type HeadingContent struct {
+	Level int64  `json:"level"`
+	Text  string `json:"text"`
+}
+
+type ParagraphContent struct {
+	Text string `json:"text"`
+}
+
+type ListItemContent struct {
+	Text       string `json:"text"`
+	Marker     string `json:"marker"`
+	Enumerated bool   `json:"enumerated"`
 }

@@ -34,8 +34,9 @@ INSERT INTO chunks (
 	representation_id,
 	position,
 	text,
+	breadcrumb,
 	created_at
-) VALUES (?,?,?,?);
+) VALUES (?,?,?,?,?);
 
 
 -- name: CreateExtraction :one
@@ -133,12 +134,11 @@ ORDER BY id
 LIMIT ?;
 
 
--- name: GetDocumentIDsAfterID :many
+-- name: GetDocumentIDsAfterID :one
 SELECT id
 FROM documents
 WHERE  id > ?
-ORDER BY id
-LIMIT ?;
+ORDER BY id;
 
 
 -- name: GetLatestExtractionOfDoc :many
@@ -159,7 +159,6 @@ WITH latest_extraction AS (
 SELECT
   le.representation_id,
   le.representation_created_at,
-  le.extraction_id,
   le.mime_type,
   en.*
 FROM latest_extraction le

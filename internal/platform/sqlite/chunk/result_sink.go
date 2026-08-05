@@ -54,8 +54,9 @@ func (store ResultSink) SaveChunks(chunkResult step.ChunkResult) error {
 		param := querries.InsertChunkParams{
 			RepresentationID: representationID,
 			Text:             chunkResult.ChunksToSave[index].Text,
-			Position:         chunkResult.ChunksToSave[index].Position,
 			CreatedAt:        time.Now(),
+			Position:         chunkResult.ChunksToSave[index].Position,
+			Breadcrumb:       chunkResult.ChunksToSave[index].Breadcrumb,
 		}
 		err := q.InsertChunk(store.ctx, param)
 		if err != nil {
