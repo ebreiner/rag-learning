@@ -155,6 +155,7 @@ func TestGroupNodeBuild(t *testing.T) {
 		groupCase("missing self ref errors", "", "list", step.KindGroup, step.LayerBody, true),
 		groupCase("group empty content layer", "#/groups/1", "list", step.KindGroup, "", true),
 		groupCase("unknown label errors", "#/groups/0", "table", step.KindGroup, step.LayerBody, true),
+		groupCase("section is unsupported", "#/groups/0", "section", step.KindUnsupported, step.LayerBody, false),
 	}
 
 	runGroupNodeCases(t, groupCases)
@@ -186,6 +187,17 @@ func TestTextNodeBuild(t *testing.T) {
 	}
 
 	runTextNodeCases(t, listItemCases)
+
+	unsupportedCases := []textNodeCase{
+		unsupportedTextCase("caption is unsupported", "caption", step.LayerBody),
+		unsupportedTextCase("footnote is unsupported", "footnote", step.LayerBody),
+		unsupportedTextCase("page_header is unsupported", "page_header", step.LayerFurniture),
+		unsupportedTextCase("page_footer is unsupported", "page_footer", step.LayerFurniture),
+		unsupportedTextCase("code is unsupported", "code", step.LayerBody),
+	}
+
+	runTextNodeCases(t, unsupportedCases)
+
 }
 
 func TestBBoxNormalize(t *testing.T) {
@@ -322,9 +334,6 @@ func TestTableProvHandling(t *testing.T) {
 
 	runTableNodeCases(t, cases)
 
-}
-
-func TestContentLayerHandling(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool                      { return &b }
@@ -740,4 +749,22 @@ func buildNodesCaseFailing(name string, mutate func(*rawDoclingDocument)) buildN
 	doc := validRawDoc()
 	mutate(doc)
 	return buildNodesCase{name: name, doc: doc, wantErr: true}
+}
+
+func unsupportedTextCase(name, label string, layer step.ContentLayer) textNodeCase {
+	provs := []rawProv{provOnPage(1)}
+	return textNodeCase{
+		name: name,
+		input: rawTextItem{
+			SelfRef: "#/text/1", Label: label,
+			Text: "irrelevant for unsupported labels", Prov: provs,
+			ContentLayer: string(layer),
+		},
+		want: &step.Node{
+			ID:         "#/text/1",
+			Kind:       step.KindUnsupported,
+			Provenance: []step.Provenance{wantProvOnPage(1)},
+			Layer:      layer,
+		},
+	}
 }
