@@ -145,11 +145,9 @@ const createExtraction = `-- name: CreateExtraction :one
 INSERT INTO extractions (
 	representation_id,
 	created_at,
-	mime_type,
-	quality_score,
-	metadata_json
+	mime_type
 ) VALUES (
-	?,?,?,?,?
+	?,?,?
 )
 RETURNING id
 `
@@ -158,18 +156,10 @@ type CreateExtractionParams struct {
 	RepresentationID int64
 	CreatedAt        time.Time
 	MimeType         string
-	QualityScore     []byte
-	MetadataJson     sql.NullString
 }
 
 func (q *Queries) CreateExtraction(ctx context.Context, arg CreateExtractionParams) (int64, error) {
-	row := q.queryRow(ctx, q.createExtractionStmt, createExtraction,
-		arg.RepresentationID,
-		arg.CreatedAt,
-		arg.MimeType,
-		arg.QualityScore,
-		arg.MetadataJson,
-	)
+	row := q.queryRow(ctx, q.createExtractionStmt, createExtraction, arg.RepresentationID, arg.CreatedAt, arg.MimeType)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -348,9 +338,7 @@ WITH latest_extraction AS (
     r.id AS representation_id,
     r.created_at AS representation_created_at,
     e.id AS extraction_id,
-    e.mime_type,
-    e.quality_score,
-    e.metadata_json
+    e.mime_type
   FROM representations r
   JOIN extractions e
     ON e.representation_id = r.id
@@ -364,8 +352,6 @@ SELECT
   le.representation_created_at,
   le.extraction_id,
   le.mime_type,
-  le.quality_score,
-  le.metadata_json,
   en.id, en.created_at, en.extraction_id, en.node_id, en.parent_id, en.kind, en.layer, en.content_json, en.provenance_json
 FROM latest_extraction le
 JOIN extraction_nodes en
@@ -378,8 +364,6 @@ type GetLatestExtractionOfDocRow struct {
 	RepresentationCreatedAt time.Time
 	ExtractionID            int64
 	MimeType                string
-	QualityScore            []byte
-	MetadataJson            sql.NullString
 	ID                      int64
 	CreatedAt               time.Time
 	ExtractionID_2          int64
@@ -405,8 +389,6 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 			&i.RepresentationCreatedAt,
 			&i.ExtractionID,
 			&i.MimeType,
-			&i.QualityScore,
-			&i.MetadataJson,
 			&i.ID,
 			&i.CreatedAt,
 			&i.ExtractionID_2,
@@ -544,7 +526,7 @@ func (q *Queries) HeadExtractionNodes(ctx context.Context, limit int64) ([]Extra
 }
 
 const headExtractions = `-- name: HeadExtractions :many
-SELECT id, created_at, representation_id, mime_type, quality_score, metadata_json
+SELECT id, created_at, representation_id, mime_type
 FROM extractions
 ORDER BY id
 LIMIT ?
@@ -564,8 +546,6 @@ func (q *Queries) HeadExtractions(ctx context.Context, limit int64) ([]Extractio
 			&i.CreatedAt,
 			&i.RepresentationID,
 			&i.MimeType,
-			&i.QualityScore,
-			&i.MetadataJson,
 		); err != nil {
 			return nil, err
 		}

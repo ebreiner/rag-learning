@@ -1,10 +1,8 @@
 package extraction
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,25 +81,10 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 			return err
 		}
 
-		buf := new(bytes.Buffer)
-		if err := binary.Write(buf, binary.LittleEndian, doc.Metadata.QualityScore); err != nil {
-			txErr := tx.Rollback()
-			if txErr != nil {
-				return fmt.Errorf("error rolling back transaction at buffer write: %s\noriginal error: %s", txErr, err)
-			}
-
-			return fmt.Errorf("error converting embedding to buffer: %s", err.Error())
-		}
-
 		extractionParam := querries.CreateExtractionParams{
 			RepresentationID: reprID,
-			MimeType:         doc.Metadata.MimeType,
-			QualityScore:     buf.Bytes(),
 			CreatedAt:        time.Now(),
-			MetadataJson:     sql.NullString{String: string(doc.Metadata.Additional)},
-		}
-		if len(doc.Metadata.Additional) > 0 {
-			extractionParam.MetadataJson.Valid = true
+			MimeType:         doc.MimeType,
 		}
 
 		extID, err := q.CreateExtraction(e.ctx, extractionParam)

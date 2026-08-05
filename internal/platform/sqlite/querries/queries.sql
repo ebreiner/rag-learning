@@ -42,11 +42,9 @@ INSERT INTO chunks (
 INSERT INTO extractions (
 	representation_id,
 	created_at,
-	mime_type,
-	quality_score,
-	metadata_json
+	mime_type
 ) VALUES (
-	?,?,?,?,?
+	?,?,?
 )
 RETURNING id;
 
@@ -149,9 +147,7 @@ WITH latest_extraction AS (
     r.id AS representation_id,
     r.created_at AS representation_created_at,
     e.id AS extraction_id,
-    e.mime_type,
-    e.quality_score,
-    e.metadata_json
+    e.mime_type
   FROM representations r
   JOIN extractions e
     ON e.representation_id = r.id
@@ -165,8 +161,6 @@ SELECT
   le.representation_created_at,
   le.extraction_id,
   le.mime_type,
-  le.quality_score,
-  le.metadata_json,
   en.*
 FROM latest_extraction le
 JOIN extraction_nodes en

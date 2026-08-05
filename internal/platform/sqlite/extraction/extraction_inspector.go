@@ -3,10 +3,8 @@ package extraction
 import (
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math"
 	"rag/internal/platform/sqlite/querries"
 	"time"
 )
@@ -15,9 +13,6 @@ type extractionRow struct {
 	ID               int64     `json:"id"`
 	CreatedAt        time.Time `json:"created_at"`
 	RepresentationID int64     `json:"representation_id"`
-	MimeType         string    `json:"mime_type"`
-	QualityScore     float64   `json:"quality_score"`
-	MetadataJson     string    `json:"metadata_json"`
 }
 
 type stats struct {
@@ -65,21 +60,11 @@ func (i ExtractionInspector) Dump() (string, error) {
 
 	exts := make([]extractionRow, 0)
 	for _, row := range rows {
-		if len(row.QualityScore) != 8 {
-			return "", fmt.Errorf("error quality score length is not 8")
-		}
-
-		qualityScore := math.Float64frombits(binary.LittleEndian.Uint64(row.QualityScore))
 
 		ext := extractionRow{
 			ID:               row.ID,
 			CreatedAt:        row.CreatedAt,
 			RepresentationID: row.RepresentationID,
-			MimeType:         row.MimeType,
-			QualityScore:     qualityScore,
-		}
-		if row.MetadataJson.Valid {
-			ext.MetadataJson = row.MetadataJson.String
 		}
 
 		exts = append(exts, ext)

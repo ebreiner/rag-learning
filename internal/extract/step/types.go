@@ -7,14 +7,8 @@ type SourceDoc struct {
 	Additional map[string]string
 }
 
-type ExtractedMetadata struct {
-	MimeType     string
-	QualityScore float64
-	Additional   []byte
-}
-
 type ExtractedDoc struct {
+	MimeType  string
 	Source    SourceDoc
-	Metadata  ExtractedMetadata
 	RootNodes []*Node
 }

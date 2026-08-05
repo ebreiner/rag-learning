@@ -33,10 +33,7 @@ CREATE TABLE IF NOT EXISTS extractions (
   created_at DATETIME NOT NULL,
   representation_id INTEGER NOT NULL,
   mime_type TEXT NOT NULL,
-  quality_score BLOB NOT NULL,
-  metadata_json TEXT,
 
-  CHECK(metadata_json IS NULL OR json_valid(metadata_json)),
   FOREIGN KEY(representation_id) REFERENCES representations(id)
 );
 

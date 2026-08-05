@@ -31,8 +31,6 @@ type Extraction struct {
 	CreatedAt        time.Time
 	RepresentationID int64
 	MimeType         string
-	QualityScore     []byte
-	MetadataJson     sql.NullString
 }
 
 type ExtractionNode struct {
