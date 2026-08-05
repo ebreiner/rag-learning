@@ -116,6 +116,7 @@ func textNode(node *step.Node, text rawTextItem) error {
 		node.Kind = step.KindListItem
 	case "caption", "footnote", "page_header", "page_footer", "code":
 		log.Printf("warning: no support for node of label '%s'", text.Label)
+		node.Kind = step.KindUnsupported
 	default:
 		log.Printf("debug: error case, full value dump: \n\n%+v\n\n", text)
 		return fmt.Errorf("unknown label type '%s'", text.Label)
@@ -142,6 +143,7 @@ func groupNode(node *step.Node, group rawGroupItem) error {
 	//		node.Kind = step.KindHeading
 	//		node.Heading.Level = sec
 	case "section":
+		node.Kind = step.KindUnsupported
 		log.Printf("warning: no support for node of label '%s'", group.Label)
 	case "inline":
 		node.Kind = step.KindGroup

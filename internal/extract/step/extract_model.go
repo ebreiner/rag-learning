@@ -3,15 +3,16 @@ package step
 type NodeKind string
 
 const (
-	KindHeading   NodeKind = "heading"
-	KindParagraph NodeKind = "paragraph"
-	KindCaption   NodeKind = "caption"
-	KindFootnote  NodeKind = "footnote"
-	KindListItem  NodeKind = "list_item"
-	KindList      NodeKind = "list"
-	KindTable     NodeKind = "table"
-	KindPicture   NodeKind = "picture"
-	KindGroup     NodeKind = "group" // generic container
+	KindHeading     NodeKind = "heading"
+	KindParagraph   NodeKind = "paragraph"
+	KindCaption     NodeKind = "caption"
+	KindFootnote    NodeKind = "footnote"
+	KindListItem    NodeKind = "list_item"
+	KindList        NodeKind = "list"
+	KindTable       NodeKind = "table"
+	KindPicture     NodeKind = "picture"
+	KindGroup       NodeKind = "group" // generic container
+	KindUnsupported NodeKind = "unsupported"
 )
 
 type ContentLayer string
