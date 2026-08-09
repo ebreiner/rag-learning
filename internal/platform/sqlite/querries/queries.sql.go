@@ -296,40 +296,17 @@ func (q *Queries) GetChunkBatchAfterID(ctx context.Context, arg GetChunkBatchAft
 	return items, nil
 }
 
-const getDocumentIDsAfterID = `-- name: GetDocumentIDsAfterID :many
+const getDocumentIDsAfterID = `-- name: GetDocumentIDsAfterID :one
 SELECT id
 FROM documents
 WHERE  id > ?
 ORDER BY id
-LIMIT ?
 `
 
-type GetDocumentIDsAfterIDParams struct {
-	ID    int64
-	Limit int64
-}
-
-func (q *Queries) GetDocumentIDsAfterID(ctx context.Context, arg GetDocumentIDsAfterIDParams) ([]int64, error) {
-	rows, err := q.query(ctx, q.getDocumentIDsAfterIDStmt, getDocumentIDsAfterID, arg.ID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetDocumentIDsAfterID(ctx context.Context, id int64) (int64, error) {
+	row := q.queryRow(ctx, q.getDocumentIDsAfterIDStmt, getDocumentIDsAfterID, id)
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getLatestExtractionOfDoc = `-- name: GetLatestExtractionOfDoc :many
@@ -350,7 +327,6 @@ WITH latest_extraction AS (
 SELECT
   le.representation_id,
   le.representation_created_at,
-  le.extraction_id,
   le.mime_type,
   en.id, en.created_at, en.extraction_id, en.node_id, en.parent_id, en.kind, en.layer, en.content_json, en.provenance_json
 FROM latest_extraction le
@@ -362,11 +338,10 @@ ORDER BY en.id
 type GetLatestExtractionOfDocRow struct {
 	RepresentationID        int64
 	RepresentationCreatedAt time.Time
-	ExtractionID            int64
 	MimeType                string
 	ID                      int64
 	CreatedAt               time.Time
-	ExtractionID_2          int64
+	ExtractionID            int64
 	NodeID                  string
 	ParentID                sql.NullString
 	Kind                    string
@@ -387,11 +362,10 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 		if err := rows.Scan(
 			&i.RepresentationID,
 			&i.RepresentationCreatedAt,
-			&i.ExtractionID,
 			&i.MimeType,
 			&i.ID,
 			&i.CreatedAt,
-			&i.ExtractionID_2,
+			&i.ExtractionID,
 			&i.NodeID,
 			&i.ParentID,
 			&i.Kind,
@@ -413,7 +387,7 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 }
 
 const headChunks = `-- name: HeadChunks :many
-SELECT id, created_at, representation_id, position, text, embedded
+SELECT id, created_at, representation_id, position, text, breadcrumb, embedded
 FROM chunks
 ORDER BY id
 LIMIT ?
@@ -434,6 +408,7 @@ func (q *Queries) HeadChunks(ctx context.Context, limit int64) ([]Chunk, error) 
 			&i.RepresentationID,
 			&i.Position,
 			&i.Text,
+			&i.Breadcrumb,
 			&i.Embedded,
 		); err != nil {
 			return nil, err
@@ -601,14 +576,16 @@ INSERT INTO chunks (
 	representation_id,
 	position,
 	text,
+	breadcrumb,
 	created_at
-) VALUES (?,?,?,?)
+) VALUES (?,?,?,?,?)
 `
 
 type InsertChunkParams struct {
 	RepresentationID int64
 	Position         int64
 	Text             string
+	Breadcrumb       string
 	CreatedAt        time.Time
 }
 
@@ -617,6 +594,7 @@ func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error 
 		arg.RepresentationID,
 		arg.Position,
 		arg.Text,
+		arg.Breadcrumb,
 		arg.CreatedAt,
 	)
 	return err
