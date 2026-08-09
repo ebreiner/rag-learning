@@ -1,6 +1,12 @@
 package step
 
-type EmbeddingToSave struct {
+type EmbeddingsToSave struct {
+	Embeddings []Embedding
+	Model      string
+	Dim        int64
+}
+
+type Embedding struct {
 	ChunkID int64
 	Vector  []float64
 }

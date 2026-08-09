@@ -1,7 +1,7 @@
 package step
 
 type TopKRetriever interface {
-	TopKByANN(embedding []float64, k int64) (RetrievedChunkIDs, error)
+	TopKByANN(query Query, k int64) (RetrievedChunkIDs, error)
 	TopKByFTS(query string, k int64) (RetrievedChunkIDs, error)
 }
 
@@ -10,5 +10,5 @@ type ChunkHydrator interface {
 }
 
 type EmbedClient interface {
-	Embed([]string) ([][]float64, error)
+	EmbedQuery(string) (Query, error)
 }

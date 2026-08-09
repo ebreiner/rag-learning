@@ -16,3 +16,9 @@ const (
 	FTS
 	Embedding
 )
+
+type Query struct {
+	Vector []float64
+	Dim    int64
+	Model  string
+}

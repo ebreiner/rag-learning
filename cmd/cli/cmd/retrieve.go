@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"log"
 	"rag/internal/platform/config"
-	"rag/internal/platform/embedclient"
+	"rag/internal/platform/embedclient/kreuzberg"
+	"rag/internal/platform/embedclient/openai"
+	"rag/internal/platform/httpclient"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/retrieval/step"
+	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -38,6 +42,11 @@ to quickly create a Cobra application.`,
 				log.Fatal(err)
 			}
 
+			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
 				log.Fatal(err)
@@ -48,10 +57,44 @@ to quickly create a Cobra application.`,
 				log.Fatal(err)
 			}
 
+			modelFlag := cmd.Flags().Lookup("model")
+			if !modelFlag.Changed || modelFlag.Value.String() == "" {
+				log.Fatal("missing flag required flag: --model model-name")
+			}
+			model := modelFlag.Value.String()
+
+			dimFlag := cmd.Flags().Lookup("dim")
+			if !dimFlag.Changed || dimFlag.Value.String() == "" {
+				log.Fatal("missing flag required flag: --dimension 1024")
+			}
+
+			dim, err := strconv.Atoi(dimFlag.Value.String())
+			if err != nil {
+				log.Fatalf("error parsing flag --dimension: %s", err.Error())
+			}
+
+			var embedClient step.EmbedClient
+			httpClient := httpclient.New(time.Minute * 5)
+			if cmd.Flags().Lookup("xberg-url").Changed {
+				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL); err == nil {
+					embedClient = client
+				} else {
+					log.Fatal(err)
+					return
+				}
+			} else if cmd.Flags().Lookup("openai-url").Changed {
+				if client, err := openai.NewOpenAIClient(model, openAIBaseURL, int64(dim), httpClient); err == nil {
+					embedClient = client
+				} else {
+					log.Fatal(err)
+					return
+				}
+			}
+
 			retrievalTypeFlag := cmd.Flag("retrieval-type")
 			retrievalType := retrievalTypeFlag.Value.String()
 
-			err = retrieveChunks(db, xbergBaseURL, userQuery, retrievalType)
+			err = retrieveChunks(db, embedClient, userQuery, retrievalType)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -60,11 +103,13 @@ to quickly create a Cobra application.`,
 
 	retrieveCmd.Flags().StringP("query", "q", "", "-q 'alles zur farbe grün")
 	retrieveCmd.Flags().StringP("retrieval-type", "t", "hybrid", "-t fts | embedding | hybrid")
+	retrieveCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
+	retrieveCmd.Flags().Int64P("dim", "d", -1, "--dimension | -d 768")
 
 	return retrieveCmd
 }
 
-func retrieveChunks(db *sql.DB, xbergURL, query, retrievalType string) error {
+func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalType string) error {
 	var strategy step.RetrievalStrategy
 	switch retrievalType {
 	case "fts":
@@ -88,12 +133,7 @@ func retrieveChunks(db *sql.DB, xbergURL, query, retrievalType string) error {
 		return err
 	}
 
-	client, err := embedclient.NewKreuzbergClient(xbergURL)
-	if err != nil {
-		return err
-	}
-
-	chunks, err := step.RunRetrieval(query, strategy, 10, &hydrator, &retriever, client)
+	chunks, err := step.RunRetrieval(query, strategy, 10, &hydrator, &retriever, embedClient)
 	if err != nil {
 		return err
 	}

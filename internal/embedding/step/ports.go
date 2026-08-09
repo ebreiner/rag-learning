@@ -1,7 +1,7 @@
 package step
 
 type EmbedClient interface {
-	Embed([]string) ([][]float64, error)
+	EmbedChunks([]ChunkToEmbed) (EmbeddingsToSave, error)
 }
 
 type ChunkSource interface {
@@ -9,5 +9,5 @@ type ChunkSource interface {
 }
 
 type EmbeddingsSink interface {
-	SaveEmbeddings(embeddings []EmbeddingToSave) error
+	SaveEmbeddings(toSave EmbeddingsToSave) error
 }

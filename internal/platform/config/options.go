@@ -18,22 +18,25 @@ type Option struct {
 }
 
 type Globals struct {
-	XBergURL   Option
-	DoclingURL Option
-	DBPath     Option
-	LogPath    Option
+	XBergURL       Option
+	OpenAIEmbedURL Option
+	DoclingURL     Option
+	DBPath         Option
+	LogPath        Option
 }
 
 var GlobalOptions = Globals{
-	XBergURL:   Option{FlagLong: "xberg-url", FlagUsage: "--xberg-url https://stuff.foo.net/kreuzberg", Default: "http://localhost:8000", IsPath: false},
-	DoclingURL: Option{FlagLong: "docling-url", FlagUsage: "--docling-url https://stuff.foo.net/docling", Default: "http://localhost:5001", IsPath: false},
-	DBPath:     Option{FlagLong: "db-path", FlagUsage: "--db-path /path/to/db", Default: "./data.db", IsPath: true},
-	LogPath:    Option{FlagLong: "log-path", FlagUsage: "--log-path /path/to/foo.log", Default: "./rag-cli.log", IsPath: true},
+	OpenAIEmbedURL: Option{FlagLong: "openai-url", FlagUsage: "--openai-url https://stuff.foo.net/openai-compatible-endpoint", Default: "http://127.0.0.1:11434", IsPath: false},
+	XBergURL:       Option{FlagLong: "xberg-url", FlagUsage: "--xberg-url https://stuff.foo.net/kreuzberg", Default: "http://localhost:8000", IsPath: false},
+	DoclingURL:     Option{FlagLong: "docling-url", FlagUsage: "--docling-url https://stuff.foo.net/docling", Default: "http://localhost:5001", IsPath: false},
+	DBPath:         Option{FlagLong: "db-path", FlagUsage: "--db-path /path/to/db", Default: "./data.db", IsPath: true},
+	LogPath:        Option{FlagLong: "log-path", FlagUsage: "--log-path /path/to/foo.log", Default: "./rag-cli.log", IsPath: true},
 }
 
 func GlobalsList() []Option {
 	return []Option{
 		GlobalOptions.DBPath,
+		GlobalOptions.OpenAIEmbedURL,
 		GlobalOptions.XBergURL,
 		GlobalOptions.DoclingURL,
 		GlobalOptions.LogPath,
