@@ -3,6 +3,7 @@ package embedding
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"rag/internal/embedding/step"
 	"rag/internal/platform/sqlite"
 )
@@ -20,19 +21,25 @@ func NewEmbeddingsResultSink(db *sql.DB, ctx context.Context) (ResultSink, error
 	return sink, nil
 }
 
-func (s ResultSink) SaveEmbeddings(embeddings []step.EmbeddingToSave) error {
+func (s ResultSink) SaveEmbeddings(embeddings step.EmbeddingsToSave) error {
+	tableName, err := sqlite.SetupVecTable(s.dbClient, s.ctx, embeddings.Dim, embeddings.Model)
+	if err != nil {
+		return err
+	}
+
 	tx, err := s.dbClient.BeginTx(s.ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	for _, embedding := range embeddings {
+	insertQuerry := fmt.Sprintf("INSERT INTO %s(chunk_id, embedding) VALUES (?,?)", tableName)
+	for _, embedding := range embeddings.Embeddings {
 		packed, err := sqlite.PackVector(embedding.Vector)
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(s.ctx, "INSERT INTO embeddings_balanced_1536(chunk_id, embedding) VALUES (?,?)", embedding.ChunkID, packed)
+		_, err = tx.ExecContext(s.ctx, insertQuerry, embedding.ChunkID, packed)
 		if err != nil {
 			return err
 		}

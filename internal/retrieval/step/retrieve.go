@@ -82,20 +82,12 @@ func fts(query string, k int64, retriever TopKRetriever) (RetrievedChunkIDs, err
 func ann(query string, k int64, embedClient EmbedClient, retriever TopKRetriever) (RetrievedChunkIDs, error) {
 	var chunkIDs RetrievedChunkIDs
 
-	texts := []string{query}
-	embeddings, err := embedClient.Embed(texts)
+	embeddedQ, err := embedClient.EmbedQuery(query)
 	if err != nil {
 		return chunkIDs, err
 	}
 
-	var embedding []float64
-	if len(embeddings) != 1 {
-		return chunkIDs, fmt.Errorf("embedding input and output count do not match")
-	} else {
-		embedding = embeddings[0]
-	}
-
-	chunkIDs, err = retriever.TopKByANN(embedding, k)
+	chunkIDs, err = retriever.TopKByANN(embeddedQ, k)
 	if err != nil {
 		return chunkIDs, err
 	}

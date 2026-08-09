@@ -5,9 +5,13 @@ import (
 	"log"
 	"rag/internal/embedding/step"
 	"rag/internal/platform/config"
-	"rag/internal/platform/embedclient"
+	"rag/internal/platform/embedclient/kreuzberg"
+	"rag/internal/platform/embedclient/openai"
+	"rag/internal/platform/httpclient"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/embedding"
+	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -30,6 +34,10 @@ to quickly create a Cobra application.`,
 			if err != nil {
 				log.Fatal(err)
 			}
+			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
+			if err != nil {
+				log.Fatal(err)
+			}
 
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
@@ -44,22 +52,59 @@ to quickly create a Cobra application.`,
 			if err != nil {
 				log.Fatal(err.Error())
 			}
-			chunkSource, err := embedding.NewChunkSource(db, ctx)
+			modelFlag := cmd.Flags().Lookup("model")
+			if !modelFlag.Changed || modelFlag.Value.String() == "" {
+				log.Fatal("missing flag required flag: --model model-name")
+			}
+			model := modelFlag.Value.String()
+
+			dimFlag := cmd.Flags().Lookup("dim")
+			if !dimFlag.Changed || dimFlag.Value.String() == "" {
+				log.Fatal("missing flag required flag: --dimension 1024")
+			}
+
+			dim, err := strconv.Atoi(dimFlag.Value.String())
+			if err != nil {
+				log.Fatalf("error parsing flag --dimension: %s", err.Error())
+			}
+			tableName, err := sqlite.SetupVecTable(db, ctx, int64(dim), model)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			chunkSource, err := embedding.NewChunkSource(db, ctx, tableName)
 			source := &chunkSource
 			if err != nil {
 				log.Fatal(err.Error())
 			}
-			client, err := embedclient.NewKreuzbergClient(xbergBaseURL)
-			if err != nil {
-				log.Fatal(err.Error())
+
+			var embedClient step.EmbedClient
+			httpClient := httpclient.New(time.Minute * 5)
+			if cmd.Flags().Lookup("xberg-url").Changed {
+				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL); err == nil {
+					embedClient = client
+				} else {
+					log.Fatal(err)
+					return
+				}
+			} else if cmd.Flags().Lookup("openai-url").Changed {
+				if client, err := openai.NewOpenAIClient(model, openAIBaseURL, int64(dim), httpClient); err == nil {
+					embedClient = client
+				} else {
+					log.Fatal(err)
+					return
+				}
 			}
 
-			err = step.Embed(sink, source, client)
+			err = step.Embed(sink, source, embedClient)
 			if err != nil {
 				log.Fatal(err)
 			}
 		},
 	}
+
+	embedCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
+	embedCmd.Flags().Int64P("dim", "d", -1, "--dimension | -d 768")
 
 	return embedCmd
 }

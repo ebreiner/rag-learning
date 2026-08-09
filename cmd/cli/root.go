@@ -28,7 +28,6 @@ func Execute() {
 		cmd.NewChunkCmd(),
 		cmd.NewEmbedCmd(),
 		cmd.NewRetrieveCmd(),
-		cmd.NewInspectCmd(),
 		cmd.NewServeCmd(),
 	)
 

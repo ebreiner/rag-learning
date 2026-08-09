@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 	"rag/internal/platform/config"
-	"rag/internal/platform/embedclient"
+	"rag/internal/platform/embedclient/kreuzberg"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/retrieval/step"
@@ -115,7 +115,7 @@ func serveMCP(db *sql.DB, xbergBaseURL string) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		client, err := embedclient.NewKreuzbergClient(xbergBaseURL)
+		client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

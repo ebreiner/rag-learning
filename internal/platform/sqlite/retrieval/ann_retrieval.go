@@ -8,22 +8,22 @@ import (
 	"rag/internal/retrieval/step"
 )
 
-func (r *SQLiteRetriever) TopKByANN(embedding []float64, k int64) (step.RetrievedChunkIDs, error) {
+func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64) (step.RetrievedChunkIDs, error) {
 	chunkIDs := make([]int64, 0)
 
-	packed, err := sqlite.PackVector(embedding)
+	packed, err := sqlite.PackVector(query.Vector)
 	if err != nil {
 		return chunkIDs, err
 	}
 
-	query := `
-	SELECT e.chunk_id, e.distance
-	FROM embeddings_balanced_1536 AS e
-	WHERE e.embedding MATCH ?
-	ORDER BY e.distance
-	LIMIT ?
-	`
-	rows, err := r.db.QueryContext(r.ctx, query, packed, k)
+	tableName, err := sqlite.LookupVecTable(r.db, r.ctx, query.Dim, query.Model)
+	if err != nil {
+		return chunkIDs, err
+	}
+
+	q := fmt.Sprintf("SELECT e.chunk_id, e.distance FROM %s AS e WHERE e.embedding MATCH ? ORDER BY e.distance LIMIT ?", tableName)
+
+	rows, err := r.db.QueryContext(r.ctx, q, packed, k)
 	if errors.Is(err, sql.ErrNoRows) {
 		return chunkIDs, fmt.Errorf("error: no rows found")
 	}

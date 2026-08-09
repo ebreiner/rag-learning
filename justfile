@@ -27,6 +27,10 @@ retrieve user-query: build
 inspect: build
 	./main inspect
 
+test:
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      CGO_ENABLED=1 go test --tags "fts5" $(go list ./... | grep -v '/cmd/scrape')
 
 ###############
 # scrape-cli
