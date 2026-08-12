@@ -43,10 +43,6 @@ func (s ResultSink) SaveEmbeddings(embeddings step.EmbeddingsToSave) error {
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(s.ctx, "UPDATE chunks SET embedded = 1 WHERE id =?", embedding.ChunkID)
-		if err != nil {
-			return err
-		}
 	}
 
 	err = tx.Commit()

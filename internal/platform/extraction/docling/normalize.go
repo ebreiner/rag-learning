@@ -114,12 +114,12 @@ func textNode(node *step.Node, text rawTextItem) error {
 		}
 		node.ListItem = item
 		node.Kind = step.KindListItem
-	case "caption", "footnote", "page_header", "page_footer", "code":
-		log.Printf("warning: no support for node of label '%s'", text.Label)
+	case "caption", "footnote", "form", "key_value_region", "page_header", "page_footer", "code", "formula", "checkbox_selected", "checkbox_unselected", "chart", "document_index", "grading_scale", "handwritten_text", "empty_value", "reference", "field_region", "field_heading", "field_item", "field_key", "field_value", "field_hint", "marker", "paragraph":
+		log.Printf("warning: no support for text node of label '%s'", text.Label)
 		node.Kind = step.KindUnsupported
 	default:
-		log.Printf("debug: error case, full value dump: \n\n%+v\n\n", text)
-		return fmt.Errorf("unknown label type '%s'", text.Label)
+		log.Printf("unknown content type label type '%s'", text.Label)
+		node.Kind = step.KindUnsupported
 	}
 
 	node.ID = text.SelfRef
@@ -139,17 +139,14 @@ func groupNode(node *step.Node, group rawGroupItem) error {
 	switch group.Label {
 	case "list":
 		node.Kind = step.KindList
-	//	case "section":
-	//		node.Kind = step.KindHeading
-	//		node.Heading.Level = sec
-	case "section":
-		node.Kind = step.KindUnsupported
-		log.Printf("warning: no support for node of label '%s'", group.Label)
 	case "inline":
 		node.Kind = step.KindGroup
+	case "section", "key_value_area", "form_area", "unspecified", "ordered_list", "chapter", "sheet", "slide", "comment_section", "picture_area":
+		node.Kind = step.KindUnsupported
+		log.Printf("warning: no support for group node of label '%s'", group.Label)
 	default:
-		log.Printf("debug: error case, full value dump: \n\n%+v\n\n", group)
-		return fmt.Errorf("unknown label type '%s'", group.Label)
+		log.Printf("unknown group type label type '%s'", group.Label)
+		node.Kind = step.KindUnsupported
 	}
 	node.ID = group.SelfRef
 	return nil
@@ -217,7 +214,25 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 		return fmt.Errorf("missing self ref for table node")
 	}
 
-	if table.Label != "table" { // TODO: thesis, proof is still missing
+	// i'm only here to catch, log and filter unknown table node labels
+	switch table.Label {
+	case "table":
+	case "document_index":
+		node.ID = table.SelfRef
+		node.Kind = step.KindUnsupported
+		log.Printf("unsupported table node document_index, skipping")
+
+		return nil
+	default:
+		log.Printf("unknown table node: '%s' skipping node", table.Label)
+		node.ID = table.SelfRef
+		node.Kind = step.KindUnsupported
+
+		return nil
+	}
+
+	// switch should capture all unknown or unsupported labels, if this errors something broke probably
+	if table.Label != "table" {
 		return fmt.Errorf("wrong label '%s' for table node", table.Label)
 	}
 
@@ -351,6 +366,12 @@ func setContentLayer(node *step.Node, contentLayer string) error {
 		node.Layer = step.LayerBody
 	case "furniture":
 		node.Layer = step.LayerFurniture
+	case "invisible":
+		node.Layer = step.LayerInvisible
+	case "notes":
+		node.Layer = step.LayerNotes
+	case "background":
+		node.Layer = step.LayerBackground
 	default:
 		return fmt.Errorf("unknown content layer '%s'", contentLayer)
 	}

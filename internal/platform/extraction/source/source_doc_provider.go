@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"rag/internal/extract/step"
@@ -23,14 +24,19 @@ func NewSourceDocSource(inputPath string, ctx context.Context) (DocSource, error
 		inputPath = filepath.Join(cwd, inputPath)
 	}
 
-	dir, err := os.ReadDir(inputPath)
+	var paths []string
+	err := filepath.WalkDir(inputPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
 	if err != nil {
 		return source, err
-	}
-	var paths []string
-	for _, entry := range dir {
-		path := filepath.Join(inputPath, entry.Name())
-		paths = append(paths, path)
 	}
 
 	source.InputPaths = paths
