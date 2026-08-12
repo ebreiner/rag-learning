@@ -9,16 +9,19 @@ import (
 )
 
 type fakeRetriever struct {
-	annIDs   RetrievedChunkIDs
-	annErr   error
-	annCalls []Query
-	ftsIDs   RetrievedChunkIDs
-	ftsErr   error
-	ftsCalls []string
+	annIDs    RetrievedChunkIDs
+	annErr    error
+	annCalls  []Query
+	annKCalls []int64
+	ftsIDs    RetrievedChunkIDs
+	ftsErr    error
+	ftsCalls  []string
+	ftsKCalls []int64
 }
 
 func (f *fakeRetriever) TopKByANN(query Query, k int64) (RetrievedChunkIDs, error) {
 	f.annCalls = append(f.annCalls, query)
+	f.annKCalls = append(f.annKCalls, k)
 	if f.annErr != nil {
 		return nil, f.annErr
 	}
@@ -27,6 +30,7 @@ func (f *fakeRetriever) TopKByANN(query Query, k int64) (RetrievedChunkIDs, erro
 
 func (f *fakeRetriever) TopKByFTS(query string, k int64) (RetrievedChunkIDs, error) {
 	f.ftsCalls = append(f.ftsCalls, query)
+	f.ftsKCalls = append(f.ftsKCalls, k)
 	if f.ftsErr != nil {
 		return nil, f.ftsErr
 	}
@@ -131,16 +135,31 @@ func TestHybrid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hybrid() error = %v", err)
 	}
-	// chunk 2 and 3 appear in both rankings, so they should score highest via RRF.
-	if len(ids) == 0 {
-		t.Fatalf("expected merged ids, got none")
+
+	// chunk 2 and 3 appear in both rankings, so RRF should rank them above
+	// chunks that only appear in one ranking -- computed by hand from rrfK=60:
+	// 2: 1/61 (ann rank1) + 1/62 (fts rank2) ; 3: 1/62 (ann rank2) + 1/63 (fts rank3)
+	// 1: 1/61 (fts rank1) only ; 4: 1/63 (ann rank3) only
+	want := RetrievedChunkIDs{2, 3, 1, 4}
+	if diff := cmp.Diff(want, ids); diff != "" {
+		t.Errorf("merged ids mismatch (-want +got):\n%s", diff)
 	}
-	// both fts and ann should have been called with k*4, per hybrid()'s own scaling.
+
 	if len(retriever.ftsCalls) != 1 {
-		t.Fatalf("fts should be called exactly once")
+		t.Fatalf("fts should be called exactly once, got %d", len(retriever.ftsCalls))
 	}
 	if len(retriever.annCalls) != 1 {
-		t.Fatalf("ann should be called exactly once")
+		t.Fatalf("ann should be called exactly once, got %d", len(retriever.annCalls))
+	}
+
+	// hybrid() scales k by 4 before querying either ranking -- assert it
+	// actually happens rather than just trusting the comment.
+	wantHybridK := int64(40)
+	if retriever.ftsKCalls[0] != wantHybridK {
+		t.Errorf("fts called with k=%d, want %d", retriever.ftsKCalls[0], wantHybridK)
+	}
+	if retriever.annKCalls[0] != wantHybridK {
+		t.Errorf("ann called with k=%d, want %d", retriever.annKCalls[0], wantHybridK)
 	}
 }
 

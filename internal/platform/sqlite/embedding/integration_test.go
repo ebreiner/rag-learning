@@ -3,12 +3,31 @@ package embedding
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	"rag/internal/embedding/step"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/sqlitetest"
 )
+
+// alwaysFailingEmbedClient simulates every chunk being permanently
+// unembeddable. embedWithFallback's base case handles that by returning
+// step.EmbeddingsToSave{} -- the Go zero value: Dim 0, Model "", Embeddings
+// nil. That zero value used to reach SaveEmbeddings unguarded and trip
+// SetupVecTable's dim/model validation (vecTableName errors on dim==0 ||
+// model==""), crashing the whole run instead of just skipping a batch with
+// nothing left to save. fakeSink in embedding_test.go can't catch this
+// class of bug at all since it doesn't replicate that validation guard --
+// this needs the real sink.
+type alwaysFailingEmbedClient struct {
+	calls int
+}
+
+func (f *alwaysFailingEmbedClient) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
+	f.calls++
+	return step.EmbeddingsToSave{}, errors.New("simulated permanent embed failure")
+}
 
 // fakeEmbedClient produces deterministic, cheap vectors without any real
 // network call -- these integration tests are about the wiring between
@@ -118,6 +137,41 @@ func TestEmbedIntegration(t *testing.T) {
 		}
 		if countA != 3 {
 			t.Fatalf("bge-m3 table changed after embedding a second model: now %d rows, want still 3", countA)
+		}
+	})
+
+	t.Run("every chunk failing to embed is a clean skip against a real sink, not a crash", func(t *testing.T) {
+		db := sqlitetest.New(t)
+		sqlitetest.InsertChunk(t, db, "a chunk that will never embed")
+		ctx := context.Background()
+
+		tableName, err := sqlite.SetupVecTable(db, ctx, 4, "bge-m3")
+		if err != nil {
+			t.Fatalf("SetupVecTable: %v", err)
+		}
+		source, err := NewChunkSource(db, ctx, tableName)
+		if err != nil {
+			t.Fatalf("NewChunkSource: %v", err)
+		}
+		sink, err := NewEmbeddingsResultSink(db, ctx)
+		if err != nil {
+			t.Fatalf("NewEmbeddingsResultSink: %v", err)
+		}
+		client := &alwaysFailingEmbedClient{}
+
+		if err := step.Embed(&sink, &source, client); err != nil {
+			t.Fatalf("Embed() error = %v, want nil -- a batch with nothing embeddable should be skipped, not fatal", err)
+		}
+		if client.calls != 1 {
+			t.Fatalf("client called %d times, want 1", client.calls)
+		}
+
+		var count int
+		if err := db.QueryRow("SELECT count(*) FROM embeddings_bge_m3_4").Scan(&count); err != nil {
+			t.Fatalf("querying embeddings_bge_m3_4: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("got %d rows saved, want 0 -- nothing was embeddable", count)
 		}
 	})
 }
