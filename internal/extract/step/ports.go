@@ -10,4 +10,5 @@ type Extractor interface {
 
 type DocSink interface {
 	SaveExtractedDoc(doc ExtractedDoc) error
+	ExistsDoc(sha256 string) (bool, error)
 }

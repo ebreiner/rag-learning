@@ -87,7 +87,7 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string) error {
 	}
 
 	var client *http.Client
-	timeout := time.Second * 60
+	timeout := time.Second * 1800
 	if len(dumpDir) != 0 {
 		dumpDir, err := config.ResolvePath(dumpDir)
 		if err != nil {

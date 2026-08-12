@@ -154,7 +154,7 @@ func TestGroupNodeBuild(t *testing.T) {
 		groupCase("group becomes group node", "#/groups/1", "list", step.KindList, step.LayerBody, false),
 		groupCase("missing self ref errors", "", "list", step.KindGroup, step.LayerBody, true),
 		groupCase("group empty content layer", "#/groups/1", "list", step.KindGroup, "", true),
-		groupCase("unknown label errors", "#/groups/0", "table", step.KindGroup, step.LayerBody, true),
+		groupCase("unknown label errors", "#/groups/0", "foobar", step.KindUnsupported, step.LayerBody, false),
 		groupCase("section is unsupported", "#/groups/0", "section", step.KindUnsupported, step.LayerBody, false),
 	}
 
@@ -280,7 +280,6 @@ func TestTableNodeBuild(t *testing.T) {
 	baselineCases := []tableNodeCase{
 		tableCase("valid inputs", "table", "#/tables/1", 1, false, heightLookup, step.LayerBody),
 		tableCase("missing self ref", "table", "", 1, true, heightLookup, step.LayerBody),
-		tableCase("wrong label", "chart", "#/tables/1", 1, true, heightLookup, step.LayerBody),
 		tableCase("no page height", "table", "#/tables/1", 5, true, heightLookup, step.LayerBody),
 		tableCase("missing content layer", "table", "#/tables/1", 5, true, heightLookup, ""),
 	}
@@ -441,10 +440,10 @@ func TestBuildNodes(t *testing.T) {
 		{name: "empty document", doc: &rawDoclingDocument{}, wantIDs: []string{}},
 		{name: "one of each node type", doc: validRawDoc(),
 			wantIDs: []string{"#/texts/0", "#/tables/0", "#/pictures/0", "#/groups/0"}},
-		buildNodesCaseFailing("text build failure propagates", func(d *rawDoclingDocument) { d.Texts[0].Label = "unknown" }),
+		buildNodesCaseFailing("text build failure propagates", func(d *rawDoclingDocument) { d.Texts[0].SelfRef = "" }),
 		buildNodesCaseFailing("table build failure propagates", func(d *rawDoclingDocument) { d.Tables[0].SelfRef = "" }),
 		buildNodesCaseFailing("picture build failure propagates", func(d *rawDoclingDocument) { d.Pictures[0].Label = "chart" }),
-		buildNodesCaseFailing("group build failure propagates", func(d *rawDoclingDocument) { d.Groups[0].Label = "chart" }),
+		buildNodesCaseFailing("group build failure propagates", func(d *rawDoclingDocument) { d.Groups[0].SelfRef = "" }),
 		buildNodesCaseFailing("invalid page key propagates", func(d *rawDoclingDocument) { d.Pages = map[string]rawPage{"abc": {}} }),
 	}
 

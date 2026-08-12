@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 )
 
 func RunExtract(docSource DocSource, docSink DocSink, extractor Extractor) error {
@@ -20,7 +21,20 @@ func RunExtract(docSource DocSource, docSink DocSink, extractor Extractor) error
 			break
 		}
 
-		fmt.Printf("processing doc # %d: %s\n", counter, sourceDoc.SourcePath)
+		if sourceDoc.SHA256 == "" {
+			return fmt.Errorf("source doc is missing sha256: %s", sourceDoc.Name)
+		}
+
+		isDuplicate, err := docSink.ExistsDoc(sourceDoc.SHA256)
+		if err != nil {
+			return err
+		}
+		if isDuplicate {
+			log.Printf("duplicate doc skipping # %d: %s\n", counter, sourceDoc.SourcePath)
+			continue
+		}
+
+		log.Printf("processing doc # %d: %s\n", counter, sourceDoc.SourcePath)
 
 		extractedDoc, err := extractor.ExtractSourceDoc(sourceDoc)
 		if err != nil {

@@ -18,8 +18,11 @@ const (
 type ContentLayer string
 
 const (
-	LayerBody      ContentLayer = "body"
-	LayerFurniture ContentLayer = "furniture" // header/footer/page boilerplate
+	LayerBody       ContentLayer = "body"
+	LayerFurniture  ContentLayer = "furniture" // header/footer/page boilerplate
+	LayerBackground ContentLayer = "background"
+	LayerInvisible  ContentLayer = "invisible"
+	LayerNotes      ContentLayer = "notes"
 )
 
 type Node struct {
