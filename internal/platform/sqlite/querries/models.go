@@ -16,7 +16,6 @@ type Chunk struct {
 	Position         int64
 	Text             string
 	Breadcrumb       string
-	Embedded         int64
 }
 
 type Document struct {
