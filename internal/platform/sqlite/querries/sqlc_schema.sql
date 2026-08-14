@@ -52,3 +52,39 @@ CREATE TABLE IF NOT EXISTS extraction_nodes (
   CHECK (provenance_json IS NULL OR json_valid(provenance_json)),
   FOREIGN KEY(extraction_id) REFERENCES extractions(id)
 );
+
+CREATE TABLE IF NOT EXISTS golden_queries (
+	id INTEGER PRIMARY KEY,
+	created_at DATETIME NOT NULL,
+	query_text TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS golden_expectations (
+	id INTEGER PRIMARY KEY,
+	created_at DATETIME NOT NULL,
+	golden_query_id INTEGER NOT NULL,
+	document_name TEXT NOT NULL,
+	content_sha256 TEXT NOT NULL,
+	breadcrumb_contains TEXT,
+	text_contains TEXT,
+
+	FOREIGN KEY(golden_query_id) REFERENCES golden_queries(id)
+);
+
+CREATE TABLE IF NOT EXISTS eval_runs (
+	id INTEGER PRIMARY KEY,
+	run_at DATETIME NOT NULL,
+	comment TEXT
+);
+
+CREATE TABLE IF NOT EXISTS eval_results (
+	id INTEGER PRIMARY KEY,
+	eval_run_id INTEGER NOT NULL,
+	golden_expectation_id INTEGER NOT NULL,
+	strategy TEXT NOT NULL,
+	matched BOOL NOT NULL,
+
+	FOREIGN KEY(eval_run_id) REFERENCES eval_runs(id),
+	FOREIGN KEY(golden_expectation_id) REFERENCES golden_expectations(id)
+);
+
