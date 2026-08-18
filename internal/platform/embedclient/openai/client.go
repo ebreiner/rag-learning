@@ -2,9 +2,11 @@ package openai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"rag/internal/embedding/step"
@@ -16,9 +18,10 @@ type ClientOpenAI struct {
 	BaseURL *url.URL
 	Model   string
 	Dim     int64
+	Logger  *slog.Logger
 }
 
-func NewOpenAIClient(model, openAIURL string, dim int64, client *http.Client) (ClientOpenAI, error) {
+func NewOpenAIClient(model, openAIURL string, dim int64, client *http.Client, logger *slog.Logger) (ClientOpenAI, error) {
 	openAI := ClientOpenAI{}
 	if parsed, err := url.Parse(openAIURL); err == nil {
 		openAI.BaseURL = parsed
@@ -29,6 +32,7 @@ func NewOpenAIClient(model, openAIURL string, dim int64, client *http.Client) (C
 	openAI.Client = client
 	openAI.Dim = dim
 	openAI.Model = model
+	openAI.Logger = logger
 
 	return openAI, nil
 }
@@ -46,8 +50,8 @@ type embedPayload struct {
 	Dim   int64    `json:"dimensions"`
 }
 
-func (c ClientOpenAI) EmbedQuery(query string) (retrieval.Query, error) {
-	resp, err := c.runEmbedding([]string{query})
+func (c ClientOpenAI) EmbedQuery(query string, ctx context.Context) (retrieval.Query, error) {
+	resp, err := c.runEmbedding([]string{query}, ctx)
 	if err != nil {
 		return retrieval.Query{}, err
 	}
@@ -69,7 +73,7 @@ func (c ClientOpenAI) EmbedQuery(query string) (retrieval.Query, error) {
 	return q, nil
 }
 
-func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
+func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Context) (step.EmbeddingsToSave, error) {
 	toSave := step.EmbeddingsToSave{}
 
 	texts := make([]string, 0, len(chunks))
@@ -77,7 +81,7 @@ func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsTo
 		texts = append(texts, c.Text)
 	}
 
-	resp, err := c.runEmbedding(texts)
+	resp, err := c.runEmbedding(texts, ctx)
 	if err != nil {
 		return toSave, err
 	}
@@ -105,7 +109,7 @@ func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsTo
 	return toSave, nil
 }
 
-func (c ClientOpenAI) runEmbedding(texts []string) (embeddingResponse, error) {
+func (c ClientOpenAI) runEmbedding(texts []string, ctx context.Context) (embeddingResponse, error) {
 	payload := embedPayload{
 		Texts: texts,
 		Model: c.Model,
@@ -118,7 +122,7 @@ func (c ClientOpenAI) runEmbedding(texts []string) (embeddingResponse, error) {
 	}
 
 	embedURL := c.BaseURL.JoinPath("/v1/embeddings")
-	req, err := http.NewRequest(http.MethodPost, embedURL.String(), bytes.NewReader(bytePayload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, embedURL.String(), bytes.NewReader(bytePayload))
 	if err != nil {
 		return embeddingResponse{}, err
 	}

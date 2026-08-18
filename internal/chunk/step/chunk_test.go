@@ -1,11 +1,18 @@
 package step
 
 import (
+	"context"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+)
+
+var (
+	testCtx    = context.Background()
+	testLogger = slog.New(slog.DiscardHandler)
 )
 
 func mkHeadingNode(level int64, text string) *ExtractionNode {
@@ -108,7 +115,7 @@ func TestWalk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := walk([]*ExtractionNode{tt.root})
+			got, err := walk([]*ExtractionNode{tt.root}, testCtx, testLogger)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("walk() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -225,7 +232,7 @@ func TestWalkTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := walk([]*ExtractionNode{tt.root})
+			got, err := walk([]*ExtractionNode{tt.root}, testCtx, testLogger)
 			if err != nil {
 				t.Fatalf("walk() error = %v", err)
 			}
@@ -316,7 +323,7 @@ func TestMergeCandidates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mergeCandidates(tt.candidates)
+			got := mergeCandidates(tt.candidates, testCtx, testLogger)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("mergeCandidates() mismatch (-want +got):\n%s", diff)
 			}

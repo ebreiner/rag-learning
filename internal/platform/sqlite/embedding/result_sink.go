@@ -4,30 +4,31 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"rag/internal/embedding/step"
 	"rag/internal/platform/sqlite"
 )
 
 type ResultSink struct {
 	dbClient *sql.DB
-	ctx      context.Context
+	Logger   *slog.Logger
 }
 
-func NewEmbeddingsResultSink(db *sql.DB, ctx context.Context) (ResultSink, error) {
+func NewEmbeddingsResultSink(db *sql.DB, logger *slog.Logger) (ResultSink, error) {
 	sink := ResultSink{}
 	sink.dbClient = db
-	sink.ctx = ctx
+	sink.Logger = logger
 
 	return sink, nil
 }
 
-func (s ResultSink) SaveEmbeddings(embeddings step.EmbeddingsToSave) error {
-	tableName, err := sqlite.SetupVecTable(s.dbClient, s.ctx, embeddings.Dim, embeddings.Model)
+func (s ResultSink) SaveEmbeddings(embeddings step.EmbeddingsToSave, ctx context.Context) error {
+	tableName, err := sqlite.SetupVecTable(s.dbClient, ctx, embeddings.Dim, embeddings.Model)
 	if err != nil {
 		return err
 	}
 
-	tx, err := s.dbClient.BeginTx(s.ctx, nil)
+	tx, err := s.dbClient.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -39,7 +40,7 @@ func (s ResultSink) SaveEmbeddings(embeddings step.EmbeddingsToSave) error {
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(s.ctx, insertQuerry, embedding.ChunkID, packed)
+		_, err = tx.ExecContext(ctx, insertQuerry, embedding.ChunkID, packed)
 		if err != nil {
 			return err
 		}

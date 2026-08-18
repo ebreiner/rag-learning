@@ -2,11 +2,14 @@ package embedding
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/sqlitetest"
 )
+
+var testLogger = slog.New(slog.DiscardHandler)
 
 func TestChunksSourceNextChunks(t *testing.T) {
 	t.Run("returns a chunk that has no row in the target embeddings table", func(t *testing.T) {
@@ -19,12 +22,12 @@ func TestChunksSourceNextChunks(t *testing.T) {
 
 		id := sqlitetest.InsertChunk(t, db, "needs embedding")
 
-		src, err := NewChunkSource(db, ctx, tableName)
+		src, err := NewChunkSource(db, tableName, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		got, err := src.NextChunks(10)
+		got, err := src.NextChunks(10, ctx)
 		if err != nil {
 			t.Fatalf("NextChunks() error = %v", err)
 		}
@@ -50,12 +53,12 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("seeding embedding row: %v", err)
 		}
 
-		src, err := NewChunkSource(db, ctx, tableName)
+		src, err := NewChunkSource(db, tableName, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		got, err := src.NextChunks(10)
+		got, err := src.NextChunks(10, ctx)
 		if err != nil {
 			t.Fatalf("NextChunks() error = %v", err)
 		}
@@ -85,11 +88,11 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("seeding embedding row under modelA: %v", err)
 		}
 
-		srcA, err := NewChunkSource(db, ctx, tableA)
+		srcA, err := NewChunkSource(db, tableA, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource(A): %v", err)
 		}
-		gotA, err := srcA.NextChunks(10)
+		gotA, err := srcA.NextChunks(10, ctx)
 		if err != nil {
 			t.Fatalf("NextChunks(A) error = %v", err)
 		}
@@ -97,11 +100,11 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("modelA source should see nothing left to embed, got %d", len(gotA))
 		}
 
-		srcB, err := NewChunkSource(db, ctx, tableB)
+		srcB, err := NewChunkSource(db, tableB, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource(B): %v", err)
 		}
-		gotB, err := srcB.NextChunks(10)
+		gotB, err := srcB.NextChunks(10, ctx)
 		if err != nil {
 			t.Fatalf("NextChunks(B) error = %v", err)
 		}
@@ -123,12 +126,12 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			ids = append(ids, sqlitetest.InsertChunk(t, db, "chunk"))
 		}
 
-		src, err := NewChunkSource(db, ctx, tableName)
+		src, err := NewChunkSource(db, tableName, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		first, err := src.NextChunks(2)
+		first, err := src.NextChunks(2, ctx)
 		if err != nil {
 			t.Fatalf("first NextChunks() error = %v", err)
 		}
@@ -136,7 +139,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("first call: got %d chunks, want 2", len(first))
 		}
 
-		second, err := src.NextChunks(2)
+		second, err := src.NextChunks(2, ctx)
 		if err != nil {
 			t.Fatalf("second NextChunks() error = %v", err)
 		}
@@ -156,12 +159,12 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("SetupTable: %v", err)
 		}
 
-		src, err := NewChunkSource(db, ctx, tableName)
+		src, err := NewChunkSource(db, tableName, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		got, err := src.NextChunks(10)
+		got, err := src.NextChunks(10, ctx)
 		if err != nil {
 			t.Fatalf("NextChunks() error = %v", err)
 		}

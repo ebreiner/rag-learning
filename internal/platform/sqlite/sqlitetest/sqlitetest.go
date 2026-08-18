@@ -35,10 +35,9 @@ func New(t *testing.T) *sql.DB {
 	return db
 }
 
-// InsertChunk seeds a minimal documents -> representations -> chunks chain
-// and returns the new chunk's ID. Every real chunk row needs a valid
-// representation_id, so this exists to keep that boilerplate out of every
-// individual test.
+// InsertChunk seeds a minimal documents -> chunks chain and returns the new
+// chunk's ID. Every real chunk row needs a valid document_id, so this exists
+// to keep that boilerplate out of every individual test.
 func InsertChunk(t *testing.T, db *sql.DB, text string) int64 {
 	t.Helper()
 	return InsertChunkWithBreadcrumb(t, db, text, "")
@@ -63,21 +62,9 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 		t.Fatalf("sqlitetest.InsertChunk: document id: %v", err)
 	}
 
-	repRes, err := db.ExecContext(ctx,
-		`INSERT INTO representations (created_at, document_id, stage) VALUES (?, ?, ?)`,
-		now, docID, "chunk",
-	)
-	if err != nil {
-		t.Fatalf("sqlitetest.InsertChunk: inserting representation: %v", err)
-	}
-	repID, err := repRes.LastInsertId()
-	if err != nil {
-		t.Fatalf("sqlitetest.InsertChunk: representation id: %v", err)
-	}
-
 	chunkRes, err := db.ExecContext(ctx,
-		`INSERT INTO chunks (created_at, representation_id, position, text, breadcrumb) VALUES (?, ?, ?, ?, ?)`,
-		now, repID, 0, text, breadcrumb,
+		`INSERT INTO chunks (created_at, document_id, position, text, breadcrumb) VALUES (?, ?, ?, ?, ?)`,
+		now, docID, 0, text, breadcrumb,
 	)
 	if err != nil {
 		t.Fatalf("sqlitetest.InsertChunk: inserting chunk: %v", err)

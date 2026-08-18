@@ -1,51 +1,77 @@
 package step
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
-func Chunk(source ExtractionSource, sink ResultSink) error {
+func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger *slog.Logger) error {
 	var counter int
 	var outerErr error
 	for {
+		tracer := otel.Tracer("rag-cli-sdk")
+		stepCtx, stepSpan := tracer.Start(ctx, "chunk-step")
 		counter++
-		extract, err := source.NextExtraction()
+		nextExtractionCtx, nextExtractionSpan := tracer.Start(stepCtx, "next_extraction")
+		extract, err := source.NextExtraction(nextExtractionCtx)
 		if errors.Is(err, io.EOF) {
+			nextExtractionSpan.End()
+			stepSpan.End()
 			break
 		}
 
 		if err != nil {
-			fmt.Println("extraction source broke")
+			logger.ErrorContext(ctx, "run-chunk", "err", err)
 			outerErr = err
+			nextExtractionSpan.End()
+			stepSpan.End()
 			break
 		}
+		stepSpan.SetAttributes(
+			attribute.String("doc.id", string(extract.DocumentID)),
+		)
+		nextExtractionSpan.End()
 
-		err = processDoc(extract, sink)
+		processDocCtx, processDocSpan := tracer.Start(stepCtx, "process_doc")
+		result, err := processDoc(extract, processDocCtx, logger)
 		if err != nil {
 			outerErr = err
+			stepSpan.End()
+			processDocSpan.End()
 			break
 		}
+		processDocSpan.SetAttributes(attribute.Int("doc.chunks.processed", len(result.ChunksToSave)))
+		processDocSpan.End()
+
+		sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_chunks")
+		err = sink.SaveChunks(result, sinkCtx)
+		if err != nil {
+			outerErr = err
+			sinkSpan.End()
+			stepSpan.End()
+			break
+		}
+		sinkSpan.End()
+		stepSpan.End()
 	}
 
 	return outerErr
 }
 
-func processDoc(extraction ExtractionToChunk, sink ResultSink) error {
-	result := ChunkResult{ParentRepresentationID: extraction.ParentRepresentationID}
-	chunkCandidates, err := walk(extraction.Roots)
+func processDoc(extraction ExtractionToChunk, ctx context.Context, logger *slog.Logger) (ChunkResult, error) {
+	result := ChunkResult{DocumentID: extraction.DocumentID}
+	chunkCandidates, err := walk(extraction.Roots, ctx, logger)
 	if err != nil {
-		return err
+		return result, err
 	}
-	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(chunkCandidates)...)
-
-	if err := sink.SaveChunks(result); err != nil {
-		return err
-	}
-
-	return nil
+	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(chunkCandidates, ctx, logger)...)
+	return result, nil
 }
 
 type chunkCandidate struct {
@@ -54,7 +80,7 @@ type chunkCandidate struct {
 	Text       string
 }
 
-func walk(roots []*ExtractionNode) ([]chunkCandidate, error) {
+func walk(roots []*ExtractionNode, ctx context.Context, logger *slog.Logger) ([]chunkCandidate, error) {
 	var breadCrumbs []*HeadingContent
 	candidates := make([]chunkCandidate, 0)
 
@@ -92,7 +118,7 @@ func walk(roots []*ExtractionNode) ([]chunkCandidate, error) {
 				}
 				breadCrumbs = append(breadCrumbs, node.Heading)
 			} else {
-				log.Print("warning: missing heading info, falling back on placeholder or skip")
+				logger.WarnContext(ctx, "walk-nodes", "warn", "warning: missing heading info, falling back on placeholder or skip")
 			}
 
 		case "paragraph":
@@ -109,7 +135,7 @@ func walk(roots []*ExtractionNode) ([]chunkCandidate, error) {
 			var parts []string
 			for _, child := range node.Children {
 				if child.List == nil || child.List.Text == "" {
-					log.Print("warning: list_item missing content, skipping")
+					logger.WarnContext(ctx, "walk-nodes", "warn", "warning: list_item missing content, skipping")
 					continue
 				}
 				parts = append(parts, child.List.Marker+" "+child.List.Text)
@@ -129,19 +155,19 @@ func walk(roots []*ExtractionNode) ([]chunkCandidate, error) {
 
 		case "table":
 			if node.Table == nil {
-				log.Print("empty table content, skipping node in walk")
+				logger.WarnContext(ctx, "walk-nodes", "warn", "empty table content, skipping node in walk")
 				continue
 			}
 
 			if len(node.Table.Cells) == 0 {
-				log.Print("warning: table has no cells or header")
+				logger.WarnContext(ctx, "walk-nodes", "warn", "warning: table has no cells or header")
 			}
 
 			colHeaderByCol := make(map[int64]string)
 			for _, cell := range node.Table.Cells {
 				if cell.IsColumnHeader {
 					if len(cell.Text) == 0 {
-						log.Print("warning: empty column header")
+						logger.WarnContext(ctx, "walk-nodes", "warn", "warning: empty column header")
 					}
 					for i := cell.ColStart; i <= cell.ColEnd; i++ {
 						colHeaderByCol[i] = cell.Text
@@ -193,7 +219,7 @@ func walk(roots []*ExtractionNode) ([]chunkCandidate, error) {
 			candidates = append(candidates, candidate)
 
 		case "unsupported":
-			log.Print("unsupported node kind, skipping")
+			logger.WarnContext(ctx, "walk-nodes", "warn", "unsupported node kind, skipping")
 		default:
 			return candidates, fmt.Errorf("unknown node kind: %s", node.Kind)
 		}
@@ -206,7 +232,7 @@ func walk(roots []*ExtractionNode) ([]chunkCandidate, error) {
 	return candidates, nil
 }
 
-func mergeCandidates(candidates []chunkCandidate) []ChunkToSave {
+func mergeCandidates(candidates []chunkCandidate, ctx context.Context, logger *slog.Logger) []ChunkToSave {
 	merged := make([]ChunkToSave, 0)
 	maxBudget := 1000
 	budget := maxBudget
@@ -233,11 +259,11 @@ func mergeCandidates(candidates []chunkCandidate) []ChunkToSave {
 
 	for _, candidate := range candidates {
 		if candidate.Node.Kind == "unknown" {
-			log.Print("unknown node kind, skipping")
+			logger.WarnContext(ctx, "walk-nodes", "warn", "unknown node kind, skipping")
 			continue
 		}
 		if candidate.Node.Kind == "unsupported" {
-			log.Print("unsupported node kind, skipping")
+			logger.WarnContext(ctx, "walk-nodes", "warn", "unsupported node kind, skipping")
 			continue
 		}
 

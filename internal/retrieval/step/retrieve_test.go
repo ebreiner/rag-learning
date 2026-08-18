@@ -1,12 +1,15 @@
 package step
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+var testCtx = context.Background()
 
 type fakeRetriever struct {
 	annIDs    RetrievedChunkIDs
@@ -19,7 +22,7 @@ type fakeRetriever struct {
 	ftsKCalls []int64
 }
 
-func (f *fakeRetriever) TopKByANN(query Query, k int64) (RetrievedChunkIDs, error) {
+func (f *fakeRetriever) TopKByANN(query Query, k int64, ctx context.Context) (RetrievedChunkIDs, error) {
 	f.annCalls = append(f.annCalls, query)
 	f.annKCalls = append(f.annKCalls, k)
 	if f.annErr != nil {
@@ -28,7 +31,7 @@ func (f *fakeRetriever) TopKByANN(query Query, k int64) (RetrievedChunkIDs, erro
 	return f.annIDs, nil
 }
 
-func (f *fakeRetriever) TopKByFTS(query string, k int64) (RetrievedChunkIDs, error) {
+func (f *fakeRetriever) TopKByFTS(query string, k int64, ctx context.Context) (RetrievedChunkIDs, error) {
 	f.ftsCalls = append(f.ftsCalls, query)
 	f.ftsKCalls = append(f.ftsKCalls, k)
 	if f.ftsErr != nil {
@@ -42,7 +45,7 @@ type fakeEmbedClient struct {
 	err   error
 }
 
-func (f *fakeEmbedClient) EmbedQuery(q string) (Query, error) {
+func (f *fakeEmbedClient) EmbedQuery(q string, ctx context.Context) (Query, error) {
 	if f.err != nil {
 		return Query{}, f.err
 	}
@@ -55,7 +58,7 @@ type fakeHydrator struct {
 	calledWith RetrievedChunkIDs
 }
 
-func (f *fakeHydrator) HydrateChunks(ids RetrievedChunkIDs) ([]RetrievedChunk, error) {
+func (f *fakeHydrator) HydrateChunks(ids RetrievedChunkIDs, ctx context.Context) ([]RetrievedChunk, error) {
 	f.calledWith = ids
 	if f.err != nil {
 		return nil, f.err
@@ -69,7 +72,7 @@ func TestAnn(t *testing.T) {
 		retriever := &fakeRetriever{annIDs: RetrievedChunkIDs{3, 1, 2}}
 		client := &fakeEmbedClient{query: wantQuery}
 
-		ids, err := ann("hello", 10, client, retriever)
+		ids, err := ann("hello", 10, client, retriever, testCtx)
 		if err != nil {
 			t.Fatalf("ann() error = %v", err)
 		}
@@ -89,7 +92,7 @@ func TestAnn(t *testing.T) {
 		retriever := &fakeRetriever{}
 		client := &fakeEmbedClient{err: wantErr}
 
-		_, err := ann("hello", 10, client, retriever)
+		_, err := ann("hello", 10, client, retriever, testCtx)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("ann() error = %v, want %v", err, wantErr)
 		}
@@ -103,7 +106,7 @@ func TestAnn(t *testing.T) {
 		retriever := &fakeRetriever{annErr: wantErr}
 		client := &fakeEmbedClient{}
 
-		_, err := ann("hello", 10, client, retriever)
+		_, err := ann("hello", 10, client, retriever, testCtx)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("ann() error = %v, want %v", err, wantErr)
 		}
@@ -112,7 +115,7 @@ func TestAnn(t *testing.T) {
 
 func TestFts(t *testing.T) {
 	retriever := &fakeRetriever{ftsIDs: RetrievedChunkIDs{5, 6}}
-	ids, err := fts("hello", 10, retriever)
+	ids, err := fts("hello", 10, retriever, testCtx)
 	if err != nil {
 		t.Fatalf("fts() error = %v", err)
 	}
@@ -131,7 +134,7 @@ func TestHybrid(t *testing.T) {
 	}
 	client := &fakeEmbedClient{query: Query{Model: "fake"}}
 
-	ids, err := hybrid("hello", 10, retriever, client)
+	ids, err := hybrid("hello", 10, retriever, client, testCtx)
 	if err != nil {
 		t.Fatalf("hybrid() error = %v", err)
 	}
@@ -152,9 +155,9 @@ func TestHybrid(t *testing.T) {
 		t.Fatalf("ann should be called exactly once, got %d", len(retriever.annCalls))
 	}
 
-	// hybrid() scales k by 4 before querying either ranking -- assert it
+	// hybrid() scales k by 2 before querying either ranking -- assert it
 	// actually happens rather than just trusting the comment.
-	wantHybridK := int64(40)
+	wantHybridK := int64(20)
 	if retriever.ftsKCalls[0] != wantHybridK {
 		t.Errorf("fts called with k=%d, want %d", retriever.ftsKCalls[0], wantHybridK)
 	}
@@ -231,7 +234,7 @@ func TestRunRetrieval(t *testing.T) {
 		client := &fakeEmbedClient{err: errors.New("should never be called")}
 		hydrator := &fakeHydrator{chunks: []RetrievedChunk{{Rank: 1}}}
 
-		chunks, err := RunRetrieval("q", FTS, 5, hydrator, retriever, client)
+		chunks, err := RunRetrieval("q", FTS, 5, hydrator, retriever, client, testCtx)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -248,7 +251,7 @@ func TestRunRetrieval(t *testing.T) {
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
 		hydrator := &fakeHydrator{}
 
-		_, err := RunRetrieval("q", Embedding, 5, hydrator, retriever, client)
+		_, err := RunRetrieval("q", Embedding, 5, hydrator, retriever, client, testCtx)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -262,7 +265,7 @@ func TestRunRetrieval(t *testing.T) {
 		client := &fakeEmbedClient{}
 		hydrator := &fakeHydrator{}
 
-		_, err := RunRetrieval("q", RetrievalStrategy(99), 5, hydrator, retriever, client)
+		_, err := RunRetrieval("q", RetrievalStrategy(99), 5, hydrator, retriever, client, testCtx)
 		if err == nil {
 			t.Fatalf("expected an error for an unknown strategy")
 		}
@@ -277,7 +280,7 @@ func TestRunRetrieval(t *testing.T) {
 		client := &fakeEmbedClient{}
 		hydrator := &fakeHydrator{err: wantErr}
 
-		_, err := RunRetrieval("q", FTS, 5, hydrator, retriever, client)
+		_, err := RunRetrieval("q", FTS, 5, hydrator, retriever, client, testCtx)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("RunRetrieval() error = %v, want %v", err, wantErr)
 		}

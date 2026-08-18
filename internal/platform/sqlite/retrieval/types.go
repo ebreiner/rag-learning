@@ -1,17 +1,18 @@
 package retrieval
 
 import (
-	"context"
 	"database/sql"
+	"log/slog"
 )
 
 type SQLiteRetriever struct {
-	ctx context.Context
-	db  *sql.DB
+	db     *sql.DB
+	Logger *slog.Logger
 }
 
-func NewSQLiteRetriever(db *sql.DB, ctx context.Context) (SQLiteRetriever, error) {
-	retriever := SQLiteRetriever{ctx: ctx}
+func NewSQLiteRetriever(db *sql.DB, logger *slog.Logger) (*SQLiteRetriever, error) {
+	retriever := SQLiteRetriever{}
 	retriever.db = db
-	return retriever, nil
+	retriever.Logger = logger
+	return &retriever, nil
 }

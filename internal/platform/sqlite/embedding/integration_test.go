@@ -24,7 +24,7 @@ type alwaysFailingEmbedClient struct {
 	calls int
 }
 
-func (f *alwaysFailingEmbedClient) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
+func (f *alwaysFailingEmbedClient) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Context) (step.EmbeddingsToSave, error) {
 	f.calls++
 	return step.EmbeddingsToSave{}, errors.New("simulated permanent embed failure")
 }
@@ -39,7 +39,7 @@ type fakeEmbedClient struct {
 	calls int
 }
 
-func (f *fakeEmbedClient) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
+func (f *fakeEmbedClient) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Context) (step.EmbeddingsToSave, error) {
 	f.calls++
 	embeddings := make([]step.Embedding, len(chunks))
 	for i, c := range chunks {
@@ -59,17 +59,17 @@ func embedAll(t *testing.T, db *sql.DB, model string, dim int64) *fakeEmbedClien
 	if err != nil {
 		t.Fatalf("SetupTable(%s): %v", model, err)
 	}
-	source, err := NewChunkSource(db, ctx, tableName)
+	source, err := NewChunkSource(db, tableName, testLogger)
 	if err != nil {
 		t.Fatalf("NewChunkSource(%s): %v", model, err)
 	}
-	sink, err := NewEmbeddingsResultSink(db, ctx)
+	sink, err := NewEmbeddingsResultSink(db, testLogger)
 	if err != nil {
 		t.Fatalf("NewEmbeddingsResultSink: %v", err)
 	}
 	client := &fakeEmbedClient{model: model, dim: dim}
 
-	if err := step.Embed(&sink, &source, client); err != nil {
+	if err := step.Embed(&sink, &source, client, ctx, testLogger); err != nil {
 		t.Fatalf("Embed(%s): %v", model, err)
 	}
 	return client
@@ -149,17 +149,17 @@ func TestEmbedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("SetupVecTable: %v", err)
 		}
-		source, err := NewChunkSource(db, ctx, tableName)
+		source, err := NewChunkSource(db, tableName, testLogger)
 		if err != nil {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
-		sink, err := NewEmbeddingsResultSink(db, ctx)
+		sink, err := NewEmbeddingsResultSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewEmbeddingsResultSink: %v", err)
 		}
 		client := &alwaysFailingEmbedClient{}
 
-		if err := step.Embed(&sink, &source, client); err != nil {
+		if err := step.Embed(&sink, &source, client, ctx, testLogger); err != nil {
 			t.Fatalf("Embed() error = %v, want nil -- a batch with nothing embeddable should be skipped, not fatal", err)
 		}
 		if client.calls != 1 {

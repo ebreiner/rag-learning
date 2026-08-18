@@ -7,13 +7,13 @@ type ChunkToSave struct {
 }
 
 type ChunkResult struct {
-	ChunksToSave           []ChunkToSave
-	ParentRepresentationID int64
+	ChunksToSave []ChunkToSave
+	DocumentID   int64
 }
 
 type ExtractionToChunk struct {
-	ParentRepresentationID int64
-	Roots                  []*ExtractionNode
+	DocumentID int64
+	Roots      []*ExtractionNode
 }
 
 type NodeKind string

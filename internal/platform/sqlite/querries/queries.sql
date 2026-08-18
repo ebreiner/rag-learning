@@ -1,5 +1,3 @@
--- TODO: in pakete auftrennen
-
 -- name: CreateDocument :one
 INSERT INTO documents (
 	created_at,
@@ -17,31 +15,27 @@ FROM documents
 WHERE sha256 = ?;
 
 
--- name: CreateRepresentation :one
-INSERT INTO representations (
-	document_id,
-	parent_representation_id,
-	stage,
-	created_at
-) VALUES (
-	?,?,?,?
-)
-RETURNING id;
-
-
 -- name: InsertChunk :exec
 INSERT INTO chunks (
-	representation_id,
+	document_id,
 	position,
 	text,
 	breadcrumb,
 	created_at
 ) VALUES (?,?,?,?,?);
 
+-- name: DocAlreadyChunked :one
+SELECT id
+FROM chunks
+WHERE document_id = ?
+LIMIT 1;
+
+-- name: FlushChunks :exec
+DELETE FROM chunks;
 
 -- name: CreateExtraction :one
 INSERT INTO extractions (
-	representation_id,
+	document_id,
 	created_at,
 	mime_type
 ) VALUES (
@@ -73,52 +67,26 @@ ORDER BY id;
 
 
 -- name: GetLatestExtractionOfDoc :many
-WITH latest_extraction AS (
-  SELECT
-    r.id AS representation_id,
-    r.created_at AS representation_created_at,
-    e.id AS extraction_id,
-    e.mime_type
-  FROM representations r
-  JOIN extractions e
-    ON e.representation_id = r.id
-  WHERE r.document_id = ?
-    AND r.stage = 'extract'
-  ORDER BY r.created_at DESC, r.id DESC
-  LIMIT 1
-)
 SELECT
-  le.representation_id,
-  le.representation_created_at,
-  le.mime_type,
-  en.*
-FROM latest_extraction le
+	e.id AS extraction_id,
+	e.document_id,
+	e.mime_type,
+	en.node_id,
+	en.parent_id,
+	en.kind,
+	en.layer,
+	en.provenance_json,
+	en.content_json
+FROM extractions e
 JOIN extraction_nodes en
-  ON en.extraction_id = le.extraction_id
-ORDER BY en.id;
-
-
--- name: CreateChildRepresentationFromParent :one
-INSERT INTO representations (
-  document_id,
-  parent_representation_id,
-  stage,
-  created_at
-)
-SELECT
-  r.document_id,
-  ?,
-  ?,
-  ?
-FROM representations r
-WHERE r.id = ?
-RETURNING representations.id;
+	ON en.extraction_id = e.id
+WHERE e.document_id = ?;
 
 
 -- name: RetrievalChunksByIDs :many
 SELECT c.id, d.name, c.position, c.text
 FROM chunks AS c
-JOIN representations r ON r.id = c.representation_id
-JOIN documents d ON d.id = r.document_id
+JOIN documents AS d
+	ON c.document_id = d.id
 WHERE c.id IN (sqlc.slice('chunk_ids'));
 
