@@ -1,12 +1,19 @@
 package docling
 
 import (
+	"context"
 	"encoding/base64"
+	"log/slog"
 	"rag/internal/extract/step"
 	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+)
+
+var (
+	testCtx    = context.Background()
+	testLogger = slog.New(slog.DiscardHandler)
 )
 
 type textNodeCase struct {
@@ -366,7 +373,7 @@ func runTextNodeCases(t *testing.T, cases []textNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := textNode(node, testCase.input)
+			err := textNode(node, testCase.input, testCtx, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -390,7 +397,7 @@ func runGroupNodeCases(t *testing.T, cases []groupNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := groupNode(node, testCase.input)
+			err := groupNode(node, testCase.input, testCtx, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -414,7 +421,7 @@ func runTableNodeCases(t *testing.T, cases []tableNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := tableNode(node, *testCase.input, testCase.heights)
+			err := tableNode(node, *testCase.input, testCase.heights, testCtx, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -449,7 +456,7 @@ func TestBuildNodes(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			nodes, err := buildNodes(testCase.doc)
+			nodes, err := buildNodes(testCase.doc, testCtx, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -534,7 +541,7 @@ func runPictureNodeCases(t *testing.T, cases []pictureNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := pictureNode(node, testCase.input)
+			err := pictureNode(node, testCase.input, testCtx, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -708,7 +715,7 @@ func tableCellCaseHeaderFlags(name string) tableCellCase {
 func runTableCellCases(t *testing.T, cases []tableCellCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := tableCell(testCase.input)
+			got, err := tableCell(testCase.input, testCtx, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

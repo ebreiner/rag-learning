@@ -9,4 +9,4 @@ scrape
 .kreuzberg
 venv
 .venv
-
+rag-cli.log

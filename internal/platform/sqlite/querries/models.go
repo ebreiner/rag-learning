@@ -10,12 +10,12 @@ import (
 )
 
 type Chunk struct {
-	ID               int64
-	CreatedAt        time.Time
-	RepresentationID int64
-	Position         int64
-	Text             string
-	Breadcrumb       string
+	ID         int64
+	CreatedAt  time.Time
+	DocumentID int64
+	Position   int64
+	Text       string
+	Breadcrumb string
 }
 
 type Document struct {
@@ -27,10 +27,10 @@ type Document struct {
 }
 
 type Extraction struct {
-	ID               int64
-	CreatedAt        time.Time
-	RepresentationID int64
-	MimeType         string
+	ID         int64
+	CreatedAt  time.Time
+	DocumentID int64
+	MimeType   string
 }
 
 type ExtractionNode struct {
@@ -43,12 +43,4 @@ type ExtractionNode struct {
 	Layer          string
 	ContentJson    sql.NullString
 	ProvenanceJson sql.NullString
-}
-
-type Representation struct {
-	ID                     int64
-	CreatedAt              time.Time
-	DocumentID             int64
-	ParentRepresentationID sql.NullInt64
-	Stage                  string
 }

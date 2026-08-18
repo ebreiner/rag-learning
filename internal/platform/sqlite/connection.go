@@ -11,7 +11,8 @@ import (
 
 func NewConn(dbPath string) (*sql.DB, error) {
 	sqlite_vec.Auto()
-	db, err := sql.Open("sqlite3", "file:"+dbPath)
+	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL", dbPath)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("erro opening db connection: %s", err.Error())
 	} else {
@@ -32,6 +33,8 @@ func NewConn(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return db, fmt.Errorf("error running init sql: %s\n", err.Error())
 	}
+
+	db.SetMaxOpenConns(8)
 
 	return db, nil
 }

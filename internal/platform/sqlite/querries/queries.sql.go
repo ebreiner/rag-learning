@@ -12,44 +12,7 @@ import (
 	"time"
 )
 
-const createChildRepresentationFromParent = `-- name: CreateChildRepresentationFromParent :one
-INSERT INTO representations (
-  document_id,
-  parent_representation_id,
-  stage,
-  created_at
-)
-SELECT
-  r.document_id,
-  ?,
-  ?,
-  ?
-FROM representations r
-WHERE r.id = ?
-RETURNING representations.id
-`
-
-type CreateChildRepresentationFromParentParams struct {
-	ParentRepresentationID sql.NullInt64
-	Stage                  string
-	CreatedAt              time.Time
-	ID                     int64
-}
-
-func (q *Queries) CreateChildRepresentationFromParent(ctx context.Context, arg CreateChildRepresentationFromParentParams) (int64, error) {
-	row := q.queryRow(ctx, q.createChildRepresentationFromParentStmt, createChildRepresentationFromParent,
-		arg.ParentRepresentationID,
-		arg.Stage,
-		arg.CreatedAt,
-		arg.ID,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const createDocument = `-- name: CreateDocument :one
-
 INSERT INTO documents (
 	created_at,
 	name,
@@ -68,7 +31,6 @@ type CreateDocumentParams struct {
 	MetadataJson sql.NullString
 }
 
-// TODO: in pakete auftrennen
 func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) (int64, error) {
 	row := q.queryRow(ctx, q.createDocumentStmt, createDocument,
 		arg.CreatedAt,
@@ -83,7 +45,7 @@ func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) 
 
 const createExtraction = `-- name: CreateExtraction :one
 INSERT INTO extractions (
-	representation_id,
+	document_id,
 	created_at,
 	mime_type
 ) VALUES (
@@ -93,13 +55,13 @@ RETURNING id
 `
 
 type CreateExtractionParams struct {
-	RepresentationID int64
-	CreatedAt        time.Time
-	MimeType         string
+	DocumentID int64
+	CreatedAt  time.Time
+	MimeType   string
 }
 
 func (q *Queries) CreateExtraction(ctx context.Context, arg CreateExtractionParams) (int64, error) {
-	row := q.queryRow(ctx, q.createExtractionStmt, createExtraction, arg.RepresentationID, arg.CreatedAt, arg.MimeType)
+	row := q.queryRow(ctx, q.createExtractionStmt, createExtraction, arg.DocumentID, arg.CreatedAt, arg.MimeType)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -145,32 +107,15 @@ func (q *Queries) CreateExtractionNode(ctx context.Context, arg CreateExtraction
 	return err
 }
 
-const createRepresentation = `-- name: CreateRepresentation :one
-INSERT INTO representations (
-	document_id,
-	parent_representation_id,
-	stage,
-	created_at
-) VALUES (
-	?,?,?,?
-)
-RETURNING id
+const docAlreadyChunked = `-- name: DocAlreadyChunked :one
+SELECT id
+FROM chunks
+WHERE document_id = ?
+LIMIT 1
 `
 
-type CreateRepresentationParams struct {
-	DocumentID             int64
-	ParentRepresentationID sql.NullInt64
-	Stage                  string
-	CreatedAt              time.Time
-}
-
-func (q *Queries) CreateRepresentation(ctx context.Context, arg CreateRepresentationParams) (int64, error) {
-	row := q.queryRow(ctx, q.createRepresentationStmt, createRepresentation,
-		arg.DocumentID,
-		arg.ParentRepresentationID,
-		arg.Stage,
-		arg.CreatedAt,
-	)
+func (q *Queries) DocAlreadyChunked(ctx context.Context, documentID int64) (int64, error) {
+	row := q.queryRow(ctx, q.docAlreadyChunkedStmt, docAlreadyChunked, documentID)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -194,6 +139,15 @@ func (q *Queries) ExistsDocument(ctx context.Context, sha256 string) (ExistsDocu
 	return i, err
 }
 
+const flushChunks = `-- name: FlushChunks :exec
+DELETE FROM chunks
+`
+
+func (q *Queries) FlushChunks(ctx context.Context) error {
+	_, err := q.exec(ctx, q.flushChunksStmt, flushChunks)
+	return err
+}
+
 const getDocumentIDsAfterID = `-- name: GetDocumentIDsAfterID :one
 SELECT id
 FROM documents
@@ -208,44 +162,32 @@ func (q *Queries) GetDocumentIDsAfterID(ctx context.Context, id int64) (int64, e
 }
 
 const getLatestExtractionOfDoc = `-- name: GetLatestExtractionOfDoc :many
-WITH latest_extraction AS (
-  SELECT
-    r.id AS representation_id,
-    r.created_at AS representation_created_at,
-    e.id AS extraction_id,
-    e.mime_type
-  FROM representations r
-  JOIN extractions e
-    ON e.representation_id = r.id
-  WHERE r.document_id = ?
-    AND r.stage = 'extract'
-  ORDER BY r.created_at DESC, r.id DESC
-  LIMIT 1
-)
 SELECT
-  le.representation_id,
-  le.representation_created_at,
-  le.mime_type,
-  en.id, en.created_at, en.extraction_id, en.node_id, en.parent_id, en.kind, en.layer, en.content_json, en.provenance_json
-FROM latest_extraction le
+	e.id AS extraction_id,
+	e.document_id,
+	e.mime_type,
+	en.node_id,
+	en.parent_id,
+	en.kind,
+	en.layer,
+	en.provenance_json,
+	en.content_json
+FROM extractions e
 JOIN extraction_nodes en
-  ON en.extraction_id = le.extraction_id
-ORDER BY en.id
+	ON en.extraction_id = e.id
+WHERE e.document_id = ?
 `
 
 type GetLatestExtractionOfDocRow struct {
-	RepresentationID        int64
-	RepresentationCreatedAt time.Time
-	MimeType                string
-	ID                      int64
-	CreatedAt               time.Time
-	ExtractionID            int64
-	NodeID                  string
-	ParentID                sql.NullString
-	Kind                    string
-	Layer                   string
-	ContentJson             sql.NullString
-	ProvenanceJson          sql.NullString
+	ExtractionID   int64
+	DocumentID     int64
+	MimeType       string
+	NodeID         string
+	ParentID       sql.NullString
+	Kind           string
+	Layer          string
+	ProvenanceJson sql.NullString
+	ContentJson    sql.NullString
 }
 
 func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64) ([]GetLatestExtractionOfDocRow, error) {
@@ -258,18 +200,15 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 	for rows.Next() {
 		var i GetLatestExtractionOfDocRow
 		if err := rows.Scan(
-			&i.RepresentationID,
-			&i.RepresentationCreatedAt,
-			&i.MimeType,
-			&i.ID,
-			&i.CreatedAt,
 			&i.ExtractionID,
+			&i.DocumentID,
+			&i.MimeType,
 			&i.NodeID,
 			&i.ParentID,
 			&i.Kind,
 			&i.Layer,
-			&i.ContentJson,
 			&i.ProvenanceJson,
+			&i.ContentJson,
 		); err != nil {
 			return nil, err
 		}
@@ -286,7 +225,7 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 
 const insertChunk = `-- name: InsertChunk :exec
 INSERT INTO chunks (
-	representation_id,
+	document_id,
 	position,
 	text,
 	breadcrumb,
@@ -295,16 +234,16 @@ INSERT INTO chunks (
 `
 
 type InsertChunkParams struct {
-	RepresentationID int64
-	Position         int64
-	Text             string
-	Breadcrumb       string
-	CreatedAt        time.Time
+	DocumentID int64
+	Position   int64
+	Text       string
+	Breadcrumb string
+	CreatedAt  time.Time
 }
 
 func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error {
 	_, err := q.exec(ctx, q.insertChunkStmt, insertChunk,
-		arg.RepresentationID,
+		arg.DocumentID,
 		arg.Position,
 		arg.Text,
 		arg.Breadcrumb,
@@ -316,8 +255,8 @@ func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error 
 const retrievalChunksByIDs = `-- name: RetrievalChunksByIDs :many
 SELECT c.id, d.name, c.position, c.text
 FROM chunks AS c
-JOIN representations r ON r.id = c.representation_id
-JOIN documents d ON d.id = r.document_id
+JOIN documents AS d
+	ON c.document_id = d.id
 WHERE c.id IN (/*SLICE:chunk_ids*/?)
 `
 

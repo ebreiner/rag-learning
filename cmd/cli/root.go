@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"rag/cmd/cli/cmd"
+	"rag/cmd/cli/cmd/serve"
 	"rag/internal/platform/config"
 
 	"github.com/spf13/cobra"
@@ -28,7 +29,7 @@ func Execute() {
 		cmd.NewChunkCmd(),
 		cmd.NewEmbedCmd(),
 		cmd.NewRetrieveCmd(),
-		cmd.NewServeCmd(),
+		serve.NewServeCmd(),
 	)
 
 	err := rootCmd.Execute()

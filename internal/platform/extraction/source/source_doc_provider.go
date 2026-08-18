@@ -1,24 +1,24 @@
 package source
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"rag/internal/extract/step"
 )
 
 type DocSource struct {
-	ctx        context.Context
 	InputPaths []string
 	Index      int
+	Logger     *slog.Logger
 }
 
-func NewSourceDocSource(inputPath string, ctx context.Context) (DocSource, error) {
-	source := DocSource{}
+func NewSourceDocSource(inputPath string, logger *slog.Logger) (DocSource, error) {
+	source := DocSource{Logger: logger}
 	if !filepath.IsAbs(inputPath) {
 		cwd, _ := os.Getwd()
 		inputPath = filepath.Join(cwd, inputPath)
@@ -41,7 +41,6 @@ func NewSourceDocSource(inputPath string, ctx context.Context) (DocSource, error
 
 	source.InputPaths = paths
 	source.Index = 0
-	source.ctx = ctx
 
 	return source, nil
 }

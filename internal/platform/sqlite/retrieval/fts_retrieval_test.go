@@ -14,12 +14,12 @@ func TestTopKByFTS(t *testing.T) {
 		id := sqlitetest.InsertChunk(t, db, "single sign on via auth0 configuration")
 		sqlitetest.InsertChunk(t, db, "completely unrelated content about ldap servers")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("auth0", 10)
+		got, err := retriever.TopKByFTS("auth0", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -34,12 +34,12 @@ func TestTopKByFTS(t *testing.T) {
 		idStrong := sqlitetest.InsertChunk(t, db, "auth0 auth0 auth0 configuration for single sign on")
 		idWeak := sqlitetest.InsertChunk(t, db, "a passing mention of auth0 among other unrelated topics entirely")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("auth0", 10)
+		got, err := retriever.TopKByFTS("auth0", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -59,12 +59,12 @@ func TestTopKByFTS(t *testing.T) {
 		ctx := context.Background()
 		sqlitetest.InsertChunk(t, db, "something completely unrelated")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("nonexistent-term-xyz", 10)
+		got, err := retriever.TopKByFTS("nonexistent-term-xyz", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -78,12 +78,12 @@ func TestTopKByFTS(t *testing.T) {
 		ctx := context.Background()
 		id := sqlitetest.InsertChunk(t, db, "configuring ldap server settings")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("auth0 ldap", 10)
+		got, err := retriever.TopKByFTS("auth0 ldap", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -97,7 +97,7 @@ func TestTopKByFTS(t *testing.T) {
 		ctx := context.Background()
 		id := sqlitetest.InsertChunk(t, db, "an ldap configuration guide")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestTopKByFTS(t *testing.T) {
 		// "an" is <=2 runes and gets filtered from the term list, but the
 		// whole raw query is always appended as a final term (fts_retrieval.go),
 		// so "an ldap configuration guide" as a literal phrase should still match.
-		got, err := retriever.TopKByFTS("an ldap configuration guide", 10)
+		got, err := retriever.TopKByFTS("an ldap configuration guide", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -119,12 +119,12 @@ func TestTopKByFTS(t *testing.T) {
 		ctx := context.Background()
 		id := sqlitetest.InsertChunk(t, db, "it is on at go")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("it is on", 10)
+		got, err := retriever.TopKByFTS("it is on", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -138,12 +138,12 @@ func TestTopKByFTS(t *testing.T) {
 		ctx := context.Background()
 		sqlitetest.InsertChunk(t, db, "some content mentioning auth0 settings")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		_, err = retriever.TopKByFTS(`auth0 "quoted" settings`, 10)
+		_, err = retriever.TopKByFTS(`auth0 "quoted" settings`, 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v, want no error -- the quote should be escaped, not break the MATCH syntax", err)
 		}
@@ -156,12 +156,12 @@ func TestTopKByFTS(t *testing.T) {
 			sqlitetest.InsertChunk(t, db, "auth0 configuration document")
 		}
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("auth0", 2)
+		got, err := retriever.TopKByFTS("auth0", 2, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -179,12 +179,12 @@ func TestTopKByFTS(t *testing.T) {
 		ctx := context.Background()
 		sqlitetest.InsertChunk(t, db, "some content")
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS("", 10)
+		got, err := retriever.TopKByFTS("", 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByFTS(\"\") error = %v (if this now errors, that's a behavior change -- update this test deliberately)", err)
 		}

@@ -1,7 +1,9 @@
 package chunk
 
 import (
+	"context"
 	"database/sql"
+	"log/slog"
 	"testing"
 
 	"rag/internal/chunk/step"
@@ -9,6 +11,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+)
+
+var (
+	testCtx    = context.Background()
+	testLogger = slog.New(slog.DiscardHandler)
 )
 
 func ns(s string) sql.NullString {
@@ -198,7 +205,7 @@ func TestBuildMap(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := buildMap(tc.rows)
+			got, err := buildMap(tc.rows, testCtx, testLogger)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("buildMap() error = nil, want error")
@@ -324,7 +331,7 @@ func TestBuildMapThenWireGraph(t *testing.T) {
 		mkRow("#/texts/4", "", "heading", "body", `{"level":1,"text":"Chapter Two"}`),
 	}
 
-	nodes, err := buildMap(rows)
+	nodes, err := buildMap(rows, testCtx, testLogger)
 	if err != nil {
 		t.Fatalf("buildMap() unexpected error: %v", err)
 	}

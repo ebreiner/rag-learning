@@ -1,6 +1,7 @@
 package step
 
 type RetrievedChunk struct {
+	ID       int64
 	Rank     int64
 	DocTitle string
 	Position int64
@@ -9,12 +10,12 @@ type RetrievedChunk struct {
 
 type RetrievedChunkIDs []int64
 
-type RetrievalStrategy int
+type RetrievalStrategy string
 
 const (
-	Hybrid RetrievalStrategy = iota
-	FTS
-	Embedding
+	Hybrid    RetrievalStrategy = "hybrid"
+	FTS                         = "fts"
+	Embedding                   = "ann"
 )
 
 type Query struct {

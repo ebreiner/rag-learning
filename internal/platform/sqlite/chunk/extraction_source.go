@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"rag/internal/chunk/step"
 	"rag/internal/platform/sqlite/querries"
 )
@@ -15,14 +15,14 @@ import (
 type ExtractedDocSource struct {
 	dbClient *sql.DB
 	q        *querries.Queries
-	ctx      context.Context
 	lastID   int64
+	Logger   *slog.Logger
 }
 
-func NewExtractedDocSource(db *sql.DB, ctx context.Context) (ExtractedDocSource, error) {
+func NewExtractedDocSource(db *sql.DB, logger *slog.Logger) (ExtractedDocSource, error) {
 	source := ExtractedDocSource{}
 	source.dbClient = db
-	source.ctx = ctx
+	source.Logger = logger
 
 	q := querries.New(source.dbClient)
 	source.q = q
@@ -31,11 +31,11 @@ func NewExtractedDocSource(db *sql.DB, ctx context.Context) (ExtractedDocSource,
 	return source, nil
 }
 
-func (e *ExtractedDocSource) NextExtraction() (step.ExtractionToChunk, error) {
+func (e *ExtractedDocSource) NextExtraction(ctx context.Context) (step.ExtractionToChunk, error) {
 	for {
 		extractionToChunk := step.ExtractionToChunk{}
 
-		docID, err := e.q.GetDocumentIDsAfterID(e.ctx, e.lastID)
+		docID, err := e.q.GetDocumentIDsAfterID(ctx, e.lastID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return extractionToChunk, io.EOF
 		}
@@ -44,22 +44,31 @@ func (e *ExtractedDocSource) NextExtraction() (step.ExtractionToChunk, error) {
 		}
 
 		e.lastID = docID
+
+		_, err = e.q.DocAlreadyChunked(ctx, docID)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return extractionToChunk, err
+			}
+		} else {
+			e.Logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("doc '%d' already chunked, skipping", docID))
+			continue
+		}
+
 		var rows []querries.GetLatestExtractionOfDocRow
-		rows, err = e.q.GetLatestExtractionOfDoc(e.ctx, docID)
+		rows, err = e.q.GetLatestExtractionOfDoc(ctx, docID)
 		if err != nil {
 			return extractionToChunk, fmt.Errorf("error getting latest extraction for doc %d: %w", docID, err)
 		}
 
 		if len(rows) == 0 {
-			// current doc exists, but no chunkable extraction rows
-			// skip and continue with next doc
-			log.Printf("skipping chunking of doc %d, empty nodes nothing to chunk", docID)
+			e.Logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("skipping chunking of doc %d, empty nodes nothing to chunk", docID))
 			continue
 		}
 
-		extractionToChunk.ParentRepresentationID = rows[0].RepresentationID
+		extractionToChunk.DocumentID = rows[0].DocumentID
 
-		nodeMap, err := buildMap(rows)
+		nodeMap, err := buildMap(rows, ctx, e.Logger)
 		if err != nil {
 			return extractionToChunk, fmt.Errorf("error building flat node map: %w", err)
 		}
@@ -73,7 +82,7 @@ func (e *ExtractedDocSource) NextExtraction() (step.ExtractionToChunk, error) {
 	}
 }
 
-func buildMap(rows []querries.GetLatestExtractionOfDocRow) (map[string]*step.ExtractionNode, error) {
+func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, logger *slog.Logger) (map[string]*step.ExtractionNode, error) {
 	nodeMap := make(map[string]*step.ExtractionNode)
 	for _, row := range rows {
 		node := &step.ExtractionNode{}
@@ -81,7 +90,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow) (map[string]*step.Ext
 		case "heading":
 			node.Kind = step.KindHeading
 			if !row.ContentJson.Valid {
-				log.Printf("heading with id '%s' has no heading content", row.NodeID)
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("heading with id '%s' has no heading content", row.NodeID))
 			} else {
 				content := &step.HeadingContent{}
 				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
@@ -94,7 +103,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow) (map[string]*step.Ext
 		case "paragraph":
 			node.Kind = step.KindParagraph
 			if !row.ContentJson.Valid {
-				log.Printf("paragraph with id '%s' has no paragraph content", row.NodeID)
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("paragraph with id '%s' has no paragraph content", row.NodeID))
 			} else {
 				content := &step.ParagraphContent{}
 				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
@@ -110,7 +119,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow) (map[string]*step.Ext
 			node.Kind = step.KindListItem
 
 			if !row.ContentJson.Valid {
-				log.Printf("list_item with id '%s' has no paragraph content", row.NodeID)
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("list_item with id '%s' has no paragraph content", row.NodeID))
 			} else {
 				content := &step.ListItemContent{}
 				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
@@ -124,7 +133,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow) (map[string]*step.Ext
 			node.Kind = step.KindTable
 
 			if !row.ContentJson.Valid {
-				log.Printf("table with id '%s' has no table_content", row.NodeID)
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("table with id '%s' has no table_content", row.NodeID))
 			} else {
 				content := &step.TableContent{}
 				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
@@ -136,7 +145,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow) (map[string]*step.Ext
 
 		case "unsupported", "caption", "footnote", "picture", "group":
 			node.Kind = step.KindUnsupported
-			log.Printf("unsupported kind %s", row.Kind)
+			logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("unsupported kind %s", row.Kind))
 		default:
 			return nodeMap, fmt.Errorf("unknown node kind '%s'", row.Kind)
 		}

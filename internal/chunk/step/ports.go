@@ -1,11 +1,11 @@
 package step
 
-import ()
+import "context"
 
 type ResultSink interface {
-	SaveChunks(chunkResult ChunkResult) error
+	SaveChunks(chunkResult ChunkResult, ctx context.Context) error
 }
 
 type ExtractionSource interface {
-	NextExtraction() (ExtractionToChunk, error)
+	NextExtraction(context.Context) (ExtractionToChunk, error)
 }

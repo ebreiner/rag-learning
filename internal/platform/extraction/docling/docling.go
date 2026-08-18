@@ -2,9 +2,11 @@ package docling
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -16,25 +18,27 @@ import (
 type DoclingExtractor struct {
 	BaseURL string
 	Client  *http.Client
+	Logger  *slog.Logger
 }
 
-func NewDoclingExtractor(doclingURL string, client *http.Client) (DoclingExtractor, error) {
+func NewDoclingExtractor(doclingURL string, client *http.Client, logger *slog.Logger) (DoclingExtractor, error) {
 	if _, err := url.Parse(doclingURL); err != nil {
 		return DoclingExtractor{}, fmt.Errorf("malformed docling url '%s': %s", doclingURL, err)
 	}
 	return DoclingExtractor{
 		Client:  client,
 		BaseURL: doclingURL,
+		Logger:  logger,
 	}, nil
 }
 
-func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.ExtractedDoc, error) {
-	rawDoc, err := doclingConvert(e.Client, sourceDoc.SourcePath, e.BaseURL)
+func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc, ctx context.Context) (step.ExtractedDoc, error) {
+	rawDoc, err := doclingConvert(e.Client, sourceDoc.SourcePath, e.BaseURL, ctx)
 	if err != nil {
 		return step.ExtractedDoc{}, err
 	}
 
-	flatNodes, err := buildNodes(rawDoc)
+	flatNodes, err := buildNodes(rawDoc, ctx, e.Logger)
 	if err != nil {
 		return step.ExtractedDoc{}, err
 	}
@@ -51,7 +55,7 @@ func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc) (step.Extr
 	return extDoc, nil
 }
 
-func doclingConvert(client *http.Client, inputPath, doclingURL string) (*rawDoclingDocument, error) {
+func doclingConvert(client *http.Client, inputPath, doclingURL string, ctx context.Context) (*rawDoclingDocument, error) {
 	contentType, form, err := convertMultipartForm(inputPath)
 	if err != nil {
 		return nil, err
@@ -61,7 +65,7 @@ func doclingConvert(client *http.Client, inputPath, doclingURL string) (*rawDocl
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, doclingURL, form)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, doclingURL, form)
 	if err != nil {
 		return nil, err
 	}

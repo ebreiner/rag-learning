@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"rag/internal/platform/sqlite/querries"
 	"strings"
 )
 
@@ -80,4 +81,36 @@ func LookupVecTable(client *sql.DB, ctx context.Context, dim int64, model string
 	}
 
 	return found, nil
+}
+
+func FlushAllEmbeddings(db *sql.DB, ctx context.Context) error {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'embeddings_%'`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		tables = append(tables, name)
+	}
+
+	for _, t := range tables {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %q", t)); err != nil {
+			return fmt.Errorf("flushing %s: %w", t, err)
+		}
+	}
+	return nil
+}
+
+func FlushChunkTable(db *sql.DB, ctx context.Context) error {
+	q := querries.New(db)
+	if err := q.FlushChunks(ctx); err != nil {
+		return err
+	}
+	return nil
 }

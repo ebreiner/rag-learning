@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"rag/internal/extract/step"
 	"rag/internal/platform/sqlite/querries"
 	"time"
@@ -13,20 +14,20 @@ import (
 
 type ExtractedDocSink struct {
 	dbClient *sql.DB
-	ctx      context.Context
+	Logger   *slog.Logger
 }
 
-func NewExtractedDocSink(db *sql.DB, ctx context.Context) (ExtractedDocSink, error) {
+func NewExtractedDocSink(db *sql.DB, logger *slog.Logger) (ExtractedDocSink, error) {
 	sink := ExtractedDocSink{}
 	sink.dbClient = db
-	sink.ctx = ctx
+	sink.Logger = logger
 
 	return sink, nil
 }
 
-func (e *ExtractedDocSink) ExistsDoc(sha256 string) (bool, error) {
+func (e *ExtractedDocSink) ExistsDoc(sha256 string, ctx context.Context) (bool, error) {
 	q := querries.New(e.dbClient)
-	_, err := q.ExistsDocument(e.ctx, sha256)
+	_, err := q.ExistsDocument(ctx, sha256)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -39,10 +40,10 @@ func (e *ExtractedDocSink) ExistsDoc(sha256 string) (bool, error) {
 
 }
 
-func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
-	tx, err := e.dbClient.BeginTx(e.ctx, nil)
+func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.Context) (int64, error) {
+	tx, err := e.dbClient.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	q := querries.New(tx)
 	defer tx.Rollback()
@@ -57,51 +58,37 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 		if err != nil {
 			txErr := tx.Rollback()
 			if txErr != nil {
-				return fmt.Errorf("error rolling back transaction: %s\noriginal error: %s", txErr, err)
+				return -1, fmt.Errorf("error rolling back transaction: %s\noriginal error: %s", txErr, err)
 			}
-			return err
+			return -1, err
 		}
 		metadataString := string(docAdditotionalMetadata)
 
 		docParam.MetadataJson = sql.NullString{String: metadataString, Valid: true}
 	}
 
-	docID, err := q.CreateDocument(e.ctx, docParam)
+	docID, err := q.CreateDocument(ctx, docParam)
 	if err != nil {
 		txErr := tx.Rollback()
 		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at doc creation: %s\noriginal error: %s", txErr, err)
+			return -1, fmt.Errorf("error rolling back transaction at doc creation: %s\noriginal error: %s", txErr, err)
 		}
-		return err
-	}
-	representationParam := querries.CreateRepresentationParams{
-		DocumentID: docID,
-		Stage:      "extract",
-		CreatedAt:  time.Now(),
-	}
-
-	reprID, err := q.CreateRepresentation(e.ctx, representationParam)
-	if err != nil {
-		txErr := tx.Rollback()
-		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at representation creation: %s\noriginal error: %s", txErr, err)
-		}
-		return err
+		return -1, err
 	}
 
 	extractionParam := querries.CreateExtractionParams{
-		RepresentationID: reprID,
-		CreatedAt:        time.Now(),
-		MimeType:         doc.MimeType,
+		DocumentID: docID,
+		CreatedAt:  time.Now(),
+		MimeType:   doc.MimeType,
 	}
 
-	extID, err := q.CreateExtraction(e.ctx, extractionParam)
+	extID, err := q.CreateExtraction(ctx, extractionParam)
 	if err != nil {
 		txErr := tx.Rollback()
 		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at extraction creation: %s\noriginal error: %s", txErr, err)
+			return -1, fmt.Errorf("error rolling back transaction at extraction creation: %s\noriginal error: %s", txErr, err)
 		}
-		return err
+		return -1, err
 	}
 	var walk func(node *step.Node, parentID string) error
 	walk = func(node *step.Node, parentID string) error {
@@ -131,7 +118,7 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 			param.ProvenanceJson = sql.NullString{String: string(provJSON), Valid: true}
 		}
 
-		if err := q.CreateExtractionNode(e.ctx, param); err != nil {
+		if err := q.CreateExtractionNode(ctx, param); err != nil {
 			return err
 		}
 
@@ -147,9 +134,9 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 		if err := walk(root, ""); err != nil {
 			txErr := tx.Rollback()
 			if txErr != nil {
-				return fmt.Errorf("error rolling back transaction at node insertion: %s\noriginal error: %s", txErr, err)
+				return -1, fmt.Errorf("error rolling back transaction at node insertion: %s\noriginal error: %s", txErr, err)
 			}
-			return err
+			return -1, err
 		}
 	}
 
@@ -157,12 +144,12 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc) error {
 	if err != nil {
 		txErr := tx.Rollback()
 		if txErr != nil {
-			return fmt.Errorf("error rolling back transaction at comitting: %s\noriginal error: %s", txErr, err)
+			return -1, fmt.Errorf("error rolling back transaction at comitting: %s\noriginal error: %s", txErr, err)
 		}
-		return err
+		return -1, err
 	}
 
-	return nil
+	return docID, nil
 }
 
 func marshalContent(node *step.Node) ([]byte, error) {

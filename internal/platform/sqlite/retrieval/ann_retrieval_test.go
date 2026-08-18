@@ -3,12 +3,15 @@ package retrieval
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"testing"
 
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/sqlitetest"
 	"rag/internal/retrieval/step"
 )
+
+var testLogger = slog.New(slog.DiscardHandler)
 
 func seedEmbedding(t *testing.T, db *sql.DB, tableName string, chunkID int64, vec []float64) {
 	t.Helper()
@@ -35,12 +38,12 @@ func TestTopKByANN(t *testing.T) {
 		seedEmbedding(t, db, tableName, idClose, []float64{1, 0, 0})
 		seedEmbedding(t, db, tableName, idFar, []float64{0, 0, 1})
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}, 10)
+		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}, 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -59,12 +62,12 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("SetupTable: %v", err)
 		}
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "empty-model"}, 10)
+		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "empty-model"}, 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -90,12 +93,12 @@ func TestTopKByANN(t *testing.T) {
 		idB := sqlitetest.InsertChunk(t, db, "chunk under modelB")
 		seedEmbedding(t, db, tableB, idB, []float64{0, 1, 0})
 
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "modelB"}, 10)
+		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "modelB"}, 10, ctx)
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -106,26 +109,22 @@ func TestTopKByANN(t *testing.T) {
 		}
 	})
 
-	// documents current, surprising behavior rather than asserting it's
-	// correct: TopKByANN calls sqlite.SetupTable unconditionally, which was
-	// designed for the embed/write side to ensure a table exists before
-	// inserting. On the read path this means a query for a model that was
-	// never embedded -- including a plain typo in --model -- silently
-	// creates a new, permanent, empty table and returns zero results with
-	// no error, instead of a clear "no such model" failure. Worth fixing;
-	// pinning it down here so a future change to this is a deliberate
-	// decision, not an unnoticed regression in either direction.
-	t.Run("querying a never-embedded model returns empty, not an error, and creates a stray table as a side effect", func(t *testing.T) {
+	// TopKByANN resolves the table via sqlite.LookupVecTable, which errors
+	// instead of creating one. A query for a model that was never embedded
+	// -- including a plain typo in --model -- fails clearly rather than
+	// silently returning zero results against a freshly created, permanently
+	// empty table.
+	t.Run("querying a never-embedded model errors instead of silently creating a stray table", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		retriever, err := NewSQLiteRetriever(db, ctx)
+		retriever, err := NewSQLiteRetriever(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "typo-model"}, 10)
+		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "typo-model"}, 10, ctx)
 		if err == nil {
-			t.Fatalf("TopKByANN() error = %v (current behavior is error -- if this now doesn't fail the underlying behavior changed, update this test deliberately)", err)
+			t.Fatalf("TopKByANN() error = nil, want an error for an unknown model")
 		}
 		if len(got) != 0 {
 			t.Fatalf("got %d results, want 0", len(got))

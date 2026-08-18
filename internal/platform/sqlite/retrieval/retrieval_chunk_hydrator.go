@@ -4,36 +4,36 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"rag/internal/platform/sqlite/querries"
 	"rag/internal/retrieval/step"
 )
 
 type ChunkHydrator struct {
-	db  *sql.DB
-	q   *querries.Queries
-	ctx context.Context
+	db     *sql.DB
+	q      *querries.Queries
+	Logger *slog.Logger
 }
 
-func NewChunkHydrator(db *sql.DB, ctx context.Context) (ChunkHydrator, error) {
+func NewChunkHydrator(db *sql.DB, logger *slog.Logger) (ChunkHydrator, error) {
 	hydrator := ChunkHydrator{}
 	hydrator.db = db
-	hydrator.ctx = ctx
 	hydrator.q = querries.New(hydrator.db)
+	hydrator.Logger = logger
 
 	return hydrator, nil
 }
 
 // TODO: rank explizit über boundaries transportieren und nicht nur auf implizites ordering verlassen
-func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs) ([]step.RetrievedChunk, error) {
+func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs, ctx context.Context) ([]step.RetrievedChunk, error) {
 	chunks := make([]step.RetrievedChunk, 0, len(chunkIDs))
 
-	rows, err := h.q.RetrievalChunksByIDs(h.ctx, chunkIDs)
+	rows, err := h.q.RetrievalChunksByIDs(ctx, chunkIDs)
 	if err != nil {
 		return chunks, err
 	}
 	if len(rows) == 0 {
-		return chunks, fmt.Errorf("query for chunk hydration did not return rows")
+		return chunks, nil
 	}
 
 	rowByID := make(map[int64]querries.RetrievalChunksByIDsRow, 0)
@@ -44,7 +44,7 @@ func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs) ([]step.R
 	for idx, id := range chunkIDs {
 		row, ok := rowByID[id]
 		if !ok {
-			log.Printf("chunk hydration failed: no row returned for chunk id %d, skipping chunk\n", id)
+			h.Logger.WarnContext(ctx, "run-retrieval", "warn", fmt.Sprintf("chunk hydration failed: no row returned for chunk id %d, skipping chunk\n", id))
 			continue
 		}
 		chunk := step.RetrievedChunk{
@@ -52,6 +52,7 @@ func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs) ([]step.R
 			DocTitle: row.Name,
 			Position: row.Position,
 			Text:     row.Text,
+			ID:       row.ID,
 		}
 
 		chunks = append(chunks, chunk)

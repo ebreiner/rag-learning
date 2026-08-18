@@ -2,9 +2,11 @@ package kreuzberg
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"rag/internal/embedding/step"
@@ -13,14 +15,16 @@ import (
 
 type ClientKreuzberg struct {
 	BaseURL string
+	logger  *slog.Logger
 }
 
-func NewKreuzbergClient(xbergBaseURL string) (ClientKreuzberg, error) {
+func NewKreuzbergClient(xbergBaseURL string, logger *slog.Logger) (ClientKreuzberg, error) {
 	client := ClientKreuzberg{}
 	if _, err := url.Parse(xbergBaseURL); err != nil {
 		return client, err
 	}
 	client.BaseURL = xbergBaseURL
+	client.logger = logger
 
 	return client, nil
 }
@@ -31,7 +35,7 @@ type embedResp struct {
 	Dimension  int32       `json:"dimensions"`
 }
 
-func (c ClientKreuzberg) runEmbedding(texts []string) (embedResp, error) {
+func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embedResp, error) {
 	type embedPayload struct {
 		Texts []string `json:"texts"`
 	}
@@ -43,7 +47,12 @@ func (c ClientKreuzberg) runEmbedding(texts []string) (embedResp, error) {
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error marshaling payload: %s", err.Error())
 	}
-	httpResp, err := http.Post(c.BaseURL+"/embed", "application/json", bytes.NewBufferString(string(bytePayload)))
+	embedURL, err := url.JoinPath(c.BaseURL, "/embed")
+	if err != nil {
+		return embedResp{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, embedURL, bytes.NewBufferString(string(bytePayload)))
+	httpResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error received for embedding request: %s", err.Error())
 	}
@@ -68,8 +77,8 @@ func (c ClientKreuzberg) runEmbedding(texts []string) (embedResp, error) {
 	}
 }
 
-func (c ClientKreuzberg) EmbedQuery(query string) (retrieval.Query, error) {
-	resp, err := c.runEmbedding([]string{query})
+func (c ClientKreuzberg) EmbedQuery(query string, ctx context.Context) (retrieval.Query, error) {
+	resp, err := c.runEmbedding([]string{query}, ctx)
 	if err != nil {
 		return retrieval.Query{}, err
 	}
@@ -87,13 +96,13 @@ func (c ClientKreuzberg) EmbedQuery(query string) (retrieval.Query, error) {
 	return q, nil
 }
 
-func (c ClientKreuzberg) EmbedChunks(chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
+func (c ClientKreuzberg) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Context) (step.EmbeddingsToSave, error) {
 	toSave := step.EmbeddingsToSave{}
 	texts := make([]string, 0)
 	for _, c := range chunks {
 		texts = append(texts, c.Text)
 	}
-	resp, err := c.runEmbedding(texts)
+	resp, err := c.runEmbedding(texts, ctx)
 	if err != nil {
 		return toSave, err
 	}

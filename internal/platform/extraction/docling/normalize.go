@@ -1,17 +1,19 @@
 package docling
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"rag/internal/extract/step"
+	"rag/internal/platform/telemetry/logging"
 	"strconv"
 	"strings"
 )
 
 type pageHeightLookup map[int64]float64
 
-func buildNodes(rawDoc *rawDoclingDocument) (map[string]*step.Node, error) {
+func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Logger) (map[string]*step.Node, error) {
 	nodes := make(map[string]*step.Node)
 	heightLookup, err := pageHeights(rawDoc.Pages)
 	if err != nil {
@@ -20,7 +22,7 @@ func buildNodes(rawDoc *rawDoclingDocument) (map[string]*step.Node, error) {
 
 	for _, text := range rawDoc.Texts {
 		node := &step.Node{}
-		if err := textNode(node, text); err != nil {
+		if err := textNode(node, text, ctx, logger); err != nil {
 			return nodes, err
 		} else {
 			nodes[node.ID] = node
@@ -29,7 +31,7 @@ func buildNodes(rawDoc *rawDoclingDocument) (map[string]*step.Node, error) {
 
 	for _, table := range rawDoc.Tables {
 		node := &step.Node{}
-		err := tableNode(node, table, heightLookup)
+		err := tableNode(node, table, heightLookup, ctx, logger)
 		if err != nil {
 			return nodes, err
 		}
@@ -39,7 +41,7 @@ func buildNodes(rawDoc *rawDoclingDocument) (map[string]*step.Node, error) {
 
 	for _, picture := range rawDoc.Pictures {
 		node := &step.Node{}
-		if err := pictureNode(node, picture); err != nil {
+		if err := pictureNode(node, picture, ctx, logger); err != nil {
 			return nodes, err
 		}
 		nodes[node.ID] = node
@@ -47,7 +49,7 @@ func buildNodes(rawDoc *rawDoclingDocument) (map[string]*step.Node, error) {
 
 	for _, group := range rawDoc.Groups {
 		node := &step.Node{}
-		if err := groupNode(node, group); err != nil {
+		if err := groupNode(node, group, ctx, logger); err != nil {
 			return nodes, err
 		}
 		nodes[node.ID] = node
@@ -56,7 +58,7 @@ func buildNodes(rawDoc *rawDoclingDocument) (map[string]*step.Node, error) {
 	return nodes, nil
 }
 
-func textNode(node *step.Node, text rawTextItem) error {
+func textNode(node *step.Node, text rawTextItem, ctx context.Context, logger *slog.Logger) error {
 	if text.SelfRef == "" {
 		return fmt.Errorf("empty self reference in text node construction")
 	}
@@ -90,24 +92,24 @@ func textNode(node *step.Node, text rawTextItem) error {
 		}
 		if text.Text == "" {
 			// TODO: how should this be handled? whats the required stuff for the domain model, whats optional?
-			log.Print("warning: empty string as paragraph value found")
+			logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", "empty text")
 		}
 		headingContent := &step.HeadingContent{Level: *text.Level, Text: text.Text}
 		node.Heading = headingContent
 		node.Kind = step.KindHeading
 	case "list_item":
 		if text.Text == "" {
-			log.Print("warning: empty list_item text")
+			logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", "empty text")
 		}
 		item := &step.ListItemContent{Text: text.Text}
 		if text.Marker == nil || *text.Marker == "" {
-			log.Print("warning: nil or empty list_item marker")
+			logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", "nil or empty list marker, defaulting to '-'")
 			item.Marker = "-"
 		} else {
 			item.Marker = *text.Marker
 		}
 		if text.Enumerated == nil {
-			log.Print("warning: nil list_item enumeration")
+			logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", "empty enumerated text")
 			item.Enumerated = false
 		} else {
 			item.Enumerated = *text.Enumerated
@@ -115,10 +117,10 @@ func textNode(node *step.Node, text rawTextItem) error {
 		node.ListItem = item
 		node.Kind = step.KindListItem
 	case "caption", "footnote", "form", "key_value_region", "page_header", "page_footer", "code", "formula", "checkbox_selected", "checkbox_unselected", "chart", "document_index", "grading_scale", "handwritten_text", "empty_value", "reference", "field_region", "field_heading", "field_item", "field_key", "field_value", "field_hint", "marker", "paragraph":
-		log.Printf("warning: no support for text node of label '%s'", text.Label)
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", fmt.Sprintf("unknown content type label '%s'", text.Label))
 		node.Kind = step.KindUnsupported
 	default:
-		log.Printf("unknown content type label type '%s'", text.Label)
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", fmt.Sprintf("unknown content type label '%s'", text.Label))
 		node.Kind = step.KindUnsupported
 	}
 
@@ -127,7 +129,7 @@ func textNode(node *step.Node, text rawTextItem) error {
 	return nil
 }
 
-func groupNode(node *step.Node, group rawGroupItem) error {
+func groupNode(node *step.Node, group rawGroupItem, ctx context.Context, logger *slog.Logger) error {
 	if group.SelfRef == "" {
 		return fmt.Errorf("missing self ref field as node id")
 	}
@@ -142,17 +144,17 @@ func groupNode(node *step.Node, group rawGroupItem) error {
 	case "inline":
 		node.Kind = step.KindGroup
 	case "section", "key_value_area", "form_area", "unspecified", "ordered_list", "chapter", "sheet", "slide", "comment_section", "picture_area":
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, step.KindGroup, "warn", fmt.Sprintf("unsupported group type label '%s'", group.Label))
 		node.Kind = step.KindUnsupported
-		log.Printf("warning: no support for group node of label '%s'", group.Label)
 	default:
-		log.Printf("unknown group type label type '%s'", group.Label)
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, step.KindUnsupported, "warn", fmt.Sprintf("unsupported group type label '%s'", group.Label))
 		node.Kind = step.KindUnsupported
 	}
 	node.ID = group.SelfRef
 	return nil
 }
 
-func pictureNode(node *step.Node, rawPic rawPictureItem) error {
+func pictureNode(node *step.Node, rawPic rawPictureItem, ctx context.Context, logger *slog.Logger) error {
 	if rawPic.SelfRef == "" {
 		return fmt.Errorf("missing self ref field as node id")
 	}
@@ -183,7 +185,7 @@ func pictureNode(node *step.Node, rawPic rawPictureItem) error {
 	}
 
 	if rawPic.Image == nil {
-		log.Print("warning: missing picture data")
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, step.KindPicture, "warn", "empty picture data")
 		return nil
 	}
 
@@ -209,7 +211,7 @@ func pictureNode(node *step.Node, rawPic rawPictureItem) error {
 	return nil
 }
 
-func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLookup) error {
+func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLookup, ctx context.Context, logger *slog.Logger) error {
 	if table.SelfRef == "" {
 		return fmt.Errorf("missing self ref for table node")
 	}
@@ -217,14 +219,8 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 	// i'm only here to catch, log and filter unknown table node labels
 	switch table.Label {
 	case "table":
-	case "document_index":
-		node.ID = table.SelfRef
-		node.Kind = step.KindUnsupported
-		log.Printf("unsupported table node document_index, skipping")
-
-		return nil
 	default:
-		log.Printf("unknown table node: '%s' skipping node", table.Label)
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, table.Label, "warn", fmt.Sprintf("unsupported table node type '%s' skipping", table.Label))
 		node.ID = table.SelfRef
 		node.Kind = step.KindUnsupported
 
@@ -243,7 +239,7 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 	tableData := &step.TableContent{}
 	cells := make([]step.TableCell, 0, len(table.Data.Cells))
 	for _, rawCell := range table.Data.Cells {
-		cell, err := tableCell(rawCell)
+		cell, err := tableCell(rawCell, ctx, logger)
 		if err != nil {
 			return err
 		}
@@ -253,7 +249,7 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 
 	provs := make([]step.Provenance, 0, len(table.Prov))
 	if len(table.Prov) == 0 {
-		log.Print("warning: table node has no provenerance data")
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, node.Kind, "warn", "empty provenance data in table")
 	}
 	for _, rawProv := range table.Prov {
 		prov := step.Provenance{Page: rawProv.PageNo}
@@ -294,10 +290,10 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 	return nil
 }
 
-func tableCell(rawCell rawTableCell) (step.TableCell, error) {
+func tableCell(rawCell rawTableCell, ctx context.Context, logger *slog.Logger) (step.TableCell, error) {
 	cell := step.TableCell{}
 	if rawCell.Text == "" {
-		log.Print("warning: empty text on table cell")
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, step.KindTable, "warn", "table cell has empty text")
 	}
 	if rawCell.RowSpan != rawCell.EndRowOffsetIdx-rawCell.StartRowOffsetIdx {
 		return cell, fmt.Errorf("row span and offsets disagree, probably something weird with the source data")
@@ -307,7 +303,7 @@ func tableCell(rawCell rawTableCell) (step.TableCell, error) {
 	}
 	switch rawCell.BBox.CoordOrigin {
 	case "":
-		log.Print("warning: missing cell bbox")
+		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, step.KindTable, "warn", "table cell misses bbox data")
 	case "TOPLEFT":
 		cell.BBox = &step.BBox{Left: rawCell.BBox.Left, Top: rawCell.BBox.Top, Right: rawCell.BBox.Right, Bottom: rawCell.BBox.Bottom}
 	default:

@@ -12,6 +12,7 @@ type Embedding struct {
 }
 
 type ChunkToEmbed struct {
+	DocID   int64
 	ChunkID int64
 	Text    string
 }

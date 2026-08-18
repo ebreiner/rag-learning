@@ -17,7 +17,7 @@ func TestSaveEmbeddings(t *testing.T) {
 		id1 := sqlitetest.InsertChunk(t, db, "first chunk")
 		id2 := sqlitetest.InsertChunk(t, db, "second chunk")
 
-		sink, err := NewEmbeddingsResultSink(db, ctx)
+		sink, err := NewEmbeddingsResultSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewEmbeddingsResultSink: %v", err)
 		}
@@ -30,7 +30,7 @@ func TestSaveEmbeddings(t *testing.T) {
 				{ChunkID: id2, Vector: []float64{0.4, 0.5, 0.6}},
 			},
 		}
-		if err := sink.SaveEmbeddings(toSave); err != nil {
+		if err := sink.SaveEmbeddings(toSave, ctx); err != nil {
 			t.Fatalf("SaveEmbeddings() error = %v", err)
 		}
 
@@ -48,7 +48,7 @@ func TestSaveEmbeddings(t *testing.T) {
 		ctx := context.Background()
 		id := sqlitetest.InsertChunk(t, db, "a chunk")
 
-		sink, err := NewEmbeddingsResultSink(db, ctx)
+		sink, err := NewEmbeddingsResultSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewEmbeddingsResultSink: %v", err)
 		}
@@ -58,7 +58,7 @@ func TestSaveEmbeddings(t *testing.T) {
 			Dim:        2,
 			Embeddings: []step.Embedding{{ChunkID: id, Vector: []float64{0.1, 0.2}}},
 		}
-		if err := sink.SaveEmbeddings(toSave); err != nil {
+		if err := sink.SaveEmbeddings(toSave, ctx); err != nil {
 			t.Fatalf("SaveEmbeddings() error = %v", err)
 		}
 
@@ -76,7 +76,7 @@ func TestSaveEmbeddings(t *testing.T) {
 		ctx := context.Background()
 		id1 := sqlitetest.InsertChunk(t, db, "good chunk")
 
-		sink, err := NewEmbeddingsResultSink(db, ctx)
+		sink, err := NewEmbeddingsResultSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewEmbeddingsResultSink: %v", err)
 		}
@@ -91,7 +91,7 @@ func TestSaveEmbeddings(t *testing.T) {
 				{ChunkID: 999999, Vector: []float64{0.1, 0.2}}, // wrong length, should be rejected
 			},
 		}
-		if err := sink.SaveEmbeddings(toSave); err == nil {
+		if err := sink.SaveEmbeddings(toSave, ctx); err == nil {
 			t.Fatalf("expected SaveEmbeddings() to fail on the malformed second embedding")
 		}
 
@@ -109,7 +109,7 @@ func TestSaveEmbeddings(t *testing.T) {
 		ctx := context.Background()
 		id := sqlitetest.InsertChunk(t, db, "a chunk")
 
-		sink, err := NewEmbeddingsResultSink(db, ctx)
+		sink, err := NewEmbeddingsResultSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewEmbeddingsResultSink: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestSaveEmbeddings(t *testing.T) {
 			Dim:        4,
 			Embeddings: []step.Embedding{{ChunkID: id, Vector: want}},
 		}
-		if err := sink.SaveEmbeddings(toSave); err != nil {
+		if err := sink.SaveEmbeddings(toSave, ctx); err != nil {
 			t.Fatalf("SaveEmbeddings() error = %v", err)
 		}
 

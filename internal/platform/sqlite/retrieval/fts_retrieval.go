@@ -1,12 +1,13 @@
 package retrieval
 
 import (
+	"context"
 	"fmt"
 	"rag/internal/retrieval/step"
 	"strings"
 )
 
-func (r *SQLiteRetriever) TopKByFTS(query string, k int64) (step.RetrievedChunkIDs, error) {
+func (r *SQLiteRetriever) TopKByFTS(query string, k int64, ctx context.Context) (step.RetrievedChunkIDs, error) {
 	chunkIDs := make([]int64, 0)
 
 	parts := strings.Fields(query)
@@ -46,7 +47,7 @@ func (r *SQLiteRetriever) TopKByFTS(query string, k int64) (step.RetrievedChunkI
 	ORDER BY bm25(chunks_fts)
 	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(r.ctx, q, matchTerm, k)
+	rows, err := r.db.QueryContext(ctx, q, matchTerm, k)
 	if err != nil {
 		return chunkIDs, fmt.Errorf("error querring rows: %s", err.Error())
 	}
