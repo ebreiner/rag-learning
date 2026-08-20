@@ -64,7 +64,7 @@ func RunRetrieval(
 	default:
 		retrieveSpan.End()
 		stepSpan.End()
-		return retrievedChunks, fmt.Errorf("unknown retrieval strategy: %d", strategy)
+		return retrievedChunks, fmt.Errorf("unknown retrieval strategy: %s", strategy)
 	}
 	retrieveSpan.End()
 
