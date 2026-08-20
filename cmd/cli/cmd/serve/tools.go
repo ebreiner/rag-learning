@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"rag/internal/platform/telemetry/logging"
 	"rag/internal/retrieval/step"
+	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -96,8 +97,17 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 			Strategy: "hybrid",
 			ChunkIDs: ids,
 		}
+
+		var charCount int
+		for _, chunk := range chunks {
+			charCount = charCount + utf8.RuneCountInString(chunk.Text)
+		}
+
 		queryLogger.LogQuery(logCtx, queryLog)
-		handlerSpan.SetAttributes(attribute.Int64Slice("query.chunks", ids))
+		handlerSpan.SetAttributes(
+			attribute.Int64Slice("query.chunks.ids", ids),
+			attribute.Int64("query.chunks.total_chars", int64(charCount)),
+		)
 		logSpan.End()
 
 		jsonChunks, err := json.Marshal(chunks)

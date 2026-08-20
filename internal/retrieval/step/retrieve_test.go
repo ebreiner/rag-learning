@@ -265,7 +265,7 @@ func TestRunRetrieval(t *testing.T) {
 		client := &fakeEmbedClient{}
 		hydrator := &fakeHydrator{}
 
-		_, err := RunRetrieval("q", RetrievalStrategy(99), 5, hydrator, retriever, client, testCtx)
+		_, err := RunRetrieval("q", RetrievalStrategy("bogus"), 5, hydrator, retriever, client, testCtx)
 		if err == nil {
 			t.Fatalf("expected an error for an unknown strategy")
 		}

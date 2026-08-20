@@ -34,7 +34,7 @@ func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger
 			break
 		}
 		stepSpan.SetAttributes(
-			attribute.String("doc.id", string(extract.DocumentID)),
+			attribute.Int64("doc.id", extract.DocumentID),
 		)
 		nextExtractionSpan.End()
 
