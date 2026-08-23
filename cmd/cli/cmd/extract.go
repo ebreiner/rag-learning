@@ -88,7 +88,7 @@ to quickly create a Cobra application.`,
 }
 
 func createExtractions(ctx context.Context, inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger) error {
-	sourceDocSource, err := source.NewSourceDocSource(inputDir, logger)
+	sourceDocSource, err := source.NewSourceDocSource(ctx, inputDir, logger)
 	if err != nil {
 		return fmt.Errorf("error creating docs source: %w", err)
 	}

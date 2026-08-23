@@ -12,10 +12,15 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+var ErrExtractionFailed = errors.New("extraction failed")
+
 func RunExtract(ctx context.Context, docSource DocSource, docSink DocSink, extractor Extractor, logger *slog.Logger) error {
+	errCount := 0
 	for {
+
 		err := extract(ctx, docSource, docSink, extractor, logger)
 		if err != nil {
+
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -24,8 +29,20 @@ func RunExtract(ctx context.Context, docSource DocSource, docSink DocSink, extra
 				continue
 			}
 
+			if errors.Is(err, ErrExtractionFailed) {
+				logger.WarnContext(ctx, "extract-doc", "warn", err)
+				errCount++
+				if errCount == 10 {
+					return fmt.Errorf("10 consecutive errors on doc extraction")
+				}
+
+				continue
+			}
+
 			return err
 		}
+
+		errCount = 0
 	}
 
 	return nil
@@ -41,11 +58,15 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 	defer sourceSpan.End()
 	sourceDoc, err := source.NextSourceDoc()
 	if err != nil {
-		return err
+		if errors.Is(err, io.EOF) {
+			return io.EOF
+		} else {
+			return fmt.Errorf("%s: %w: %w", sourceDoc.SourcePath, ErrExtractionFailed, err)
+		}
 	}
 
 	if sourceDoc.SHA256 == "" {
-		return fmt.Errorf("source doc is missing sha256: %s", sourceDoc.Name)
+		return fmt.Errorf("%s: %w: %w", sourceDoc.SourcePath, ErrExtractionFailed, fmt.Errorf("source doc is missing sha256"))
 	}
 
 	stepSpan.SetAttributes(
@@ -72,7 +93,7 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 	defer extractSpan.End()
 	extractedDoc, err := extractor.ExtractSourceDoc(extractCtx, sourceDoc)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w: %w", sourceDoc.SourcePath, ErrExtractionFailed, err)
 	}
 	extractSpan.End()
 

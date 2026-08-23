@@ -1,6 +1,7 @@
 package source
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"rag/internal/extract/step"
+	"strings"
 )
 
 type DocSource struct {
@@ -18,7 +20,30 @@ type DocSource struct {
 	Logger     *slog.Logger
 }
 
-func NewSourceDocSource(inputPath string, logger *slog.Logger) (DocSource, error) {
+var allowedExtensions = map[string]struct{}{
+	".pdf": {},
+
+	// Word
+	".doc": {}, ".dot": {},
+	".docx": {}, ".dotx": {}, ".docm": {}, ".dotm": {},
+
+	// PowerPoint
+	".ppt": {}, ".pot": {}, ".pps": {},
+	".pptx": {}, ".potx": {}, ".ppsx": {}, ".pptm": {}, ".potm": {}, ".ppsm": {},
+
+	// OpenDocument text
+	".odt": {}, ".ott": {},
+
+	// plain text / markdown
+	".md": {}, ".txt": {}, ".text": {},
+
+	// markup / typesetting
+	".html": {}, ".htm": {}, ".xhtml": {},
+	".adoc": {}, ".asciidoc": {}, ".asc": {},
+	".tex": {}, ".latex": {},
+}
+
+func NewSourceDocSource(ctx context.Context, inputPath string, logger *slog.Logger) (DocSource, error) {
 	source := DocSource{Logger: logger}
 	if !filepath.IsAbs(inputPath) {
 		cwd, _ := os.Getwd()
@@ -30,10 +55,14 @@ func NewSourceDocSource(inputPath string, logger *slog.Logger) (DocSource, error
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			return nil
+		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+			return fs.SkipDir
 		}
-		paths = append(paths, path)
+		if _, ok := allowedExtensions[filepath.Ext(strings.ToLower(path))]; ok {
+			paths = append(paths, path)
+		} else {
+			logger.WarnContext(ctx, "wiring", "warn", fmt.Sprintf("skipping doc extension not supported: %s", path))
+		}
 		return nil
 	})
 	if err != nil {
