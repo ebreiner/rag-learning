@@ -58,7 +58,7 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.C
 		if err != nil {
 			txErr := tx.Rollback()
 			if txErr != nil {
-				return -1, fmt.Errorf("error rolling back transaction: %s\noriginal error: %s", txErr, err)
+				return -1, fmt.Errorf("error rolling back transaction: %w\noriginal error: %w", txErr, err)
 			}
 			return -1, err
 		}
@@ -71,7 +71,7 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.C
 	if err != nil {
 		txErr := tx.Rollback()
 		if txErr != nil {
-			return -1, fmt.Errorf("error rolling back transaction at doc creation: %s\noriginal error: %s", txErr, err)
+			return -1, fmt.Errorf("error rolling back transaction at doc creation: %w\noriginal error: %w", txErr, err)
 		}
 		return -1, err
 	}
@@ -86,7 +86,7 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.C
 	if err != nil {
 		txErr := tx.Rollback()
 		if txErr != nil {
-			return -1, fmt.Errorf("error rolling back transaction at extraction creation: %s\noriginal error: %s", txErr, err)
+			return -1, fmt.Errorf("error rolling back transaction at extraction creation: %w\noriginal error: %w", txErr, err)
 		}
 		return -1, err
 	}
@@ -134,7 +134,7 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.C
 		if err := walk(root, ""); err != nil {
 			txErr := tx.Rollback()
 			if txErr != nil {
-				return -1, fmt.Errorf("error rolling back transaction at node insertion: %s\noriginal error: %s", txErr, err)
+				return -1, fmt.Errorf("error rolling back transaction at node insertion: %w\noriginal error: %w", txErr, err)
 			}
 			return -1, err
 		}
@@ -144,7 +144,7 @@ func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.C
 	if err != nil {
 		txErr := tx.Rollback()
 		if txErr != nil {
-			return -1, fmt.Errorf("error rolling back transaction at comitting: %s\noriginal error: %s", txErr, err)
+			return -1, fmt.Errorf("error rolling back transaction at comitting: %w\noriginal error: %w", txErr, err)
 		}
 		return -1, err
 	}

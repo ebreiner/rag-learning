@@ -14,26 +14,26 @@ func NewConn(dbPath string, rebuildFTSIndex bool) (*sql.DB, error) {
 	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&foreign_keys=ON", dbPath)
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("erro opening db connection: %s", err.Error())
+		return nil, fmt.Errorf("erro opening db connection: %w", err)
 	} else {
 	}
 	_, err = db.Exec(querries.Manual)
 	if err != nil {
-		return db, fmt.Errorf("error running init sql: %s\n", err.Error())
+		return db, fmt.Errorf("error running init sql: %w", err)
 	}
 	_, err = db.Exec(querries.SQLC)
 	if err != nil {
-		return db, fmt.Errorf("error running init sql: %s\n", err.Error())
+		return db, fmt.Errorf("error running init sql: %w", err)
 	}
 	_, err = db.Exec(querries.FTSTrigger)
 	if err != nil {
-		return db, fmt.Errorf("error running init sql: %s\n", err.Error())
+		return db, fmt.Errorf("error running init sql: %w", err)
 	}
 
 	if rebuildFTSIndex {
 		_, err = db.Exec("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
 		if err != nil {
-			return db, fmt.Errorf("error running init sql: %s\n", err.Error())
+			return db, fmt.Errorf("error running init sql: %w", err)
 		}
 	}
 

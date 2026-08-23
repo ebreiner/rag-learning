@@ -29,7 +29,7 @@ func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Conte
 		return chunkIDs, fmt.Errorf("error: no rows found")
 	}
 	if err != nil {
-		return chunkIDs, fmt.Errorf("error querring rows: %s", err.Error())
+		return chunkIDs, fmt.Errorf("error querring rows: %w", err)
 	}
 	defer rows.Close()
 
@@ -37,7 +37,7 @@ func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Conte
 		var id int64
 		var distance sql.NullFloat64
 		if err := rows.Scan(&id, &distance); err != nil {
-			return chunkIDs, fmt.Errorf("error scanning top k row result: %s", err.Error())
+			return chunkIDs, fmt.Errorf("error scanning top k row result: %w", err)
 		}
 		chunkIDs = append(chunkIDs, id)
 	}

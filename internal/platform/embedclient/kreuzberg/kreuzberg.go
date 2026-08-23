@@ -47,7 +47,7 @@ func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embe
 	}
 	bytePayload, err := json.Marshal(payload)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error marshaling payload: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error marshaling payload: %w", err)
 	}
 	embedURL, err := url.JoinPath(c.BaseURL, "/embed")
 	if err != nil {
@@ -59,16 +59,16 @@ func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embe
 	}
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error received for embedding request: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error received for embedding request: %w", err)
 	}
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error reading response body: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error reading response body: %w", err)
 	}
 	err = httpResp.Body.Close()
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error closing response body: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error closing response body: %w", err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
 		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s\n", string(body))
@@ -76,7 +76,7 @@ func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embe
 
 	resp := embedResp{}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return embedResp{}, fmt.Errorf("cannot unmarshal embedding response: %s", err.Error())
+		return embedResp{}, fmt.Errorf("cannot unmarshal embedding response: %w", err)
 	} else {
 		return resp, nil
 	}

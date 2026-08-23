@@ -103,7 +103,7 @@ to quickly create a Cobra application.`,
 func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger, ctx context.Context) error {
 	sourceDocSource, err := source.NewSourceDocSource(inputDir, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs source: %s", err.Error())
+		return fmt.Errorf("error creating docs source: %w", err)
 	}
 	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {
@@ -112,7 +112,7 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 
 	extracedDocSink, err := extraction.NewExtractedDocSink(db, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs sink: %s", err.Error())
+		return fmt.Errorf("error creating docs sink: %w", err)
 	}
 
 	var client *http.Client
@@ -132,7 +132,7 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 
 	extractor, err := docling.NewDoclingExtractor(doclingURL, client, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs sink: %s", err.Error())
+		return fmt.Errorf("error creating docs sink: %w", err)
 	}
 
 	err = step.RunExtract(&sourceDocSource, &extracedDocSink, &extractor, logger, ctx)

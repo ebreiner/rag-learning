@@ -49,7 +49,7 @@ func (r *SQLiteRetriever) TopKByFTS(query string, k int64, ctx context.Context) 
 	`
 	rows, err := r.db.QueryContext(ctx, q, matchTerm, k)
 	if err != nil {
-		return chunkIDs, fmt.Errorf("error querring rows: %s", err.Error())
+		return chunkIDs, fmt.Errorf("error querring rows: %w", err)
 	}
 	defer rows.Close()
 
@@ -57,12 +57,12 @@ func (r *SQLiteRetriever) TopKByFTS(query string, k int64, ctx context.Context) 
 		var id int64
 		var score float64
 		if err := rows.Scan(&id, &score); err != nil {
-			return chunkIDs, fmt.Errorf("error scanning top k row result: %s", err.Error())
+			return chunkIDs, fmt.Errorf("error scanning top k row result: %w", err)
 		}
 		chunkIDs = append(chunkIDs, id)
 	}
 	if err := rows.Err(); err != nil {
-		return chunkIDs, fmt.Errorf("error scanning rows for fts: %s", err.Error())
+		return chunkIDs, fmt.Errorf("error scanning rows for fts: %w", err)
 	} else {
 		return chunkIDs, nil
 	}
