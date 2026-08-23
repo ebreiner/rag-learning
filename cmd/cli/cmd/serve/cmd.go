@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	cmdpkg "rag/cmd/cli/cmd"
 	"rag/internal/platform/config"
 	"rag/internal/platform/telemetry/logging"
-	"rag/internal/platform/telemetry/tracing"
+
 	"strconv"
 	"syscall"
 	"time"
@@ -25,19 +26,13 @@ func NewServeCmd() *cobra.Command {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			logger, err := logging.FromCommand(cmd)
+			logger, otelShutdownFunc, err := cmdpkg.Setup(ctx, cmd)
 			if err != nil {
-				return err
+				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
-
-			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
-			if err != nil {
-				return fmt.Errorf("error setting up otel-sdk: %w", err)
-			}
+			logger.With(logging.KeyStep, "serve-mcp")
 			defer func() {
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				if err := shutdownOTEL(shutdownCtx); err != nil {
+				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
 				}
 			}()

@@ -11,7 +11,6 @@ import (
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/embedding"
 	"rag/internal/platform/telemetry/logging"
-	"rag/internal/platform/telemetry/tracing"
 	"strconv"
 	"time"
 
@@ -31,18 +30,13 @@ to quickly create a Cobra application.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
-			logger, err := logging.FromCommand(cmd)
+			logger, otelShutdownFunc, err := Setup(ctx, cmd)
 			if err != nil {
-				return err
+				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
 			logger = logger.With(logging.KeyStep, "embed")
-
-			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
-			if err != nil {
-				return fmt.Errorf("error setting up otel-sdk: %w", err)
-			}
 			defer func() {
-				if err := shutdownOTEL(ctx); err != nil {
+				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
 				}
 			}()
