@@ -44,7 +44,7 @@ func (f *fakeEmbedServer) handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 
 	if f.rawBody != "" {
-		w.Write([]byte(f.rawBody))
+		_, _ = w.Write([]byte(f.rawBody))
 		return
 	}
 
@@ -62,7 +62,7 @@ func (f *fakeEmbedServer) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Data = append(resp.Data, respEmbedding{Embedding: vec, Index: i})
 	}
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func newTestClient(t *testing.T, server *fakeEmbedServer, dim int64) (ClientOpenAI, *httptest.Server) {

@@ -591,7 +591,7 @@ func tableCase(name, label, selfRef string, pageNo int, wantErr bool, heightLook
 	provRaw := rawProv{PageNo: int64(pageNo), BBox: bbox}
 	prov := wantProvOnPage(1)
 	prov.BBox = &step.BBox{Left: 0, Top: 0, Bottom: 10, Right: 10}
-	cells := make([]step.TableCell, 0, 0)
+	cells := make([]step.TableCell, 0)
 	tableContent := &step.TableContent{Cells: cells}
 	tableCase := tableNodeCase{
 		name: name,
@@ -627,7 +627,7 @@ func wantProvWithBBox(page int64, bbox step.BBox) step.Provenance {
 }
 
 func tableProvCase(name string, provs []rawProv, wantErr bool, want []step.Provenance, heightLookup pageHeightLookup, layer step.ContentLayer) tableNodeCase {
-	cells := make([]step.TableCell, 0, 0)
+	cells := make([]step.TableCell, 0)
 	tableContent := &step.TableContent{Cells: cells}
 	return tableNodeCase{
 		name:    name,

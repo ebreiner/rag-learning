@@ -47,7 +47,7 @@ to quickly create a Cobra application.`,
 			userQueryFlag := cmd.Flag("query")
 			userQuery := userQueryFlag.Value.String()
 			if len(userQuery) == 0 {
-				return fmt.Errorf("Missing query string --query 'query string'")
+				return fmt.Errorf("missing query string --query 'query string'")
 			}
 
 			globals := config.GlobalOptions

@@ -115,7 +115,6 @@ func convertMultipartForm(inputPath string) (string, *bytes.Buffer, error) {
 	if err != nil {
 		return "", body, err
 	}
-	defer f.Close()
 
 	_, name := filepath.Split(inputPath)
 	part, err := writer.CreateFormFile("files", name)
@@ -124,6 +123,10 @@ func convertMultipartForm(inputPath string) (string, *bytes.Buffer, error) {
 	}
 
 	if _, err := io.Copy(part, f); err != nil {
+		return "", body, err
+	}
+
+	if err := f.Close(); err != nil {
 		return "", body, err
 	}
 

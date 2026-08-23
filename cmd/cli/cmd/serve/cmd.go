@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -97,11 +98,14 @@ func NewServeCmd() *cobra.Command {
 
 			// TODO: db mit defer schließen
 			hydrator, retriever, embedClient, closeDB, err := wireUp(ctx, dbPath, embedConfig, logger)
+
 			if err != nil {
 				if closeDB == nil {
 					return err
 				} else {
-					closeDB(ctx)
+					if closeDBErr := closeDB(ctx); closeDBErr != nil {
+						return errors.Join(err, closeDBErr)
+					}
 					return err
 				}
 			}
@@ -109,7 +113,9 @@ func NewServeCmd() *cobra.Command {
 			var queryLogger *logging.QueryLogger
 			queryLogger, err = logging.NewQueryLogger(logging.WithLogPath(queryLogPath))
 			if err != nil {
-				closeDB(ctx)
+				if closeDBErr := closeDB(ctx); closeDBErr != nil {
+					return errors.Join(err, closeDBErr)
+				}
 				return fmt.Errorf("error setting up querry logger: %w", err)
 			}
 

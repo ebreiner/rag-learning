@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"rag/internal/platform/sqlite/querries"
 	"strings"
 )
@@ -83,12 +84,17 @@ func LookupVecTable(ctx context.Context, client *sql.DB, dim int64, model string
 	return found, nil
 }
 
-func FlushAllEmbeddings(ctx context.Context, db *sql.DB) error {
+func FlushAllEmbeddings(ctx context.Context, db *sql.DB, logger *slog.Logger) error {
 	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'embeddings_%'`)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+	}()
 
 	var tables []string
 	for rows.Next() {

@@ -56,7 +56,7 @@ func NewChunkCmd() *cobra.Command {
 				if err := sqlite.FlushChunkTable(ctx, db); err != nil {
 					return fmt.Errorf("error flushing chunks: %w", err)
 				}
-				if err := sqlite.FlushAllEmbeddings(ctx, db); err != nil {
+				if err := sqlite.FlushAllEmbeddings(ctx, db, logger); err != nil {
 					return fmt.Errorf("error flushing embeddings_tables: %w", err)
 				}
 			}

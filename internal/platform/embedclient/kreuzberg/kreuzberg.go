@@ -71,7 +71,7 @@ func (c ClientKreuzberg) runEmbedding(ctx context.Context, texts []string) (embe
 		return embedResp{}, fmt.Errorf("error closing response body: %w", err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
-		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s\n", string(body))
+		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s", string(body))
 	}
 
 	resp := embedResp{}

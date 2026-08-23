@@ -15,7 +15,6 @@ func NewConn(dbPath string, rebuildFTSIndex bool) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("erro opening db connection: %w", err)
-	} else {
 	}
 	_, err = db.Exec(querries.Manual)
 	if err != nil {

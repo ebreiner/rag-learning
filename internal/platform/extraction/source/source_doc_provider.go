@@ -3,6 +3,7 @@ package source
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -69,12 +70,16 @@ func calculateSHA256Content(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
 
 	hasher := sha256.New()
 	_, err = io.Copy(hasher, file)
 	if err != nil {
 		return "", err
 	}
+
+	if err := file.Close(); err != nil {
+		return "", fmt.Errorf("error closing file: %w", err)
+	}
+
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

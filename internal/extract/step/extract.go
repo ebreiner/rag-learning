@@ -19,7 +19,7 @@ func RunExtract(ctx context.Context, docSource DocSource, docSink DocSink, extra
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			if errors.Is(err, DuplicateErr) {
+			if errors.Is(err, ErrDuplicateDoc) {
 				logger.InfoContext(ctx, "extract-doc", "warn", "duplicate doc")
 				continue
 			}
@@ -61,7 +61,7 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 	if isDuplicate {
 		stepSpan.SetAttributes(attribute.String("doc.is_duplicate", strconv.FormatBool(true)))
 		logger.WarnContext(ctx, "run-extract", "warn", fmt.Sprintf("duplicate doc skipping:  %s", sourceDoc.SourcePath))
-		return DuplicateErr
+		return ErrDuplicateDoc
 	}
 	stepSpan.SetAttributes(attribute.String("doc.is_duplicate", strconv.FormatBool(false)))
 	sourceSpan.End()

@@ -29,7 +29,9 @@ func New(t *testing.T) *sql.DB {
 		t.Fatalf("sqlitetest.New: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Close()
+		if err := db.Close(); err != nil {
+			t.Errorf("sqlitetest.New: closing db: %v", err)
+		}
 	})
 
 	return db

@@ -51,7 +51,12 @@ func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) 
 	if err != nil {
 		return chunkIDs, fmt.Errorf("error querring rows: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.Logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+
+	}()
 
 	for rows.Next() {
 		var id int64

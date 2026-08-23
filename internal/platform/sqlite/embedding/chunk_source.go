@@ -37,7 +37,12 @@ LIMIT ?`, s.tableName)
 	if err != nil {
 		return []step.ChunkToEmbed{}, err
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			s.Logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+	}()
 
 	type chunkRow struct {
 		ID    int64

@@ -31,6 +31,11 @@ test:
       set -euxo pipefail
       CGO_ENABLED=1 go test --tags "fts5" ./...
 
+lint:
+	go vet ./...
+	golangci-lint run -c golangci-lint.yaml
+
+
 e2e input-dir: build
 	#!/usr/bin/env bash
 	set -euxo pipefail

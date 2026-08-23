@@ -142,7 +142,7 @@ func (c ClientOpenAI) runEmbedding(ctx context.Context, texts []string) (embeddi
 		return embeddingResponse{}, fmt.Errorf("error closing response body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return embeddingResponse{}, fmt.Errorf("error status code of embedding not 200: %s\n", string(body))
+		return embeddingResponse{}, fmt.Errorf("error status code of embedding not 200: %s", string(body))
 	}
 
 	desResp := embeddingResponse{}
