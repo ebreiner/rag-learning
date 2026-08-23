@@ -10,3 +10,5 @@ scrape
 venv
 .venv
 rag-cli.log
+./data.*
+

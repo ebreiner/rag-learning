@@ -114,7 +114,7 @@ to quickly create a Cobra application.`,
 			var embedClient step.EmbedClient
 			httpClient := httpclient.New(time.Minute * 30)
 			if cmd.Flags().Lookup("xberg-url").Changed {
-				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger); err == nil {
+				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger, httpClient); err == nil {
 					embedClient = client
 				} else {
 					logger.ErrorContext(ctx, "wiring", "err", err)

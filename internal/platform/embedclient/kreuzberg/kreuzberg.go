@@ -16,15 +16,17 @@ import (
 type ClientKreuzberg struct {
 	BaseURL string
 	logger  *slog.Logger
+	client  *http.Client
 }
 
-func NewKreuzbergClient(xbergBaseURL string, logger *slog.Logger) (ClientKreuzberg, error) {
+func NewKreuzbergClient(xbergBaseURL string, logger *slog.Logger, httpClient *http.Client) (ClientKreuzberg, error) {
 	client := ClientKreuzberg{}
 	if _, err := url.Parse(xbergBaseURL); err != nil {
 		return client, err
 	}
 	client.BaseURL = xbergBaseURL
 	client.logger = logger
+	client.client = httpClient
 
 	return client, nil
 }
@@ -52,7 +54,7 @@ func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embe
 		return embedResp{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, embedURL, bytes.NewBufferString(string(bytePayload)))
-	httpResp, err := http.DefaultClient.Do(req)
+	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error received for embedding request: %s", err.Error())
 	}
