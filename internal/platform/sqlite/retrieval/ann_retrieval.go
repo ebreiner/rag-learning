@@ -41,6 +41,9 @@ func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Conte
 		}
 		chunkIDs = append(chunkIDs, id)
 	}
-
-	return chunkIDs, nil
+	if rows.Err() != nil {
+		return chunkIDs, rows.Err()
+	} else {
+		return chunkIDs, nil
+	}
 }

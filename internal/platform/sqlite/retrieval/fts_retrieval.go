@@ -54,9 +54,6 @@ func (r *SQLiteRetriever) TopKByFTS(query string, k int64, ctx context.Context) 
 	defer rows.Close()
 
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return chunkIDs, fmt.Errorf("error scanning rows for fts: %s", err.Error())
-		}
 		var id int64
 		var score float64
 		if err := rows.Scan(&id, &score); err != nil {
@@ -64,6 +61,9 @@ func (r *SQLiteRetriever) TopKByFTS(query string, k int64, ctx context.Context) 
 		}
 		chunkIDs = append(chunkIDs, id)
 	}
-
-	return chunkIDs, nil
+	if err := rows.Err(); err != nil {
+		return chunkIDs, fmt.Errorf("error scanning rows for fts: %s", err.Error())
+	} else {
+		return chunkIDs, nil
+	}
 }
