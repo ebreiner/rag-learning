@@ -272,6 +272,9 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				buffer = buffer + candidate.Text
 				budget = budget - tokenCount(candidate.Text)
 			}
+		} else if len(candidate.Text) > 0 {
+			buffer = buffer + candidate.Text
+			budget = budget - tokenCount(candidate.Text)
 		}
 
 		lastCrumb = candidate.Breadcrumb
