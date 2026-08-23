@@ -1,4 +1,5 @@
 .idea
+.env
 scrape
 docs/graph-design.md
 examples
