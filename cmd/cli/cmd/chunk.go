@@ -3,8 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
 	"rag/internal/chunk/step"
 	"rag/internal/platform/config"
 	"rag/internal/platform/sqlite"
@@ -20,23 +18,21 @@ func NewChunkCmd() *cobra.Command {
 		Use:   "chunk",
 		Short: "Chunks current input dir",
 		Long:  `Chunks all files inside the input dir`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			logger, err := logging.FromCommand(cmd)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			logger = logger.With(logging.KeyStep, "chunk")
 
 			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return fmt.Errorf("error setting up otel-sdk: %w", err)
 			}
 			defer func() {
 				if err := shutdownOTEL(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
-					os.Exit(1)
 				}
 			}()
 
@@ -44,51 +40,43 @@ func NewChunkCmd() *cobra.Command {
 
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			db, err := sqlite.NewConn(dbPath, true)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			sink, err := chunk.NewResultSink(db, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			flush, err := cmd.Flags().GetBool("flush")
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 			if flush {
 				if err := sqlite.FlushChunkTable(ctx, db); err != nil {
-					logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error flushing chunks because of force flag: %w", err))
-					os.Exit(1)
+					return fmt.Errorf("error flushing chunks: %w", err)
 				}
 				if err := sqlite.FlushAllEmbeddings(ctx, db); err != nil {
-					logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error flushing embeddings because of force flag: %w", err))
-					os.Exit(1)
+					return fmt.Errorf("error flushing embeddings_tables: %w", err)
 				}
 			}
 
 			source, err := chunk.NewExtractedDocSource(db, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			err = step.Chunk(ctx, &source, sink, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error running chunker: %w", err))
-				os.Exit(1)
+				return err
 			}
 
-			return
+			return nil
 		},
 	}
 

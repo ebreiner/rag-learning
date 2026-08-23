@@ -3,10 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
-	"os"
 	"rag/internal/extract/step"
 	"rag/internal/platform/config"
 	"rag/internal/platform/extraction/docling"
@@ -31,65 +29,59 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			logger, err := logging.FromCommand(cmd)
 			if err != nil {
-				log.Fatal(fmt.Errorf("error setting up logger: %w", err))
+				return err
 			}
 			logger = logger.With(logging.KeyStep, "extract")
 
 			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return fmt.Errorf("error setting up otel sdk: %w", err)
 			}
 			defer func() {
 				if err := shutdownOTEL(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
-					os.Exit(1)
 				}
 			}()
 
 			globals := config.GlobalOptions
 			doclingURL, err := config.ResolveGlobal(cmd, globals.DoclingURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			inputDirFlag := cmd.Flags().Lookup("input-dir")
 			inputDir := inputDirFlag.Value.String()
 			if len(inputDir) == 0 {
-				logger.ErrorContext(ctx, "wiring", "err", "missing required flag input-dir")
-				os.Exit(1)
+				return fmt.Errorf("missing required flag input-dir")
 			}
 			inputDir, err = config.ResolvePath(inputDir)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			dumpDirFlag := cmd.Flags().Lookup("dump-dir")
 			dumpDir := dumpDirFlag.Value.String()
 			if dumpDirFlag.Changed {
 				if len(dumpDir) == 0 {
-					logger.ErrorContext(ctx, "wiring", "err", "dump-dir cannot be set to empty string if specified")
-					os.Exit(1)
+					return fmt.Errorf("dump-dir cannot be set to empty string if specified")
 				}
 			}
 
 			err = createExtractions(ctx, inputDir, doclingURL, dbPath, dumpDir, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
+
+			return nil
 		},
 	}
 

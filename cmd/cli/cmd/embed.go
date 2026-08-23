@@ -3,8 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
 	"rag/internal/embedding/step"
 	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient/kreuzberg"
@@ -30,85 +28,73 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
 			logger, err := logging.FromCommand(cmd)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			logger = logger.With(logging.KeyStep, "embed")
 
 			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return fmt.Errorf("error setting up otel-sdk: %w", err)
 			}
 			defer func() {
 				if err := shutdownOTEL(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
-					os.Exit(1)
 				}
 			}()
 
 			globals := config.GlobalOptions
 			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			db, err := sqlite.NewConn(dbPath, false)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			sink, err := embedding.NewEmbeddingsResultSink(db, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 			modelFlag := cmd.Flags().Lookup("model")
 			if !modelFlag.Changed || modelFlag.Value.String() == "" {
-				logger.ErrorContext(ctx, "wiring", "err", "missing flag required flag: --model model-name")
-				os.Exit(1)
+				return fmt.Errorf("missing flag required flag: --model model-name")
 			}
 			model := modelFlag.Value.String()
 
 			dimFlag := cmd.Flags().Lookup("dim")
 			if !dimFlag.Changed || dimFlag.Value.String() == "" {
-				logger.ErrorContext(ctx, "wiring", "err", "missing flag required flag: --dimension 1024")
-				os.Exit(1)
+				return fmt.Errorf("missing flag required flag: --dimension 1024")
 			}
 
 			dim, err := strconv.Atoi(dimFlag.Value.String())
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error parsing flag --dimension: %w", err))
-				os.Exit(1)
+				return fmt.Errorf("error parsing flag --dimension: %w", err)
 			}
 			tableName, err := sqlite.SetupVecTable(ctx, db, int64(dim), model)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error setting up sqlite vec tables: %w", err))
-				os.Exit(1)
+				return fmt.Errorf("error setting up sqlite vec tables: %w", err)
 			}
 
 			chunkSource, err := embedding.NewChunkSource(db, tableName, logger)
 			source := &chunkSource
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			var embedClient step.EmbedClient
@@ -117,24 +103,23 @@ to quickly create a Cobra application.`,
 				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger, httpClient); err == nil {
 					embedClient = client
 				} else {
-					logger.ErrorContext(ctx, "wiring", "err", err)
-					os.Exit(1)
+					return err
 				}
 			} else if cmd.Flags().Lookup("openai-url").Changed {
 
 				if client, err := openai.NewOpenAIClient(model, openAIBaseURL, int64(dim), httpClient, logger); err == nil {
 					embedClient = client
 				} else {
-					logger.ErrorContext(ctx, "wiring", "err", err)
-					os.Exit(1)
+					return err
 				}
 			}
 
 			err = step.Embed(ctx, sink, source, embedClient, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error running embedding: %w", err))
-				os.Exit(1)
+				return err
 			}
+
+			return nil
 		},
 	}
 
