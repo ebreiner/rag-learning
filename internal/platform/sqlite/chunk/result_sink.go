@@ -47,7 +47,7 @@ func (store ResultSink) SaveChunks(chunkResult step.ChunkResult, ctx context.Con
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("rolling back transaction: %w", err)
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
 	return nil

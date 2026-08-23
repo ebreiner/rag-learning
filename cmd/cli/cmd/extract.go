@@ -132,7 +132,7 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 
 	extractor, err := docling.NewDoclingExtractor(doclingURL, client, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs sink: %w", err)
+		return fmt.Errorf("error creating docling extractor: %w", err)
 	}
 
 	err = step.RunExtract(&sourceDocSource, &extracedDocSink, &extractor, logger, ctx)
