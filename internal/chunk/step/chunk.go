@@ -143,6 +143,41 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			continue // list_items consumed dont push
 
+		case "group":
+			var parts []string
+			for _, child := range node.Children {
+
+				switch child.Kind {
+				case KindParagraph:
+					if child.Paragraph == nil || child.Paragraph.Text == "" {
+						logger.WarnContext(ctx, "walk-nodes", "warn", "warning: group item missing content, skipping")
+						continue
+					}
+					parts = append(parts, child.Paragraph.Text)
+				case KindUnsupported:
+					logger.WarnContext(ctx, "walk-nodes", "warn", "node type unsupported")
+					continue
+				case KindGroup:
+					logger.WarnContext(ctx, "walk-nodes", "warn", "group node in group node found, unexpected!")
+					continue
+				default:
+					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("unsupported node kind %s", child.Kind))
+				}
+			}
+
+			if len(parts) > 0 {
+				text := ""
+				for _, s := range parts {
+					text = text + s
+				}
+				candidates = append(candidates, chunkCandidate{
+					Node:       node,
+					Breadcrumb: currentBreadCrumb(),
+					Text:       text,
+				})
+			}
+			continue // list_items consumed dont push
+
 		case "table":
 			if node.Table == nil {
 				logger.WarnContext(ctx, "walk-nodes", "warn", "empty table content, skipping node in walk")
