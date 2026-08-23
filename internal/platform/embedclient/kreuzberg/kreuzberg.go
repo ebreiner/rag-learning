@@ -54,6 +54,9 @@ func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embe
 		return embedResp{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, embedURL, bytes.NewBufferString(string(bytePayload)))
+	if err != nil {
+		return embedResp{}, err
+	}
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error received for embedding request: %s", err.Error())
