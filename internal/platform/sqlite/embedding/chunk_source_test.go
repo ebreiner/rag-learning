@@ -15,7 +15,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 	t.Run("returns a chunk that has no row in the target embeddings table", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableName, err := sqlite.SetupVecTable(db, ctx, 4, "modelA")
+		tableName, err := sqlite.SetupVecTable(ctx, db, 4, "modelA")
 		if err != nil {
 			t.Fatalf("SetupTable: %v", err)
 		}
@@ -27,7 +27,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		got, err := src.NextChunks(10, ctx)
+		got, err := src.NextChunks(ctx, 10)
 		if err != nil {
 			t.Fatalf("NextChunks() error = %v", err)
 		}
@@ -39,7 +39,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 	t.Run("excludes a chunk that already has a row in the target embeddings table -- this is the core fix for the multi-model design", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableName, err := sqlite.SetupVecTable(db, ctx, 4, "modelA")
+		tableName, err := sqlite.SetupVecTable(ctx, db, 4, "modelA")
 		if err != nil {
 			t.Fatalf("SetupTable: %v", err)
 		}
@@ -58,7 +58,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		got, err := src.NextChunks(10, ctx)
+		got, err := src.NextChunks(ctx, 10)
 		if err != nil {
 			t.Fatalf("NextChunks() error = %v", err)
 		}
@@ -70,11 +70,11 @@ func TestChunksSourceNextChunks(t *testing.T) {
 	t.Run("the same chunk is needed under a second model even though it's done under the first -- the actual backfill property", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableA, err := sqlite.SetupVecTable(db, ctx, 4, "modelA")
+		tableA, err := sqlite.SetupVecTable(ctx, db, 4, "modelA")
 		if err != nil {
 			t.Fatalf("SetupTable(modelA): %v", err)
 		}
-		tableB, err := sqlite.SetupVecTable(db, ctx, 4, "modelB")
+		tableB, err := sqlite.SetupVecTable(ctx, db, 4, "modelB")
 		if err != nil {
 			t.Fatalf("SetupTable(modelB): %v", err)
 		}
@@ -92,7 +92,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewChunkSource(A): %v", err)
 		}
-		gotA, err := srcA.NextChunks(10, ctx)
+		gotA, err := srcA.NextChunks(ctx, 10)
 		if err != nil {
 			t.Fatalf("NextChunks(A) error = %v", err)
 		}
@@ -104,7 +104,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewChunkSource(B): %v", err)
 		}
-		gotB, err := srcB.NextChunks(10, ctx)
+		gotB, err := srcB.NextChunks(ctx, 10)
 		if err != nil {
 			t.Fatalf("NextChunks(B) error = %v", err)
 		}
@@ -116,7 +116,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 	t.Run("pagination advances past chunks already returned in an earlier call", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableName, err := sqlite.SetupVecTable(db, ctx, 4, "modelA")
+		tableName, err := sqlite.SetupVecTable(ctx, db, 4, "modelA")
 		if err != nil {
 			t.Fatalf("SetupTable: %v", err)
 		}
@@ -131,7 +131,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		first, err := src.NextChunks(2, ctx)
+		first, err := src.NextChunks(ctx, 2)
 		if err != nil {
 			t.Fatalf("first NextChunks() error = %v", err)
 		}
@@ -139,7 +139,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("first call: got %d chunks, want 2", len(first))
 		}
 
-		second, err := src.NextChunks(2, ctx)
+		second, err := src.NextChunks(ctx, 2)
 		if err != nil {
 			t.Fatalf("second NextChunks() error = %v", err)
 		}
@@ -154,7 +154,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 	t.Run("no chunks needing embedding returns an empty result without error", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableName, err := sqlite.SetupVecTable(db, ctx, 4, "modelA")
+		tableName, err := sqlite.SetupVecTable(ctx, db, 4, "modelA")
 		if err != nil {
 			t.Fatalf("SetupTable: %v", err)
 		}
@@ -164,7 +164,7 @@ func TestChunksSourceNextChunks(t *testing.T) {
 			t.Fatalf("NewChunkSource: %v", err)
 		}
 
-		got, err := src.NextChunks(10, ctx)
+		got, err := src.NextChunks(ctx, 10)
 		if err != nil {
 			t.Fatalf("NextChunks() error = %v", err)
 		}

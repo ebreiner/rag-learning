@@ -167,7 +167,7 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 		return err
 	}
 
-	chunks, err := step.RunRetrieval(query, strategy, 10, &hydrator, retriever, embedClient, ctx)
+	chunks, err := step.RunRetrieval(ctx, query, strategy, 10, &hydrator, retriever, embedClient)
 	if err != nil {
 		return err
 	}

@@ -112,7 +112,7 @@ func NewServeCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			hydrator, retriever, embedClient, closeDB, err := wireUp(dbPath, embedConfig, ctx, logger)
+			hydrator, retriever, embedClient, closeDB, err := wireUp(ctx, dbPath, embedConfig, logger)
 			if err != nil {
 				if closeDB == nil {
 					logger.ErrorContext(ctx, "wiring", "err", err)

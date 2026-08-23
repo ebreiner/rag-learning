@@ -13,7 +13,7 @@ import (
 
 type pageHeightLookup map[int64]float64
 
-func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Logger) (map[string]*step.Node, error) {
+func buildNodes(ctx context.Context, rawDoc *rawDoclingDocument, logger *slog.Logger) (map[string]*step.Node, error) {
 	nodes := make(map[string]*step.Node)
 	heightLookup, err := pageHeights(rawDoc.Pages)
 	if err != nil {
@@ -22,7 +22,7 @@ func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Lo
 
 	for _, text := range rawDoc.Texts {
 		node := &step.Node{}
-		if err := textNode(node, text, ctx, logger); err != nil {
+		if err := textNode(ctx, node, text, logger); err != nil {
 			return nodes, err
 		} else {
 			nodes[node.ID] = node
@@ -31,7 +31,7 @@ func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Lo
 
 	for _, table := range rawDoc.Tables {
 		node := &step.Node{}
-		err := tableNode(node, table, heightLookup, ctx, logger)
+		err := tableNode(ctx, node, table, heightLookup, logger)
 		if err != nil {
 			return nodes, err
 		}
@@ -41,7 +41,7 @@ func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Lo
 
 	for _, picture := range rawDoc.Pictures {
 		node := &step.Node{}
-		if err := pictureNode(node, picture, ctx, logger); err != nil {
+		if err := pictureNode(ctx, node, picture, logger); err != nil {
 			return nodes, err
 		}
 		nodes[node.ID] = node
@@ -49,7 +49,7 @@ func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Lo
 
 	for _, group := range rawDoc.Groups {
 		node := &step.Node{}
-		if err := groupNode(node, group, ctx, logger); err != nil {
+		if err := groupNode(ctx, node, group, logger); err != nil {
 			return nodes, err
 		}
 		nodes[node.ID] = node
@@ -58,7 +58,7 @@ func buildNodes(rawDoc *rawDoclingDocument, ctx context.Context, logger *slog.Lo
 	return nodes, nil
 }
 
-func textNode(node *step.Node, text rawTextItem, ctx context.Context, logger *slog.Logger) error {
+func textNode(ctx context.Context, node *step.Node, text rawTextItem, logger *slog.Logger) error {
 	if text.SelfRef == "" {
 		return fmt.Errorf("empty self reference in text node construction")
 	}
@@ -129,7 +129,7 @@ func textNode(node *step.Node, text rawTextItem, ctx context.Context, logger *sl
 	return nil
 }
 
-func groupNode(node *step.Node, group rawGroupItem, ctx context.Context, logger *slog.Logger) error {
+func groupNode(ctx context.Context, node *step.Node, group rawGroupItem, logger *slog.Logger) error {
 	if group.SelfRef == "" {
 		return fmt.Errorf("missing self ref field as node id")
 	}
@@ -154,7 +154,7 @@ func groupNode(node *step.Node, group rawGroupItem, ctx context.Context, logger 
 	return nil
 }
 
-func pictureNode(node *step.Node, rawPic rawPictureItem, ctx context.Context, logger *slog.Logger) error {
+func pictureNode(ctx context.Context, node *step.Node, rawPic rawPictureItem, logger *slog.Logger) error {
 	if rawPic.SelfRef == "" {
 		return fmt.Errorf("missing self ref field as node id")
 	}
@@ -211,7 +211,7 @@ func pictureNode(node *step.Node, rawPic rawPictureItem, ctx context.Context, lo
 	return nil
 }
 
-func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLookup, ctx context.Context, logger *slog.Logger) error {
+func tableNode(ctx context.Context, node *step.Node, table rawTableItem, heightLookup pageHeightLookup, logger *slog.Logger) error {
 	if table.SelfRef == "" {
 		return fmt.Errorf("missing self ref for table node")
 	}
@@ -239,7 +239,7 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 	tableData := &step.TableContent{}
 	cells := make([]step.TableCell, 0, len(table.Data.Cells))
 	for _, rawCell := range table.Data.Cells {
-		cell, err := tableCell(rawCell, ctx, logger)
+		cell, err := tableCell(ctx, rawCell, logger)
 		if err != nil {
 			return err
 		}
@@ -290,7 +290,7 @@ func tableNode(node *step.Node, table rawTableItem, heightLookup pageHeightLooku
 	return nil
 }
 
-func tableCell(rawCell rawTableCell, ctx context.Context, logger *slog.Logger) (step.TableCell, error) {
+func tableCell(ctx context.Context, rawCell rawTableCell, logger *slog.Logger) (step.TableCell, error) {
 	cell := step.TableCell{}
 	if rawCell.Text == "" {
 		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, step.KindTable, "warn", "table cell has empty text")

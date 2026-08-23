@@ -23,7 +23,7 @@ func NewResultSink(db *sql.DB, logger *slog.Logger) (ResultSink, error) {
 	return store, nil
 }
 
-func (store ResultSink) SaveChunks(chunkResult step.ChunkResult, ctx context.Context) error {
+func (store ResultSink) SaveChunks(ctx context.Context, chunkResult step.ChunkResult) error {
 
 	tx, err := store.dbClient.BeginTx(ctx, nil)
 	if err != nil {

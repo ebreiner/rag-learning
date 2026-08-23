@@ -9,7 +9,7 @@ import (
 	"rag/internal/retrieval/step"
 )
 
-func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Context) (step.RetrievedChunkIDs, error) {
+func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int64) (step.RetrievedChunkIDs, error) {
 	chunkIDs := make([]int64, 0)
 
 	packed, err := sqlite.PackVector(query.Vector)
@@ -17,7 +17,7 @@ func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Conte
 		return chunkIDs, err
 	}
 
-	tableName, err := sqlite.LookupVecTable(r.db, ctx, query.Dim, query.Model)
+	tableName, err := sqlite.LookupVecTable(ctx, r.db, query.Dim, query.Model)
 	if err != nil {
 		return chunkIDs, err
 	}

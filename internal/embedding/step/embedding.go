@@ -9,14 +9,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-func Embed(sink EmbeddingsSink, source ChunkSource, client EmbedClient, ctx context.Context, logger *slog.Logger) error {
+func Embed(ctx context.Context, sink EmbeddingsSink, source ChunkSource, client EmbedClient, logger *slog.Logger) error {
 	var limit int64 = 10
 
 	for {
 		tracer := otel.Tracer("rac-cli-sdk")
 		stepCtx, stepSpan := tracer.Start(ctx, "embed-step")
 		nextCtx, nextSpan := tracer.Start(stepCtx, "next_chunk")
-		rawChunks, err := source.NextChunks(limit, nextCtx)
+		rawChunks, err := source.NextChunks(nextCtx, limit)
 
 		if err != nil {
 			stepSpan.End()
@@ -45,7 +45,7 @@ func Embed(sink EmbeddingsSink, source ChunkSource, client EmbedClient, ctx cont
 		}
 
 		embedCtx, embedSpan := tracer.Start(stepCtx, "embed_with_fallback")
-		embeddingsToSave, err := embedWithFallback(client, chunks, embedCtx, logger)
+		embeddingsToSave, err := embedWithFallback(embedCtx, client, chunks, logger)
 		if err != nil {
 			embedSpan.End()
 			stepSpan.End()
@@ -55,7 +55,7 @@ func Embed(sink EmbeddingsSink, source ChunkSource, client EmbedClient, ctx cont
 
 		sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_embeddings")
 		if len(embeddingsToSave.Embeddings) > 0 {
-			if err := sink.SaveEmbeddings(embeddingsToSave, sinkCtx); err != nil {
+			if err := sink.SaveEmbeddings(sinkCtx, embeddingsToSave); err != nil {
 				sinkSpan.End()
 				stepSpan.End()
 				return err
@@ -78,11 +78,11 @@ func Embed(sink EmbeddingsSink, source ChunkSource, client EmbedClient, ctx cont
 // example: if a batch of an embedding response contains to many nearly identical texts,
 // this can break the embed model, then they start return NaN and other weird stuff. Most
 // experienced problems with different models were fixed by the following stuff:
-func embedWithFallback(client EmbedClient, chunks []ChunkToEmbed, ctx context.Context, logger *slog.Logger) (EmbeddingsToSave, error) {
+func embedWithFallback(ctx context.Context, client EmbedClient, chunks []ChunkToEmbed, logger *slog.Logger) (EmbeddingsToSave, error) {
 	if len(chunks) == 0 {
 		return EmbeddingsToSave{}, nil
 	}
-	result, err := client.EmbedChunks(chunks, ctx)
+	result, err := client.EmbedChunks(ctx, chunks)
 	if err == nil {
 		return result, nil
 	}
@@ -95,11 +95,11 @@ func embedWithFallback(client EmbedClient, chunks []ChunkToEmbed, ctx context.Co
 	}
 
 	mid := len(chunks) / 2
-	first, err := embedWithFallback(client, chunks[:mid], ctx, logger)
+	first, err := embedWithFallback(ctx, client, chunks[:mid], logger)
 	if err != nil {
 		return EmbeddingsToSave{}, err
 	}
-	second, err := embedWithFallback(client, chunks[mid:], ctx, logger)
+	second, err := embedWithFallback(ctx, client, chunks[mid:], logger)
 	if err != nil {
 		return EmbeddingsToSave{}, err
 	}

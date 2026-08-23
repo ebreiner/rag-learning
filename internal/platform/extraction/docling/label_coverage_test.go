@@ -84,7 +84,7 @@ func TestTextNodeLabelCoverage(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.label, func(t *testing.T) {
 			node := &step.Node{}
-			err := textNode(node, rawTextItemForLabel(tc.label), testCtx, testLogger)
+			err := textNode(testCtx, node, rawTextItemForLabel(tc.label), testLogger)
 			if err != nil {
 				t.Fatalf("label %q: textNode returned unexpected error: %v", tc.label, err)
 			}
@@ -97,7 +97,7 @@ func TestTextNodeLabelCoverage(t *testing.T) {
 
 func TestTextNodeUnknownLabelDegradesGracefully(t *testing.T) {
 	node := &step.Node{}
-	err := textNode(node, rawTextItemForLabel("something_docling_invents_tomorrow"), testCtx, testLogger)
+	err := textNode(testCtx, node, rawTextItemForLabel("something_docling_invents_tomorrow"), testLogger)
 	if err != nil {
 		t.Fatalf("unrecognized label should degrade to KindUnsupported, not error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestGroupNodeLabelCoverage(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.label, func(t *testing.T) {
 			node := &step.Node{}
-			err := groupNode(node, rawGroupItemForLabel(tc.label), testCtx, testLogger)
+			err := groupNode(testCtx, node, rawGroupItemForLabel(tc.label), testLogger)
 			if err != nil {
 				t.Fatalf("label %q: groupNode returned unexpected error: %v", tc.label, err)
 			}
@@ -157,7 +157,7 @@ func TestGroupNodeLabelCoverage(t *testing.T) {
 
 func TestGroupNodeUnknownLabelDegradesGracefully(t *testing.T) {
 	node := &step.Node{}
-	err := groupNode(node, rawGroupItemForLabel("something_docling_invents_tomorrow"), testCtx, testLogger)
+	err := groupNode(testCtx, node, rawGroupItemForLabel("something_docling_invents_tomorrow"), testLogger)
 	if err != nil {
 		t.Fatalf("unrecognized label should degrade to KindUnsupported, not error: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestTableNodeLabelCoverage(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.label, func(t *testing.T) {
 			node := &step.Node{}
-			err := tableNode(node, rawTableItemForLabel(tc.label), heights, testCtx, testLogger)
+			err := tableNode(testCtx, node, rawTableItemForLabel(tc.label), heights, testLogger)
 			if err != nil {
 				t.Fatalf("label %q: tableNode returned unexpected error: %v", tc.label, err)
 			}
@@ -215,7 +215,7 @@ func TestTableNodeLabelCoverage(t *testing.T) {
 
 func TestTableNodeUnknownLabelDegradesGracefully(t *testing.T) {
 	node := &step.Node{}
-	err := tableNode(node, rawTableItemForLabel("something_docling_invents_tomorrow"), pageHeightLookup{}, testCtx, testLogger)
+	err := tableNode(testCtx, node, rawTableItemForLabel("something_docling_invents_tomorrow"), pageHeightLookup{}, testLogger)
 	if err != nil {
 		t.Fatalf("unrecognized table label should degrade to KindUnsupported, not error: %v", err)
 	}

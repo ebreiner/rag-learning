@@ -28,7 +28,7 @@ func TestTopKByANN(t *testing.T) {
 	t.Run("resolves the table from the query's model and dim, and orders by distance", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableName, err := sqlite.SetupVecTable(db, ctx, 3, "bge-m3")
+		tableName, err := sqlite.SetupVecTable(ctx, db, 3, "bge-m3")
 		if err != nil {
 			t.Fatalf("SetupTable: %v", err)
 		}
@@ -43,7 +43,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}, 10, ctx)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}, 10)
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -58,7 +58,7 @@ func TestTopKByANN(t *testing.T) {
 	t.Run("an empty table returns an empty result, not an error", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		if _, err := sqlite.SetupVecTable(db, ctx, 3, "empty-model"); err != nil {
+		if _, err := sqlite.SetupVecTable(ctx, db, 3, "empty-model"); err != nil {
 			t.Fatalf("SetupTable: %v", err)
 		}
 
@@ -67,7 +67,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "empty-model"}, 10, ctx)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "empty-model"}, 10)
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -79,14 +79,14 @@ func TestTopKByANN(t *testing.T) {
 	t.Run("cross-model safety: querying a model that has real embeddings never returns another model's chunks", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		tableA, err := sqlite.SetupVecTable(db, ctx, 3, "modelA")
+		tableA, err := sqlite.SetupVecTable(ctx, db, 3, "modelA")
 		if err != nil {
 			t.Fatalf("SetupTable(modelA): %v", err)
 		}
 		idA := sqlitetest.InsertChunk(t, db, "chunk under modelA")
 		seedEmbedding(t, db, tableA, idA, []float64{1, 0, 0})
 
-		tableB, err := sqlite.SetupVecTable(db, ctx, 3, "modelB")
+		tableB, err := sqlite.SetupVecTable(ctx, db, 3, "modelB")
 		if err != nil {
 			t.Fatalf("SetupTable(modelB): %v", err)
 		}
@@ -98,7 +98,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "modelB"}, 10, ctx)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "modelB"}, 10)
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -122,7 +122,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "typo-model"}, 10, ctx)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "typo-model"}, 10)
 		if err == nil {
 			t.Fatalf("TopKByANN() error = nil, want an error for an unknown model")
 		}

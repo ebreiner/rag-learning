@@ -77,7 +77,7 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 		)
 
 		retrievalCtx, retrievalSpan := tracer.Start(handlerCtx, "run_retrieval")
-		chunks, err := step.RunRetrieval(query, step.Hybrid, int64(k), hydrator, retriever, embedClient, retrievalCtx)
+		chunks, err := step.RunRetrieval(retrievalCtx, query, step.Hybrid, int64(k), hydrator, retriever, embedClient)
 		if err != nil {
 			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error running retrieval: %w", err))
 			retrievalSpan.End()

@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-func RunExtract(docSource DocSource, docSink DocSink, extractor Extractor, logger *slog.Logger, ctx context.Context) error {
+func RunExtract(ctx context.Context, docSource DocSource, docSink DocSink, extractor Extractor, logger *slog.Logger) error {
 	var outerErr error
 	counter := 0
 	for {
@@ -47,7 +47,7 @@ func RunExtract(docSource DocSource, docSink DocSink, extractor Extractor, logge
 			attribute.String("doc.sha256", sourceDoc.SHA256),
 		)
 
-		isDuplicate, err := docSink.ExistsDoc(sourceDoc.SHA256, ctx)
+		isDuplicate, err := docSink.ExistsDoc(ctx, sourceDoc.SHA256)
 		if err != nil {
 			sourceSpan.End()
 			stepSpan.End()
@@ -66,7 +66,7 @@ func RunExtract(docSource DocSource, docSink DocSink, extractor Extractor, logge
 		logger.InfoContext(ctx, fmt.Sprintf("processing doc # %d: %s", counter, sourceDoc.SourcePath))
 
 		extractCtx, extractSpan := tracer.Start(stepCtx, "extract_source_doc")
-		extractedDoc, err := extractor.ExtractSourceDoc(sourceDoc, extractCtx)
+		extractedDoc, err := extractor.ExtractSourceDoc(extractCtx, sourceDoc)
 		if err != nil {
 			outerErr = err
 			extractSpan.End()
@@ -76,7 +76,7 @@ func RunExtract(docSource DocSource, docSink DocSink, extractor Extractor, logge
 		extractSpan.End()
 
 		saveCtx, saveSpan := tracer.Start(stepCtx, "save_extracted_doc")
-		docID, err := docSink.SaveExtractedDoc(extractedDoc, saveCtx)
+		docID, err := docSink.SaveExtractedDoc(saveCtx, extractedDoc)
 		if err != nil {
 			outerErr = err
 			saveSpan.End()

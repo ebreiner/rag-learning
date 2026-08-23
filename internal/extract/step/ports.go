@@ -7,10 +7,10 @@ type DocSource interface {
 }
 
 type Extractor interface {
-	ExtractSourceDoc(doc SourceDoc, ctx context.Context) (ExtractedDoc, error)
+	ExtractSourceDoc(ctx context.Context, doc SourceDoc) (ExtractedDoc, error)
 }
 
 type DocSink interface {
-	SaveExtractedDoc(doc ExtractedDoc, ctx context.Context) (int64, error)
-	ExistsDoc(sha256 string, ctx context.Context) (bool, error)
+	SaveExtractedDoc(ctx context.Context, doc ExtractedDoc) (int64, error)
+	ExistsDoc(ctx context.Context, sha256 string) (bool, error)
 }

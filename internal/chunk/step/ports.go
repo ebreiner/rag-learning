@@ -3,7 +3,7 @@ package step
 import "context"
 
 type ResultSink interface {
-	SaveChunks(chunkResult ChunkResult, ctx context.Context) error
+	SaveChunks(ctx context.Context, chunkResult ChunkResult) error
 }
 
 type ExtractionSource interface {

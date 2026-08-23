@@ -29,7 +29,7 @@ type openAIConfig struct {
 
 func (openAIConfig) isEmbedBackendConfig() {}
 
-func wireUp(dbPath string, embedConfig embedBackendConfig, ctx context.Context, logger *slog.Logger) (
+func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, logger *slog.Logger) (
 	hydrator retrieval.ChunkHydrator, retriever step.TopKRetriever, embedClient step.EmbedClient, closeDB func(context.Context) error, err error) {
 	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {

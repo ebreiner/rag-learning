@@ -373,7 +373,7 @@ func runTextNodeCases(t *testing.T, cases []textNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := textNode(node, testCase.input, testCtx, testLogger)
+			err := textNode(testCtx, node, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -397,7 +397,7 @@ func runGroupNodeCases(t *testing.T, cases []groupNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := groupNode(node, testCase.input, testCtx, testLogger)
+			err := groupNode(testCtx, node, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -421,7 +421,7 @@ func runTableNodeCases(t *testing.T, cases []tableNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := tableNode(node, *testCase.input, testCase.heights, testCtx, testLogger)
+			err := tableNode(testCtx, node, *testCase.input, testCase.heights, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -456,7 +456,7 @@ func TestBuildNodes(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			nodes, err := buildNodes(testCase.doc, testCtx, testLogger)
+			nodes, err := buildNodes(testCtx, testCase.doc, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -541,7 +541,7 @@ func runPictureNodeCases(t *testing.T, cases []pictureNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := pictureNode(node, testCase.input, testCtx, testLogger)
+			err := pictureNode(testCtx, node, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -715,7 +715,7 @@ func tableCellCaseHeaderFlags(name string) tableCellCase {
 func runTableCellCases(t *testing.T, cases []tableCellCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := tableCell(testCase.input, testCtx, testLogger)
+			got, err := tableCell(testCtx, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

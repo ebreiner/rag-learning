@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger *slog.Logger) error {
+func Chunk(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
 	var counter int
 	var outerErr error
 	for {
@@ -39,7 +39,7 @@ func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger
 		nextExtractionSpan.End()
 
 		processDocCtx, processDocSpan := tracer.Start(stepCtx, "process_doc")
-		result, err := processDoc(extract, processDocCtx, logger)
+		result, err := processDoc(processDocCtx, extract, logger)
 		if err != nil {
 			outerErr = err
 			stepSpan.End()
@@ -50,7 +50,7 @@ func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger
 		processDocSpan.End()
 
 		sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_chunks")
-		err = sink.SaveChunks(result, sinkCtx)
+		err = sink.SaveChunks(sinkCtx, result)
 		if err != nil {
 			outerErr = err
 			sinkSpan.End()
@@ -64,13 +64,13 @@ func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger
 	return outerErr
 }
 
-func processDoc(extraction ExtractionToChunk, ctx context.Context, logger *slog.Logger) (ChunkResult, error) {
+func processDoc(ctx context.Context, extraction ExtractionToChunk, logger *slog.Logger) (ChunkResult, error) {
 	result := ChunkResult{DocumentID: extraction.DocumentID}
-	chunkCandidates, err := walk(extraction.Roots, ctx, logger)
+	chunkCandidates, err := walk(ctx, extraction.Roots, logger)
 	if err != nil {
 		return result, err
 	}
-	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(chunkCandidates, ctx, logger)...)
+	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(ctx, chunkCandidates, logger)...)
 	return result, nil
 }
 
@@ -80,7 +80,7 @@ type chunkCandidate struct {
 	Text       string
 }
 
-func walk(roots []*ExtractionNode, ctx context.Context, logger *slog.Logger) ([]chunkCandidate, error) {
+func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]chunkCandidate, error) {
 	var breadCrumbs []*HeadingContent
 	candidates := make([]chunkCandidate, 0)
 
@@ -232,7 +232,7 @@ func walk(roots []*ExtractionNode, ctx context.Context, logger *slog.Logger) ([]
 	return candidates, nil
 }
 
-func mergeCandidates(candidates []chunkCandidate, ctx context.Context, logger *slog.Logger) []ChunkToSave {
+func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *slog.Logger) []ChunkToSave {
 	merged := make([]ChunkToSave, 0)
 	maxBudget := 1000
 	budget := maxBudget

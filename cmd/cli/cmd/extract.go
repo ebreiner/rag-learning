@@ -85,7 +85,7 @@ to quickly create a Cobra application.`,
 				}
 			}
 
-			err = createExtractions(inputDir, doclingURL, dbPath, dumpDir, logger, ctx)
+			err = createExtractions(ctx, inputDir, doclingURL, dbPath, dumpDir, logger)
 			if err != nil {
 				logger.ErrorContext(ctx, "wiring", "err", err)
 				os.Exit(1)
@@ -100,7 +100,7 @@ to quickly create a Cobra application.`,
 	return extractCmd
 }
 
-func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger, ctx context.Context) error {
+func createExtractions(ctx context.Context, inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger) error {
 	sourceDocSource, err := source.NewSourceDocSource(inputDir, logger)
 	if err != nil {
 		return fmt.Errorf("error creating docs source: %w", err)
@@ -135,7 +135,7 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 		return fmt.Errorf("error creating docling extractor: %w", err)
 	}
 
-	err = step.RunExtract(&sourceDocSource, &extracedDocSink, &extractor, logger, ctx)
+	err = step.RunExtract(ctx, &sourceDocSource, &extracedDocSink, &extractor, logger)
 	if err != nil {
 		return err
 	}

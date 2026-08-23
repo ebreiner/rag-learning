@@ -66,11 +66,11 @@ func NewChunkCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			if flush {
-				if err := sqlite.FlushChunkTable(db, ctx); err != nil {
+				if err := sqlite.FlushChunkTable(ctx, db); err != nil {
 					logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error flushing chunks because of force flag: %w", err))
 					os.Exit(1)
 				}
-				if err := sqlite.FlushAllEmbeddings(db, ctx); err != nil {
+				if err := sqlite.FlushAllEmbeddings(ctx, db); err != nil {
 					logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error flushing embeddings because of force flag: %w", err))
 					os.Exit(1)
 				}
@@ -82,7 +82,7 @@ func NewChunkCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			err = step.Chunk(&source, sink, ctx, logger)
+			err = step.Chunk(ctx, &source, sink, logger)
 			if err != nil {
 				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error running chunker: %w", err))
 				os.Exit(1)

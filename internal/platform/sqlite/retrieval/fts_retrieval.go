@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func (r *SQLiteRetriever) TopKByFTS(query string, k int64, ctx context.Context) (step.RetrievedChunkIDs, error) {
+func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) (step.RetrievedChunkIDs, error) {
 	chunkIDs := make([]int64, 0)
 
 	parts := strings.Fields(query)

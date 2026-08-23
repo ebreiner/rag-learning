@@ -98,7 +98,7 @@ to quickly create a Cobra application.`,
 				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error parsing flag --dimension: %w", err))
 				os.Exit(1)
 			}
-			tableName, err := sqlite.SetupVecTable(db, ctx, int64(dim), model)
+			tableName, err := sqlite.SetupVecTable(ctx, db, int64(dim), model)
 			if err != nil {
 				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error setting up sqlite vec tables: %w", err))
 				os.Exit(1)
@@ -130,7 +130,7 @@ to quickly create a Cobra application.`,
 				}
 			}
 
-			err = step.Embed(sink, source, embedClient, ctx, logger)
+			err = step.Embed(ctx, sink, source, embedClient, logger)
 			if err != nil {
 				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error running embedding: %w", err))
 				os.Exit(1)

@@ -32,13 +32,13 @@ func NewDoclingExtractor(doclingURL string, client *http.Client, logger *slog.Lo
 	}, nil
 }
 
-func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc, ctx context.Context) (step.ExtractedDoc, error) {
-	rawDoc, err := doclingConvert(e.Client, sourceDoc.SourcePath, e.BaseURL, ctx)
+func (e *DoclingExtractor) ExtractSourceDoc(ctx context.Context, sourceDoc step.SourceDoc) (step.ExtractedDoc, error) {
+	rawDoc, err := doclingConvert(ctx, e.Client, sourceDoc.SourcePath, e.BaseURL)
 	if err != nil {
 		return step.ExtractedDoc{}, err
 	}
 
-	flatNodes, err := buildNodes(rawDoc, ctx, e.Logger)
+	flatNodes, err := buildNodes(ctx, rawDoc, e.Logger)
 	if err != nil {
 		return step.ExtractedDoc{}, err
 	}
@@ -55,7 +55,7 @@ func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc, ctx contex
 	return extDoc, nil
 }
 
-func doclingConvert(client *http.Client, inputPath, doclingURL string, ctx context.Context) (*rawDoclingDocument, error) {
+func doclingConvert(ctx context.Context, client *http.Client, inputPath, doclingURL string) (*rawDoclingDocument, error) {
 	contentType, form, err := convertMultipartForm(inputPath)
 	if err != nil {
 		return nil, err

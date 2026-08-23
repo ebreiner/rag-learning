@@ -25,7 +25,7 @@ func NewExtractedDocSink(db *sql.DB, logger *slog.Logger) (ExtractedDocSink, err
 	return sink, nil
 }
 
-func (e *ExtractedDocSink) ExistsDoc(sha256 string, ctx context.Context) (bool, error) {
+func (e *ExtractedDocSink) ExistsDoc(ctx context.Context, sha256 string) (bool, error) {
 	q := querries.New(e.dbClient)
 	_, err := q.ExistsDocument(ctx, sha256)
 	if err != nil {
@@ -40,7 +40,7 @@ func (e *ExtractedDocSink) ExistsDoc(sha256 string, ctx context.Context) (bool, 
 
 }
 
-func (e *ExtractedDocSink) SaveExtractedDoc(doc step.ExtractedDoc, ctx context.Context) (int64, error) {
+func (e *ExtractedDocSink) SaveExtractedDoc(ctx context.Context, doc step.ExtractedDoc) (int64, error) {
 	tx, err := e.dbClient.BeginTx(ctx, nil)
 	if err != nil {
 		return -1, err

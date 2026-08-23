@@ -3,14 +3,14 @@ package step
 import "context"
 
 type TopKRetriever interface {
-	TopKByANN(query Query, k int64, ctx context.Context) (RetrievedChunkIDs, error)
-	TopKByFTS(query string, k int64, ctx context.Context) (RetrievedChunkIDs, error)
+	TopKByANN(ctx context.Context, query Query, k int64) (RetrievedChunkIDs, error)
+	TopKByFTS(ctx context.Context, query string, k int64) (RetrievedChunkIDs, error)
 }
 
 type ChunkHydrator interface {
-	HydrateChunks(chunkIDs RetrievedChunkIDs, ctx context.Context) ([]RetrievedChunk, error)
+	HydrateChunks(ctx context.Context, chunkIDs RetrievedChunkIDs) ([]RetrievedChunk, error)
 }
 
 type EmbedClient interface {
-	EmbedQuery(string, context.Context) (Query, error)
+	EmbedQuery(context.Context, string) (Query, error)
 }
