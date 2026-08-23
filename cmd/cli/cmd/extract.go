@@ -123,6 +123,9 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 			return err
 		}
 		client, err = httpclient.NewDump(timeout, dumpDir, logger)
+		if err != nil {
+			return err
+		}
 	} else {
 		client = httpclient.New(timeout)
 	}
