@@ -123,6 +123,7 @@ func (c ClientKreuzberg) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Con
 
 	toSave.Dim = int64(resp.Dimension)
 	toSave.Model = resp.Model
+	toSave.Embeddings = embeddings
 
 	return toSave, nil
 }
