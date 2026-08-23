@@ -5,6 +5,7 @@ type RetrievedChunk struct {
 	Rank       int64
 	DocTitle   string
 	Position   int64
+	Score      float64
 	Breadcrumb string
 	Text       string
 }

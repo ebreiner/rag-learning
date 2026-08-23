@@ -127,6 +127,19 @@ func TestFts(t *testing.T) {
 	}
 }
 
+// rrfScore mirrors rrfMerge's own accumulation (scores[id] += 1.0/float64(rrfK+rank))
+// at runtime rather than as a compile-time constant expression -- a literal
+// like `1.0/61 + 1.0/62` gets folded by the compiler using exact arbitrary-
+// precision arithmetic and rounds to float64 once, while production divides
+// and rounds each term separately at runtime, which can land 1 ULP away.
+func rrfScore(ranks ...int64) float64 {
+	var s float64
+	for _, r := range ranks {
+		s += 1.0 / float64(rrfK+r)
+	}
+	return s
+}
+
 func TestHybrid(t *testing.T) {
 	retriever := &fakeRetriever{
 		ftsIDs: RetrievedChunkIDs{1, 2, 3},
@@ -143,7 +156,12 @@ func TestHybrid(t *testing.T) {
 	// chunks that only appear in one ranking -- computed by hand from rrfK=60:
 	// 2: 1/61 (ann rank1) + 1/62 (fts rank2) ; 3: 1/62 (ann rank2) + 1/63 (fts rank3)
 	// 1: 1/61 (fts rank1) only ; 4: 1/63 (ann rank3) only
-	want := RetrievedChunkIDs{2, 3, 1, 4}
+	want := []scoredChunkID{
+		{ID: 2, Score: rrfScore(1, 2)},
+		{ID: 3, Score: rrfScore(2, 3)},
+		{ID: 1, Score: rrfScore(1)},
+		{ID: 4, Score: rrfScore(3)},
+	}
 	if diff := cmp.Diff(want, ids); diff != "" {
 		t.Errorf("merged ids mismatch (-want +got):\n%s", diff)
 	}
@@ -171,13 +189,17 @@ func TestRrfMerge(t *testing.T) {
 		name     string
 		limit    int64
 		rankings []RetrievedChunkIDs
-		want     RetrievedChunkIDs
+		want     []scoredChunkID
 	}{
 		{
 			name:     "single ranking preserves order",
 			limit:    3,
 			rankings: []RetrievedChunkIDs{{1, 2, 3}},
-			want:     RetrievedChunkIDs{1, 2, 3},
+			want: []scoredChunkID{
+				{ID: 1, Score: rrfScore(1)},
+				{ID: 2, Score: rrfScore(2)},
+				{ID: 3, Score: rrfScore(3)},
+			},
 		},
 		{
 			name:  "chunk appearing in both rankings outranks one appearing in only one",
@@ -187,25 +209,35 @@ func TestRrfMerge(t *testing.T) {
 				{20, 1, 3},
 			},
 			// 1 appears at a good rank in both lists, so it should win overall.
-			want: RetrievedChunkIDs{1, 10, 20},
+			want: []scoredChunkID{
+				{ID: 1, Score: rrfScore(2, 2)},
+				{ID: 10, Score: rrfScore(1)},
+				{ID: 20, Score: rrfScore(1)},
+			},
 		},
 		{
 			name:     "limit truncates the result",
 			limit:    2,
 			rankings: []RetrievedChunkIDs{{1, 2, 3, 4, 5}},
-			want:     RetrievedChunkIDs{1, 2},
+			want: []scoredChunkID{
+				{ID: 1, Score: rrfScore(1)},
+				{ID: 2, Score: rrfScore(2)},
+			},
 		},
 		{
 			name:     "limit larger than available results does not panic or pad",
 			limit:    10,
 			rankings: []RetrievedChunkIDs{{1, 2}},
-			want:     RetrievedChunkIDs{1, 2},
+			want: []scoredChunkID{
+				{ID: 1, Score: rrfScore(1)},
+				{ID: 2, Score: rrfScore(2)},
+			},
 		},
 		{
 			name:     "empty rankings produce an empty result",
 			limit:    5,
 			rankings: []RetrievedChunkIDs{},
-			want:     RetrievedChunkIDs{},
+			want:     []scoredChunkID{},
 		},
 		{
 			name:  "equal scores tie-break by ascending chunk id",
@@ -214,7 +246,10 @@ func TestRrfMerge(t *testing.T) {
 				{20},
 				{10},
 			},
-			want: RetrievedChunkIDs{10, 20},
+			want: []scoredChunkID{
+				{ID: 10, Score: rrfScore(1)},
+				{ID: 20, Score: rrfScore(1)},
+			},
 		},
 	}
 
