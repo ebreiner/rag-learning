@@ -176,6 +176,7 @@ FROM extractions e
 JOIN extraction_nodes en
 	ON en.extraction_id = e.id
 WHERE e.document_id = ?
+ORDER BY en.id
 `
 
 type GetLatestExtractionOfDocRow struct {

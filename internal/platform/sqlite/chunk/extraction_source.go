@@ -143,7 +143,10 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 				}
 			}
 
-		case "unsupported", "caption", "footnote", "picture", "group":
+		case "group":
+			node.Kind = step.KindGroup
+
+		case "unsupported", "caption", "footnote", "picture":
 			node.Kind = step.KindUnsupported
 			logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("unsupported kind %s", row.Kind))
 		default:

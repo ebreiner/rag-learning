@@ -249,6 +249,106 @@ func TestWalkTable(t *testing.T) {
 	}
 }
 
+// TestWalkGroup captures the design decisions for group-node support before
+// it's implemented -- walk() has no `case "group"` yet, so every case here
+// is expected to fail red (walk() currently returns "unknown node kind:
+// group") until that case is added.
+func TestWalkGroup(t *testing.T) {
+	tests := []struct {
+		name string
+		root *ExtractionNode
+		want []string // "breadcrumb|text" per candidate, in emitted order
+	}{
+		{
+			// a group's children are fragments of ONE paragraph that docling
+			// split at bold/italic span boundaries -- reassembling means
+			// direct concatenation with NO separator, unlike list's
+			// per-item "\n" or mergeCandidates' cross-candidate "\n\n".
+			// The fragments themselves already carry any needed whitespace.
+			name: "group concatenates its children's text with no separator",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "group"},
+					mkParagraphNode("Please click "),
+					mkParagraphNode("Save"),
+					mkParagraphNode(" to continue."),
+				),
+			),
+			want: []string{"|Please click Save to continue."},
+		},
+		{
+			name: "non-paragraph child inside a group is skipped, does not corrupt the group text",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "group"},
+					mkParagraphNode("before "),
+					&ExtractionNode{Kind: "picture"},
+					mkParagraphNode("after"),
+				),
+			),
+			want: []string{"|before after"},
+		},
+		{
+			// mirrors list's "if len(parts) > 0" guard: a group with nothing
+			// usable inside it must not emit a stray empty-text candidate,
+			// and walk() must still continue on to process later siblings.
+			name: "group with no usable text produces no candidate, siblings still processed",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "group"},
+					&ExtractionNode{Kind: "picture"},
+					&ExtractionNode{Kind: "unsupported"},
+				),
+				mkParagraphNode("after"),
+			),
+			want: []string{"|after"},
+		},
+		{
+			name: "group candidate carries the active breadcrumb",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkHeadingNode(1, "Ch1"),
+				withChildren(&ExtractionNode{Kind: "group"},
+					mkParagraphNode("A"),
+					mkParagraphNode("B"),
+				),
+			),
+			want: []string{"Ch1|AB"},
+		},
+		{
+			// groups-in-groups: kept dumb on purpose (no recursion). A
+			// nested group child must be skipped -- not silently treated as
+			// empty/no-op text, and not recursed into -- while its own
+			// siblings within the outer group are unaffected.
+			name: "nested group child is skipped, not recursed into",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "group"},
+					mkParagraphNode("before "),
+					withChildren(&ExtractionNode{Kind: "group"},
+						mkParagraphNode("nested"),
+					),
+					mkParagraphNode("after"),
+				),
+			),
+			want: []string{"|before after"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := walk(testCtx, []*ExtractionNode{tt.root}, testLogger)
+			if err != nil {
+				t.Fatalf("walk() error = %v", err)
+			}
+
+			gotStrs := make([]string, len(got))
+			for i, c := range got {
+				gotStrs[i] = c.Breadcrumb + "|" + c.Text
+			}
+
+			if diff := cmp.Diff(tt.want, gotStrs, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("walk() candidates mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestMergeCandidates(t *testing.T) {
 	mkCandidate := func(breadcrumb, text string) chunkCandidate {
 		return chunkCandidate{Node: mkParagraphNode(text), Breadcrumb: breadcrumb, Text: text}

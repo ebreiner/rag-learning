@@ -191,7 +191,7 @@ func TestBuildMap(t *testing.T) {
 		},
 	}
 
-	for _, kind := range []string{"unsupported", "caption", "footnote", "picture", "group"} {
+	for _, kind := range []string{"unsupported", "caption", "footnote", "picture"} {
 		cases = append(cases, buildMapCase{
 			name: kind + " maps to KindUnsupported",
 			rows: []querries.GetLatestExtractionOfDocRow{
