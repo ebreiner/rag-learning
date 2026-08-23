@@ -85,7 +85,7 @@ ORDER BY en.id;
 
 
 -- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, c.position, c.text
+SELECT c.id, d.name, c.position, c.text, c.breadcrumb
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id

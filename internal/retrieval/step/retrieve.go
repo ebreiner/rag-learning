@@ -3,6 +3,7 @@ package step
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 
 	"go.opentelemetry.io/otel"
@@ -35,6 +36,7 @@ func RunRetrieval(
 	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "retrieval-run")
 	defer retrieveSpan.End()
 	var chunkIDs RetrievedChunkIDs
+	var scoreByID map[int64]float64
 	switch strategy {
 	case FTS:
 		ids, err := fts(retrieveCtx, query, k, retriever)
@@ -51,11 +53,16 @@ func RunRetrieval(
 		chunkIDs = ids
 
 	case Hybrid:
-		ids, err := hybrid(retrieveCtx, query, k, retriever, embedClient)
+		scored, err := hybrid(retrieveCtx, query, k, retriever, embedClient)
 		if err != nil {
 			return retrievedChunks, err
 		}
-		chunkIDs = ids
+		chunkIDs = make(RetrievedChunkIDs, len(scored))
+		scoreByID = make(map[int64]float64, len(scored))
+		for i, s := range scored {
+			chunkIDs[i] = s.ID
+			scoreByID[s.ID] = math.Round(s.Score*1e4) / 1e4
+		}
 
 	default:
 		return retrievedChunks, fmt.Errorf("unknown retrieval strategy: %s", strategy)
@@ -69,24 +76,28 @@ func RunRetrieval(
 		return retrievedChunks, err
 	}
 
+	for i := range hydratedChunks {
+		if score, ok := scoreByID[hydratedChunks[i].ID]; ok {
+			hydratedChunks[i].Score = score
+		}
+	}
+
 	hydrateSpan.End()
 	stepSpan.End()
 	return hydratedChunks, nil
 }
 
-func hybrid(ctx context.Context, query string, k int64, retriever TopKRetriever, embedClient EmbedClient) (RetrievedChunkIDs, error) {
-	var chunkIDs RetrievedChunkIDs
-
+func hybrid(ctx context.Context, query string, k int64, retriever TopKRetriever, embedClient EmbedClient) ([]scoredChunkID, error) {
 	hybridK := k * 2
 
 	ftsIDs, err := fts(ctx, query, hybridK, retriever)
 	if err != nil {
-		return chunkIDs, err
+		return nil, err
 	}
 
 	annIDs, err := ann(ctx, query, hybridK, embedClient, retriever)
 	if err != nil {
-		return chunkIDs, err
+		return nil, err
 	}
 
 	return rrfMerge(k, ftsIDs, annIDs), nil
@@ -122,7 +133,7 @@ type scoredChunkID struct {
 	Score float64
 }
 
-func rrfMerge(limit int64, rankings ...RetrievedChunkIDs) RetrievedChunkIDs {
+func rrfMerge(limit int64, rankings ...RetrievedChunkIDs) []scoredChunkID {
 	scores := make(map[int64]float64)
 
 	for _, ranking := range rankings {
@@ -151,10 +162,5 @@ func rrfMerge(limit int64, rankings ...RetrievedChunkIDs) RetrievedChunkIDs {
 		limit = int64(len(scored))
 	}
 
-	result := make(RetrievedChunkIDs, 0, limit)
-	for i := int64(0); i < limit; i++ {
-		result = append(result, scored[i].ID)
-	}
-
-	return result
+	return scored[:limit]
 }
