@@ -254,7 +254,7 @@ func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error 
 }
 
 const retrievalChunksByIDs = `-- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, c.position, c.text
+SELECT c.id, d.name, c.position, c.text, c.breadcrumb
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
@@ -262,10 +262,11 @@ WHERE c.id IN (/*SLICE:chunk_ids*/?)
 `
 
 type RetrievalChunksByIDsRow struct {
-	ID       int64
-	Name     string
-	Position int64
-	Text     string
+	ID         int64
+	Name       string
+	Position   int64
+	Text       string
+	Breadcrumb string
 }
 
 func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([]RetrievalChunksByIDsRow, error) {
@@ -292,6 +293,7 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 			&i.Name,
 			&i.Position,
 			&i.Text,
+			&i.Breadcrumb,
 		); err != nil {
 			return nil, err
 		}

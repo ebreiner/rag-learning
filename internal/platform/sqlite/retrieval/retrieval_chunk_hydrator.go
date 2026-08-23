@@ -48,11 +48,12 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs step.Retriev
 			continue
 		}
 		chunk := step.RetrievedChunk{
-			Rank:     int64(idx + 1),
-			DocTitle: row.Name,
-			Position: row.Position,
-			Text:     row.Text,
-			ID:       row.ID,
+			Rank:       int64(idx + 1),
+			DocTitle:   row.Name,
+			Position:   row.Position,
+			Text:       row.Text,
+			ID:         row.ID,
+			Breadcrumb: row.Breadcrumb,
 		}
 
 		chunks = append(chunks, chunk)
