@@ -69,7 +69,7 @@ to quickly create a Cobra application.`,
 				os.Exit(1)
 			}
 
-			db, err := sqlite.NewConn(dbPath)
+			db, err := sqlite.NewConn(dbPath, false)
 			if err != nil {
 				logger.ErrorContext(ctx, "wiring", "err", err)
 				os.Exit(1)

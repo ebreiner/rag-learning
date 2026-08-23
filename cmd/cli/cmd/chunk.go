@@ -48,7 +48,7 @@ func NewChunkCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			db, err := sqlite.NewConn(dbPath)
+			db, err := sqlite.NewConn(dbPath, true)
 			if err != nil {
 				logger.ErrorContext(ctx, "wiring", "err", err)
 				os.Exit(1)

@@ -105,7 +105,7 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 	if err != nil {
 		return fmt.Errorf("error creating docs source: %s", err.Error())
 	}
-	db, err := sqlite.NewConn(dbPath)
+	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {
 		return err
 	}

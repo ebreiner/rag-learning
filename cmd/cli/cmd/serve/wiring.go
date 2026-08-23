@@ -31,7 +31,7 @@ func (openAIConfig) isEmbedBackendConfig() {}
 
 func wireUp(dbPath string, embedConfig embedBackendConfig, ctx context.Context, logger *slog.Logger) (
 	hydrator retrieval.ChunkHydrator, retriever step.TopKRetriever, embedClient step.EmbedClient, closeDB func(context.Context) error, err error) {
-	db, err := sqlite.NewConn(dbPath)
+	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {
 		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, nil, err
 	}
