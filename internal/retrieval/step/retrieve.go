@@ -24,6 +24,7 @@ func RunRetrieval(
 
 	tracer := otel.Tracer("rag-cli-sdk")
 	stepCtx, stepSpan := tracer.Start(ctx, "step-retrieval")
+	defer stepSpan.End()
 
 	stepSpan.SetAttributes(
 		attribute.String("query.query", query),
@@ -32,13 +33,12 @@ func RunRetrieval(
 	)
 
 	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "retrieval-run")
+	defer retrieveSpan.End()
 	var chunkIDs RetrievedChunkIDs
 	switch strategy {
 	case FTS:
 		ids, err := fts(retrieveCtx, query, k, retriever)
 		if err != nil {
-			retrieveSpan.End()
-			stepSpan.End()
 			return retrievedChunks, err
 		}
 		chunkIDs = ids
@@ -46,8 +46,6 @@ func RunRetrieval(
 	case Embedding:
 		ids, err := ann(retrieveCtx, query, k, embedClient, retriever)
 		if err != nil {
-			retrieveSpan.End()
-			stepSpan.End()
 			return retrievedChunks, err
 		}
 		chunkIDs = ids
@@ -55,24 +53,19 @@ func RunRetrieval(
 	case Hybrid:
 		ids, err := hybrid(retrieveCtx, query, k, retriever, embedClient)
 		if err != nil {
-			retrieveSpan.End()
-			stepSpan.End()
 			return retrievedChunks, err
 		}
 		chunkIDs = ids
 
 	default:
-		retrieveSpan.End()
-		stepSpan.End()
 		return retrievedChunks, fmt.Errorf("unknown retrieval strategy: %s", strategy)
 	}
 	retrieveSpan.End()
 
 	hydrateCtx, hydrateSpan := tracer.Start(stepCtx, "hydrate_chunks")
+	defer hydrateSpan.End()
 	hydratedChunks, err := hydrator.HydrateChunks(hydrateCtx, chunkIDs)
 	if err != nil {
-		hydrateSpan.End()
-		stepSpan.End()
 		return retrievedChunks, err
 	}
 

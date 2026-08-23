@@ -12,66 +12,56 @@ import (
 )
 
 func Chunk(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
-	var counter int
-	var outerErr error
 	for {
-		tracer := otel.Tracer("rag-cli-sdk")
-		stepCtx, stepSpan := tracer.Start(ctx, "chunk-step")
-		counter++
-		nextExtractionCtx, nextExtractionSpan := tracer.Start(stepCtx, "next_extraction")
-		extract, err := source.NextExtraction(nextExtractionCtx)
-		if errors.Is(err, io.EOF) {
-			nextExtractionSpan.End()
-			stepSpan.End()
-			break
+		if err := processDoc(ctx, source, sink, logger); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			} else {
+				return err
+			}
 		}
-
-		if err != nil {
-			logger.ErrorContext(ctx, "run-chunk", "err", err)
-			outerErr = err
-			nextExtractionSpan.End()
-			stepSpan.End()
-			break
-		}
-		stepSpan.SetAttributes(
-			attribute.Int64("doc.id", extract.DocumentID),
-		)
-		nextExtractionSpan.End()
-
-		processDocCtx, processDocSpan := tracer.Start(stepCtx, "process_doc")
-		result, err := processDoc(processDocCtx, extract, logger)
-		if err != nil {
-			outerErr = err
-			stepSpan.End()
-			processDocSpan.End()
-			break
-		}
-		processDocSpan.SetAttributes(attribute.Int("doc.chunks.processed", len(result.ChunksToSave)))
-		processDocSpan.End()
-
-		sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_chunks")
-		err = sink.SaveChunks(sinkCtx, result)
-		if err != nil {
-			outerErr = err
-			sinkSpan.End()
-			stepSpan.End()
-			break
-		}
-		sinkSpan.End()
-		stepSpan.End()
 	}
 
-	return outerErr
+	return nil
 }
 
-func processDoc(ctx context.Context, extraction ExtractionToChunk, logger *slog.Logger) (ChunkResult, error) {
-	result := ChunkResult{DocumentID: extraction.DocumentID}
-	chunkCandidates, err := walk(ctx, extraction.Roots, logger)
+func processDoc(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
+	tracer := otel.Tracer("rag-cli-sdk")
+	stepCtx, stepSpan := tracer.Start(ctx, "chunk-step")
+	defer stepSpan.End()
+
+	nextExtractionCtx, nextExtractionSpan := tracer.Start(stepCtx, "next_extraction")
+	defer nextExtractionSpan.End()
+	extract, err := source.NextExtraction(nextExtractionCtx)
 	if err != nil {
-		return result, err
+		return err
 	}
-	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(ctx, chunkCandidates, logger)...)
-	return result, nil
+
+	stepSpan.SetAttributes(
+		attribute.Int64("doc.id", extract.DocumentID),
+	)
+	nextExtractionSpan.End()
+
+	processDocCtx, processDocSpan := tracer.Start(stepCtx, "process_doc")
+	defer processDocSpan.End()
+	result := ChunkResult{DocumentID: extract.DocumentID}
+	chunkCandidates, err := walk(processDocCtx, extract.Roots, logger)
+	if err != nil {
+		return err
+	}
+	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(processDocCtx, chunkCandidates, logger)...)
+	processDocSpan.SetAttributes(attribute.Int("doc.chunks.processed", len(result.ChunksToSave)))
+	processDocSpan.End()
+
+	sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_chunks")
+	defer sinkSpan.End()
+	err = sink.SaveChunks(sinkCtx, result)
+	if err != nil {
+		return err
+	}
+	sinkSpan.End()
+
+	return nil
 }
 
 type chunkCandidate struct {

@@ -2,7 +2,9 @@ package step
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 
 	"go.opentelemetry.io/otel"
@@ -10,66 +12,71 @@ import (
 )
 
 func Embed(ctx context.Context, sink EmbeddingsSink, source ChunkSource, client EmbedClient, logger *slog.Logger) error {
-	var limit int64 = 10
-
 	for {
-		tracer := otel.Tracer("rac-cli-sdk")
-		stepCtx, stepSpan := tracer.Start(ctx, "embed-step")
-		nextCtx, nextSpan := tracer.Start(stepCtx, "next_chunk")
-		rawChunks, err := source.NextChunks(nextCtx, limit)
-
-		if err != nil {
-			stepSpan.End()
-			nextSpan.End()
-			return err
-		}
-		if len(rawChunks) == 0 {
-			stepSpan.End()
-			nextSpan.End()
-			return err
-		}
-		stepSpan.SetAttributes(
-			attribute.Int64("doc.id", rawChunks[0].DocID),
-			attribute.Int("doc.chunks.to_embed", len(rawChunks)),
-		)
-
-		nextSpan.End()
-
-		var chunks []ChunkToEmbed
-		for _, chunk := range rawChunks {
-			if len(chunk.Text) <= 1 {
-				continue
-			} else {
-				chunks = append(chunks, chunk)
+		if err := embed(ctx, sink, source, client, logger); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
 			}
-		}
 
-		embedCtx, embedSpan := tracer.Start(stepCtx, "embed_with_fallback")
-		embeddingsToSave, err := embedWithFallback(embedCtx, client, chunks, logger)
-		if err != nil {
-			embedSpan.End()
-			stepSpan.End()
 			return err
 		}
-		embedSpan.End()
-
-		sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_embeddings")
-		if len(embeddingsToSave.Embeddings) > 0 {
-			if err := sink.SaveEmbeddings(sinkCtx, embeddingsToSave); err != nil {
-				sinkSpan.End()
-				stepSpan.End()
-				return err
-			}
-		}
-
-		if len(rawChunks) < int(limit) {
-			sinkSpan.End()
-			stepSpan.End()
-			break
-		}
-		sinkSpan.End()
-		stepSpan.End()
 	}
+
+	return nil
+}
+
+func embed(ctx context.Context, sink EmbeddingsSink, source ChunkSource, client EmbedClient, logger *slog.Logger) error {
+	var limit int64 = 10
+	tracer := otel.Tracer("rac-cli-sdk")
+	stepCtx, stepSpan := tracer.Start(ctx, "embed-step")
+	defer stepSpan.End()
+
+	nextCtx, nextSpan := tracer.Start(stepCtx, "next_chunk")
+	defer nextSpan.End()
+	rawChunks, err := source.NextChunks(nextCtx, limit)
+
+	if err != nil {
+		return err
+	}
+	if len(rawChunks) == 0 {
+		return io.EOF
+	}
+	stepSpan.SetAttributes(
+		attribute.Int64("doc.id", rawChunks[0].DocID),
+		attribute.Int("doc.chunks.to_embed", len(rawChunks)),
+	)
+
+	nextSpan.End()
+
+	embedCtx, embedSpan := tracer.Start(stepCtx, "embed_with_fallback")
+	defer embedSpan.End()
+	var chunks []ChunkToEmbed
+	for _, chunk := range rawChunks {
+		if len(chunk.Text) <= 1 {
+			continue
+		} else {
+			chunks = append(chunks, chunk)
+		}
+	}
+
+	embeddingsToSave, err := embedWithFallback(embedCtx, client, chunks, logger)
+	if err != nil {
+		return err
+	}
+	embedSpan.End()
+
+	sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_embeddings")
+	defer sinkSpan.End()
+	if len(embeddingsToSave.Embeddings) > 0 {
+		if err := sink.SaveEmbeddings(sinkCtx, embeddingsToSave); err != nil {
+			return err
+		}
+	}
+
+	if len(rawChunks) < int(limit) {
+		return io.EOF
+	}
+	sinkSpan.End()
 
 	return nil
 }

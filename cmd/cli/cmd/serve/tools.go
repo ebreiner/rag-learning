@@ -77,15 +77,16 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 		)
 
 		retrievalCtx, retrievalSpan := tracer.Start(handlerCtx, "run_retrieval")
+		defer retrievalSpan.End()
 		chunks, err := step.RunRetrieval(retrievalCtx, query, step.Hybrid, int64(k), hydrator, retriever, embedClient)
 		if err != nil {
 			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error running retrieval: %w", err))
-			retrievalSpan.End()
 			return mcp.NewToolResultError("error running chunk retrieval"), nil
 		}
 		retrievalSpan.End()
 
 		logCtx, logSpan := tracer.Start(handlerCtx, "log_query")
+		defer logSpan.End()
 		ids := make([]int64, 0, len(chunks))
 		for _, chunk := range chunks {
 			ids = append(ids, chunk.ID)
