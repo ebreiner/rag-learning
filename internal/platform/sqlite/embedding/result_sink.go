@@ -22,8 +22,8 @@ func NewEmbeddingsResultSink(db *sql.DB, logger *slog.Logger) (ResultSink, error
 	return sink, nil
 }
 
-func (s ResultSink) SaveEmbeddings(embeddings step.EmbeddingsToSave, ctx context.Context) error {
-	tableName, err := sqlite.SetupVecTable(s.dbClient, ctx, embeddings.Dim, embeddings.Model)
+func (s ResultSink) SaveEmbeddings(ctx context.Context, embeddings step.EmbeddingsToSave) error {
+	tableName, err := sqlite.SetupVecTable(ctx, s.dbClient, embeddings.Dim, embeddings.Model)
 	if err != nil {
 		return err
 	}

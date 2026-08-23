@@ -12,18 +12,19 @@ import (
 const rrfK int64 = 60
 
 func RunRetrieval(
+	ctx context.Context,
 	query string,
 	strategy RetrievalStrategy,
 	k int64,
 	hydrator ChunkHydrator,
 	retriever TopKRetriever,
 	embedClient EmbedClient,
-	ctx context.Context,
 ) ([]RetrievedChunk, error) {
 	retrievedChunks := make([]RetrievedChunk, 0)
 
 	tracer := otel.Tracer("rag-cli-sdk")
 	stepCtx, stepSpan := tracer.Start(ctx, "step-retrieval")
+	defer stepSpan.End()
 
 	stepSpan.SetAttributes(
 		attribute.String("query.query", query),
@@ -32,47 +33,39 @@ func RunRetrieval(
 	)
 
 	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "retrieval-run")
+	defer retrieveSpan.End()
 	var chunkIDs RetrievedChunkIDs
 	switch strategy {
 	case FTS:
-		ids, err := fts(query, k, retriever, retrieveCtx)
+		ids, err := fts(retrieveCtx, query, k, retriever)
 		if err != nil {
-			retrieveSpan.End()
-			stepSpan.End()
 			return retrievedChunks, err
 		}
 		chunkIDs = ids
 
 	case Embedding:
-		ids, err := ann(query, k, embedClient, retriever, retrieveCtx)
+		ids, err := ann(retrieveCtx, query, k, embedClient, retriever)
 		if err != nil {
-			retrieveSpan.End()
-			stepSpan.End()
 			return retrievedChunks, err
 		}
 		chunkIDs = ids
 
 	case Hybrid:
-		ids, err := hybrid(query, k, retriever, embedClient, retrieveCtx)
+		ids, err := hybrid(retrieveCtx, query, k, retriever, embedClient)
 		if err != nil {
-			retrieveSpan.End()
-			stepSpan.End()
 			return retrievedChunks, err
 		}
 		chunkIDs = ids
 
 	default:
-		retrieveSpan.End()
-		stepSpan.End()
 		return retrievedChunks, fmt.Errorf("unknown retrieval strategy: %s", strategy)
 	}
 	retrieveSpan.End()
 
 	hydrateCtx, hydrateSpan := tracer.Start(stepCtx, "hydrate_chunks")
-	hydratedChunks, err := hydrator.HydrateChunks(chunkIDs, hydrateCtx)
+	defer hydrateSpan.End()
+	hydratedChunks, err := hydrator.HydrateChunks(hydrateCtx, chunkIDs)
 	if err != nil {
-		hydrateSpan.End()
-		stepSpan.End()
 		return retrievedChunks, err
 	}
 
@@ -81,17 +74,17 @@ func RunRetrieval(
 	return hydratedChunks, nil
 }
 
-func hybrid(query string, k int64, retriever TopKRetriever, embedClient EmbedClient, ctx context.Context) (RetrievedChunkIDs, error) {
+func hybrid(ctx context.Context, query string, k int64, retriever TopKRetriever, embedClient EmbedClient) (RetrievedChunkIDs, error) {
 	var chunkIDs RetrievedChunkIDs
 
 	hybridK := k * 2
 
-	ftsIDs, err := fts(query, hybridK, retriever, ctx)
+	ftsIDs, err := fts(ctx, query, hybridK, retriever)
 	if err != nil {
 		return chunkIDs, err
 	}
 
-	annIDs, err := ann(query, hybridK, embedClient, retriever, ctx)
+	annIDs, err := ann(ctx, query, hybridK, embedClient, retriever)
 	if err != nil {
 		return chunkIDs, err
 	}
@@ -99,8 +92,8 @@ func hybrid(query string, k int64, retriever TopKRetriever, embedClient EmbedCli
 	return rrfMerge(k, ftsIDs, annIDs), nil
 }
 
-func fts(query string, k int64, retriever TopKRetriever, ctx context.Context) (RetrievedChunkIDs, error) {
-	chunkIDs, err := retriever.TopKByFTS(query, k, ctx)
+func fts(ctx context.Context, query string, k int64, retriever TopKRetriever) (RetrievedChunkIDs, error) {
+	chunkIDs, err := retriever.TopKByFTS(ctx, query, k)
 	if err != nil {
 		return chunkIDs, err
 	}
@@ -108,15 +101,15 @@ func fts(query string, k int64, retriever TopKRetriever, ctx context.Context) (R
 	return chunkIDs, nil
 }
 
-func ann(query string, k int64, embedClient EmbedClient, retriever TopKRetriever, ctx context.Context) (RetrievedChunkIDs, error) {
+func ann(ctx context.Context, query string, k int64, embedClient EmbedClient, retriever TopKRetriever) (RetrievedChunkIDs, error) {
 	var chunkIDs RetrievedChunkIDs
 
-	embeddedQ, err := embedClient.EmbedQuery(query, ctx)
+	embeddedQ, err := embedClient.EmbedQuery(ctx, query)
 	if err != nil {
 		return chunkIDs, err
 	}
 
-	chunkIDs, err = retriever.TopKByANN(embeddedQ, k, ctx)
+	chunkIDs, err = retriever.TopKByANN(ctx, embeddedQ, k)
 	if err != nil {
 		return chunkIDs, err
 	}

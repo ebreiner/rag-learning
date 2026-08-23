@@ -7,7 +7,7 @@ import (
 
 func wireGraph(flatNodes map[string]*step.Node, rawDoc *rawDoclingDocument) (step.ExtractedDoc, error) {
 	extractedDoc := step.ExtractedDoc{}
-	roots := make([]*step.Node, 0, 0)
+	roots := make([]*step.Node, 0)
 	rootRefs := make([]rawRef, 0, len(rawDoc.Body.Children)+len(rawDoc.Furniture.Children))
 	rootRefs = append(rootRefs, rawDoc.Body.Children...)
 	rootRefs = append(rootRefs, rawDoc.Furniture.Children...)

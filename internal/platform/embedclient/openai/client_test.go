@@ -44,7 +44,7 @@ func (f *fakeEmbedServer) handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 
 	if f.rawBody != "" {
-		w.Write([]byte(f.rawBody))
+		_, _ = w.Write([]byte(f.rawBody))
 		return
 	}
 
@@ -62,7 +62,7 @@ func (f *fakeEmbedServer) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Data = append(resp.Data, respEmbedding{Embedding: vec, Index: i})
 	}
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func newTestClient(t *testing.T, server *fakeEmbedServer, dim int64) (ClientOpenAI, *httptest.Server) {
@@ -86,7 +86,7 @@ func TestEmbedChunks(t *testing.T) {
 			{ChunkID: 101, Text: "first"},
 			{ChunkID: 202, Text: "second"},
 		}
-		got, err := client.EmbedChunks(chunks, testCtx)
+		got, err := client.EmbedChunks(testCtx, chunks)
 		if err != nil {
 			t.Fatalf("EmbedChunks() error = %v", err)
 		}
@@ -109,7 +109,7 @@ func TestEmbedChunks(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 4}
 		client, _ := newTestClient(t, server, 4)
 
-		_, err := client.EmbedChunks([]step.ChunkToEmbed{{ChunkID: 1, Text: "hello world"}}, testCtx)
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello world"}})
 		if err != nil {
 			t.Fatalf("EmbedChunks() error = %v", err)
 		}
@@ -127,7 +127,7 @@ func TestEmbedChunks(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 768}
 		client, _ := newTestClient(t, server, 1024)
 
-		_, err := client.EmbedChunks([]step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}}, testCtx)
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
 		if err == nil {
 			t.Fatalf("expected an error on dim mismatch, got nil")
 		}
@@ -137,7 +137,7 @@ func TestEmbedChunks(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 1024}
 		client, _ := newTestClient(t, server, 1024)
 
-		_, err := client.EmbedChunks([]step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}}, testCtx)
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
 		if err != nil {
 			t.Fatalf("EmbedChunks() unexpected error = %v", err)
 		}
@@ -147,7 +147,7 @@ func TestEmbedChunks(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 4, statusCode: http.StatusInternalServerError, rawBody: "server exploded"}
 		client, _ := newTestClient(t, server, 4)
 
-		_, err := client.EmbedChunks([]step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}}, testCtx)
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
 		if err == nil {
 			t.Fatalf("expected an error for a 500 response")
 		}
@@ -160,7 +160,7 @@ func TestEmbedChunks(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 4, rawBody: "{not valid json"}
 		client, _ := newTestClient(t, server, 4)
 
-		_, err := client.EmbedChunks([]step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}}, testCtx)
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
 		if err == nil {
 			t.Fatalf("expected an error for malformed JSON")
 		}
@@ -170,7 +170,7 @@ func TestEmbedChunks(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 4, rawBody: `{"data":[]}`}
 		client, _ := newTestClient(t, server, 4)
 
-		_, err := client.EmbedChunks([]step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}}, testCtx)
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
 		if err == nil {
 			t.Fatalf("expected an error for an empty data array")
 		}
@@ -182,7 +182,7 @@ func TestEmbedQuery(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 4}
 		client, _ := newTestClient(t, server, 4)
 
-		q, err := client.EmbedQuery("what is single sign on", testCtx)
+		q, err := client.EmbedQuery(testCtx, "what is single sign on")
 		if err != nil {
 			t.Fatalf("EmbedQuery() error = %v", err)
 		}
@@ -198,7 +198,7 @@ func TestEmbedQuery(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 768}
 		client, _ := newTestClient(t, server, 1024)
 
-		_, err := client.EmbedQuery("hello", testCtx)
+		_, err := client.EmbedQuery(testCtx, "hello")
 		if err == nil {
 			t.Fatalf("expected an error on dim mismatch")
 		}
@@ -208,7 +208,7 @@ func TestEmbedQuery(t *testing.T) {
 		server := &fakeEmbedServer{vectorLen: 4, rawBody: `{"data":[]}`}
 		client, _ := newTestClient(t, server, 4)
 
-		_, err := client.EmbedQuery("hello", testCtx)
+		_, err := client.EmbedQuery(testCtx, "hello")
 		if err == nil {
 			t.Fatalf("expected an error for an empty data array")
 		}

@@ -31,7 +31,13 @@ func (t *capturingTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if reqFileErr != nil {
 		t.logger.WarnContext(ctx, "http-client", "warn", fmt.Errorf("warning: req-dump failed opening file: %w", reqFileErr))
 	}
-	defer reqFile.Close()
+
+	defer func() {
+		if err := reqFile.Close(); err != nil {
+			t.logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+	}()
+
 	_, reqFileErr = reqFile.Write(reqDump)
 
 	if reqFileErr != nil {
@@ -51,7 +57,13 @@ func (t *capturingTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if respFileErr != nil {
 		t.logger.WarnContext(ctx, "http-client", "warn", fmt.Errorf("warning: resp-dump failed opening file: %s", reqFileErr))
 	}
-	defer respFile.Close()
+
+	defer func() {
+		if err := respFile.Close(); err != nil {
+			t.logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+	}()
+
 	_, respFileErr = respFile.Write(respDump)
 
 	if respFileErr != nil {

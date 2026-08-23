@@ -23,7 +23,7 @@ type DoclingExtractor struct {
 
 func NewDoclingExtractor(doclingURL string, client *http.Client, logger *slog.Logger) (DoclingExtractor, error) {
 	if _, err := url.Parse(doclingURL); err != nil {
-		return DoclingExtractor{}, fmt.Errorf("malformed docling url '%s': %s", doclingURL, err)
+		return DoclingExtractor{}, fmt.Errorf("malformed docling url '%s': %w", doclingURL, err)
 	}
 	return DoclingExtractor{
 		Client:  client,
@@ -32,13 +32,13 @@ func NewDoclingExtractor(doclingURL string, client *http.Client, logger *slog.Lo
 	}, nil
 }
 
-func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc, ctx context.Context) (step.ExtractedDoc, error) {
-	rawDoc, err := doclingConvert(e.Client, sourceDoc.SourcePath, e.BaseURL, ctx)
+func (e *DoclingExtractor) ExtractSourceDoc(ctx context.Context, sourceDoc step.SourceDoc) (step.ExtractedDoc, error) {
+	rawDoc, err := doclingConvert(ctx, e.Client, sourceDoc.SourcePath, e.BaseURL)
 	if err != nil {
 		return step.ExtractedDoc{}, err
 	}
 
-	flatNodes, err := buildNodes(rawDoc, ctx, e.Logger)
+	flatNodes, err := buildNodes(ctx, rawDoc, e.Logger)
 	if err != nil {
 		return step.ExtractedDoc{}, err
 	}
@@ -55,7 +55,7 @@ func (e *DoclingExtractor) ExtractSourceDoc(sourceDoc step.SourceDoc, ctx contex
 	return extDoc, nil
 }
 
-func doclingConvert(client *http.Client, inputPath, doclingURL string, ctx context.Context) (*rawDoclingDocument, error) {
+func doclingConvert(ctx context.Context, client *http.Client, inputPath, doclingURL string) (*rawDoclingDocument, error) {
 	contentType, form, err := convertMultipartForm(inputPath)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,6 @@ func convertMultipartForm(inputPath string) (string, *bytes.Buffer, error) {
 	if err != nil {
 		return "", body, err
 	}
-	defer f.Close()
 
 	_, name := filepath.Split(inputPath)
 	part, err := writer.CreateFormFile("files", name)
@@ -124,6 +123,10 @@ func convertMultipartForm(inputPath string) (string, *bytes.Buffer, error) {
 	}
 
 	if _, err := io.Copy(part, f); err != nil {
+		return "", body, err
+	}
+
+	if err := f.Close(); err != nil {
 		return "", body, err
 	}
 

@@ -23,7 +23,7 @@ type fakeSource struct {
 	err          error
 }
 
-func (f *fakeSource) NextChunks(limit int64, ctx context.Context) ([]ChunkToEmbed, error) {
+func (f *fakeSource) NextChunks(ctx context.Context, limit int64) ([]ChunkToEmbed, error) {
 	f.limitsCalled = append(f.limitsCalled, limit)
 	if f.err != nil {
 		return nil, f.err
@@ -42,7 +42,7 @@ type fakeClient struct {
 	err        error
 }
 
-func (f *fakeClient) EmbedChunks(chunks []ChunkToEmbed, ctx context.Context) (EmbeddingsToSave, error) {
+func (f *fakeClient) EmbedChunks(ctx context.Context, chunks []ChunkToEmbed) (EmbeddingsToSave, error) {
 	f.calledWith = append(f.calledWith, chunks)
 	if f.err != nil {
 		return EmbeddingsToSave{}, f.err
@@ -60,7 +60,7 @@ type fakeSink struct {
 	err   error
 }
 
-func (f *fakeSink) SaveEmbeddings(toSave EmbeddingsToSave, ctx context.Context) error {
+func (f *fakeSink) SaveEmbeddings(ctx context.Context, toSave EmbeddingsToSave) error {
 	f.saved = append(f.saved, toSave)
 	return f.err
 }
@@ -76,7 +76,7 @@ type flakyClient struct {
 	calls                 [][]ChunkToEmbed
 }
 
-func (f *flakyClient) EmbedChunks(chunks []ChunkToEmbed, ctx context.Context) (EmbeddingsToSave, error) {
+func (f *flakyClient) EmbedChunks(ctx context.Context, chunks []ChunkToEmbed) (EmbeddingsToSave, error) {
 	f.calls = append(f.calls, chunks)
 
 	for _, c := range chunks {
@@ -100,7 +100,7 @@ func TestEmbedWithFallback(t *testing.T) {
 		client := &flakyClient{}
 		chunks := []ChunkToEmbed{{ChunkID: 1, Text: "a"}, {ChunkID: 2, Text: "b"}}
 
-		got, err := embedWithFallback(client, chunks, testCtx, testLogger)
+		got, err := embedWithFallback(testCtx, client, chunks, testLogger)
 		if err != nil {
 			t.Fatalf("embedWithFallback() error = %v", err)
 		}
@@ -119,7 +119,7 @@ func TestEmbedWithFallback(t *testing.T) {
 			{ChunkID: 3, Text: "c"}, {ChunkID: 4, Text: "d"},
 		}
 
-		got, err := embedWithFallback(client, chunks, testCtx, testLogger)
+		got, err := embedWithFallback(testCtx, client, chunks, testLogger)
 		if err != nil {
 			t.Fatalf("embedWithFallback() error = %v", err)
 		}
@@ -134,7 +134,7 @@ func TestEmbedWithFallback(t *testing.T) {
 			{ChunkID: 1, Text: "a"}, {ChunkID: 2, Text: "b"}, {ChunkID: 3, Text: "c"},
 		}
 
-		got, err := embedWithFallback(client, chunks, testCtx, testLogger)
+		got, err := embedWithFallback(testCtx, client, chunks, testLogger)
 		if err != nil {
 			t.Fatalf("embedWithFallback() error = %v", err)
 		}
@@ -157,7 +157,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{}
 		sink := &fakeSink{}
 
-		if err := Embed(sink, source, client, testCtx, testLogger); err != nil {
+		if err := Embed(testCtx, sink, source, client, testLogger); err != nil {
 			t.Fatalf("Embed() error = %v", err)
 		}
 
@@ -188,7 +188,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{}
 		sink := &fakeSink{}
 
-		if err := Embed(sink, source, client, testCtx, testLogger); err != nil {
+		if err := Embed(testCtx, sink, source, client, testLogger); err != nil {
 			t.Fatalf("Embed() error = %v", err)
 		}
 
@@ -211,7 +211,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{}
 		sink := &fakeSink{}
 
-		if err := Embed(sink, source, client, testCtx, testLogger); err != nil {
+		if err := Embed(testCtx, sink, source, client, testLogger); err != nil {
 			t.Fatalf("Embed() error = %v", err)
 		}
 
@@ -233,7 +233,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{}
 		sink := &fakeSink{}
 
-		if err := Embed(sink, source, client, testCtx, testLogger); err != nil {
+		if err := Embed(testCtx, sink, source, client, testLogger); err != nil {
 			t.Fatalf("Embed() error = %v, want nil", err)
 		}
 		if len(client.calledWith) != 0 {
@@ -247,7 +247,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{}
 		sink := &fakeSink{}
 
-		err := Embed(sink, source, client, testCtx, testLogger)
+		err := Embed(testCtx, sink, source, client, testLogger)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("Embed() error = %v, want %v", err, wantErr)
 		}
@@ -267,7 +267,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{err: errors.New("embed call broke")}
 		sink := &fakeSink{}
 
-		if err := Embed(sink, source, client, testCtx, testLogger); err != nil {
+		if err := Embed(testCtx, sink, source, client, testLogger); err != nil {
 			t.Fatalf("Embed() error = %v, want nil -- an unembeddable chunk should be skipped, not fatal", err)
 		}
 
@@ -284,7 +284,7 @@ func TestEmbed(t *testing.T) {
 		client := &fakeClient{}
 		sink := &fakeSink{err: wantErr}
 
-		err := Embed(sink, source, client, testCtx, testLogger)
+		err := Embed(testCtx, sink, source, client, testLogger)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("Embed() error = %v, want %v", err, wantErr)
 		}

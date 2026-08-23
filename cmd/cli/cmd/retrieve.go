@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
-	"os"
 	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient/kreuzberg"
 	"rag/internal/platform/embedclient/openai"
@@ -15,7 +13,6 @@ import (
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/platform/telemetry/logging"
-	"rag/internal/platform/telemetry/tracing"
 	"rag/internal/retrieval/step"
 	"strconv"
 	"time"
@@ -33,93 +30,77 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
-			logger, err := logging.FromCommand(cmd)
+
+			logger, otelShutdownFunc, err := Setup(ctx, cmd)
 			if err != nil {
-				log.Fatal(fmt.Errorf("error setting up logger: %w", err))
+				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
 			logger = logger.With(logging.KeyStep, "retrieval")
-
-			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
-			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
-			}
 			defer func() {
-				if err := shutdownOTEL(ctx); err != nil {
+				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
-					os.Exit(1)
 				}
 			}()
 
 			userQueryFlag := cmd.Flag("query")
 			userQuery := userQueryFlag.Value.String()
 			if len(userQuery) == 0 {
-				logger.ErrorContext(ctx, "wiring", "err", "Missing query string --query 'query string'")
-				os.Exit(1)
+				return fmt.Errorf("missing query string --query 'query string'")
 			}
 
 			globals := config.GlobalOptions
 
 			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
-			db, err := sqlite.NewConn(dbPath)
+			db, err := sqlite.NewConn(dbPath, false)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			modelFlag := cmd.Flags().Lookup("model")
 			if !modelFlag.Changed || modelFlag.Value.String() == "" {
-				logger.ErrorContext(ctx, "wiring", "err", "missing flag required flag: --model model-name")
-				os.Exit(1)
+				return fmt.Errorf("missing flag required flag: --model model-name")
 			}
 			model := modelFlag.Value.String()
 
 			dimFlag := cmd.Flags().Lookup("dim")
 			if !dimFlag.Changed || dimFlag.Value.String() == "" {
-				logger.ErrorContext(ctx, "wiring", "err", "missing flag required flag: --dimension 1024")
-				os.Exit(1)
+				return fmt.Errorf("missing flag required flag: --dimension 1024")
 			}
 
 			dim, err := strconv.Atoi(dimFlag.Value.String())
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error parsing flag --dimension: %w", err))
-				os.Exit(1)
+				return fmt.Errorf("error parsing flag --dimension: %w", err)
 			}
 
 			var embedClient step.EmbedClient
 			httpClient := httpclient.New(time.Minute * 5)
 			if cmd.Flags().Lookup("xberg-url").Changed {
-				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger); err == nil {
+				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger, httpClient); err == nil {
 					embedClient = client
 				} else {
-					logger.ErrorContext(ctx, "wiring", "err", err)
-					os.Exit(1)
+					return err
 				}
 			} else if cmd.Flags().Lookup("openai-url").Changed {
 				if client, err := openai.NewOpenAIClient(model, openAIBaseURL, int64(dim), httpClient, logger); err == nil {
 					embedClient = client
 				} else {
-					logger.ErrorContext(ctx, "wiring", "err", err)
-					os.Exit(1)
+					return err
 				}
 			}
 
@@ -128,9 +109,10 @@ to quickly create a Cobra application.`,
 
 			err = retrieveChunks(db, embedClient, userQuery, retrievalType, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error running retrieval: %w", err))
-				os.Exit(1)
+				return fmt.Errorf("error running retrieval: %w", err)
 			}
+
+			return nil
 		},
 	}
 
@@ -167,7 +149,7 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 		return err
 	}
 
-	chunks, err := step.RunRetrieval(query, strategy, 10, &hydrator, retriever, embedClient, ctx)
+	chunks, err := step.RunRetrieval(ctx, query, strategy, 10, &hydrator, retriever, embedClient)
 	if err != nil {
 		return err
 	}

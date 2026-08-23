@@ -13,7 +13,7 @@ import (
 func TestSetupTable(t *testing.T) {
 	t.Run("creates a table named after the sanitized model and dim", func(t *testing.T) {
 		db := sqlitetest.New(t)
-		got, err := sqlite.SetupVecTable(db, context.Background(), 1024, "bge-m3")
+		got, err := sqlite.SetupVecTable(context.Background(), db, 1024, "bge-m3")
 		if err != nil {
 			t.Fatalf("SetupTable() error = %v", err)
 		}
@@ -25,7 +25,7 @@ func TestSetupTable(t *testing.T) {
 
 	t.Run("sanitizes colons and hyphens in the model name", func(t *testing.T) {
 		db := sqlitetest.New(t)
-		got, err := sqlite.SetupVecTable(db, context.Background(), 768, "qwen3-embedding:0.6b")
+		got, err := sqlite.SetupVecTable(context.Background(), db, 768, "qwen3-embedding:0.6b")
 		if err != nil {
 			t.Fatalf("SetupTable() error = %v", err)
 		}
@@ -36,7 +36,7 @@ func TestSetupTable(t *testing.T) {
 
 	t.Run("the created table actually enforces the declared dimension", func(t *testing.T) {
 		db := sqlitetest.New(t)
-		tableName, err := sqlite.SetupVecTable(db, context.Background(), 3, "dimtest")
+		tableName, err := sqlite.SetupVecTable(context.Background(), db, 3, "dimtest")
 		if err != nil {
 			t.Fatalf("SetupTable() error = %v", err)
 		}
@@ -61,11 +61,11 @@ func TestSetupTable(t *testing.T) {
 	t.Run("calling it twice for the same model+dim is idempotent", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		first, err := sqlite.SetupVecTable(db, ctx, 512, "repeat-test")
+		first, err := sqlite.SetupVecTable(ctx, db, 512, "repeat-test")
 		if err != nil {
 			t.Fatalf("first SetupTable() error = %v", err)
 		}
-		second, err := sqlite.SetupVecTable(db, ctx, 512, "repeat-test")
+		second, err := sqlite.SetupVecTable(ctx, db, 512, "repeat-test")
 		if err != nil {
 			t.Fatalf("second SetupTable() error = %v", err)
 		}
@@ -76,14 +76,14 @@ func TestSetupTable(t *testing.T) {
 
 	t.Run("missing dim errors", func(t *testing.T) {
 		db := sqlitetest.New(t)
-		if _, err := sqlite.SetupVecTable(db, context.Background(), 0, "some-model"); err == nil {
+		if _, err := sqlite.SetupVecTable(context.Background(), db, 0, "some-model"); err == nil {
 			t.Error("expected an error for dim=0")
 		}
 	})
 
 	t.Run("missing model errors", func(t *testing.T) {
 		db := sqlitetest.New(t)
-		if _, err := sqlite.SetupVecTable(db, context.Background(), 1024, ""); err == nil {
+		if _, err := sqlite.SetupVecTable(context.Background(), db, 1024, ""); err == nil {
 			t.Error("expected an error for an empty model")
 		}
 	})
@@ -117,7 +117,7 @@ func TestPackVector(t *testing.T) {
 // length" but bytes vec0 actually interprets as the right float values.
 func TestPackVectorRoundTrip(t *testing.T) {
 	db := sqlitetest.New(t)
-	tableName, err := sqlite.SetupVecTable(db, context.Background(), 3, "roundtrip")
+	tableName, err := sqlite.SetupVecTable(context.Background(), db, 3, "roundtrip")
 	if err != nil {
 		t.Fatalf("SetupTable() error = %v", err)
 	}

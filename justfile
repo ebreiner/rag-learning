@@ -1,16 +1,10 @@
-###############
-# rag-cli
-###############
 export OTEL_EXPORTER_OTLP_ENDPOINT := "http://127.0.0.1:4318"
-export OTEL_EXPORTER_OTLP_HEADERS := "Authorization=acb47fc5-6277-4511-8ec8-332d8223c53d"
 export OTEL_SERVICE_NAME := "rag-cli-dev"
 
 
 build:
 	#!/usr/bin/env bash
 	set -euxo pipefail
-	export CGO_CFLAGS="-I$HOME/.local/include"
-	export CGO_LDFLAGS="-L$HOME/.local/lib -lkreuzberg_ffi"
 	CGO_ENABLED=1 go build --tags "fts5" -o ./main main.go
 	chmod a+x ./main
 
@@ -35,7 +29,12 @@ inspect: build
 test:
       #!/usr/bin/env bash
       set -euxo pipefail
-      CGO_ENABLED=1 go test --tags "fts5" $(go list ./... | grep -v '/cmd/scrape')
+      CGO_ENABLED=1 go test --tags "fts5" ./...
+
+lint:
+	go vet ./...
+	golangci-lint run -c golangci-lint.yaml
+
 
 e2e input-dir: build
 	#!/usr/bin/env bash
@@ -56,14 +55,4 @@ serve-mcp: build
 	set -euxo pipefail
 	export RAG_CLI_API_TOKEN=super-super-sicher
 	./main --db-path ./data/data.db serve mcp  --openai-url http://127.0.0.1:11434 --model bge-m3 --dim 1024
-
-###############
-# scrape-cli
-###############
-scrape-build:
-	go build -o ./scrape cmd/scrape
-	chmod a+x ./scrape
-
-mw: scrape-build
-	./scrape mw -o data/mw-download -a "https://wiki.krumedia.com/api.php"
 

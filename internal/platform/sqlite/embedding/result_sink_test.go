@@ -30,7 +30,7 @@ func TestSaveEmbeddings(t *testing.T) {
 				{ChunkID: id2, Vector: []float64{0.4, 0.5, 0.6}},
 			},
 		}
-		if err := sink.SaveEmbeddings(toSave, ctx); err != nil {
+		if err := sink.SaveEmbeddings(ctx, toSave); err != nil {
 			t.Fatalf("SaveEmbeddings() error = %v", err)
 		}
 
@@ -58,7 +58,7 @@ func TestSaveEmbeddings(t *testing.T) {
 			Dim:        2,
 			Embeddings: []step.Embedding{{ChunkID: id, Vector: []float64{0.1, 0.2}}},
 		}
-		if err := sink.SaveEmbeddings(toSave, ctx); err != nil {
+		if err := sink.SaveEmbeddings(ctx, toSave); err != nil {
 			t.Fatalf("SaveEmbeddings() error = %v", err)
 		}
 
@@ -91,7 +91,7 @@ func TestSaveEmbeddings(t *testing.T) {
 				{ChunkID: 999999, Vector: []float64{0.1, 0.2}}, // wrong length, should be rejected
 			},
 		}
-		if err := sink.SaveEmbeddings(toSave, ctx); err == nil {
+		if err := sink.SaveEmbeddings(ctx, toSave); err == nil {
 			t.Fatalf("expected SaveEmbeddings() to fail on the malformed second embedding")
 		}
 
@@ -120,7 +120,7 @@ func TestSaveEmbeddings(t *testing.T) {
 			Dim:        4,
 			Embeddings: []step.Embedding{{ChunkID: id, Vector: want}},
 		}
-		if err := sink.SaveEmbeddings(toSave, ctx); err != nil {
+		if err := sink.SaveEmbeddings(ctx, toSave); err != nil {
 			t.Fatalf("SaveEmbeddings() error = %v", err)
 		}
 

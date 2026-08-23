@@ -9,7 +9,7 @@ import (
 	"rag/internal/retrieval/step"
 )
 
-func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Context) (step.RetrievedChunkIDs, error) {
+func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int64) (step.RetrievedChunkIDs, error) {
 	chunkIDs := make([]int64, 0)
 
 	packed, err := sqlite.PackVector(query.Vector)
@@ -17,7 +17,7 @@ func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Conte
 		return chunkIDs, err
 	}
 
-	tableName, err := sqlite.LookupVecTable(r.db, ctx, query.Dim, query.Model)
+	tableName, err := sqlite.LookupVecTable(ctx, r.db, query.Dim, query.Model)
 	if err != nil {
 		return chunkIDs, err
 	}
@@ -29,18 +29,27 @@ func (r *SQLiteRetriever) TopKByANN(query step.Query, k int64, ctx context.Conte
 		return chunkIDs, fmt.Errorf("error: no rows found")
 	}
 	if err != nil {
-		return chunkIDs, fmt.Errorf("error querring rows: %s", err.Error())
+		return chunkIDs, fmt.Errorf("error querring rows: %w", err)
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.Logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+
+	}()
 
 	for rows.Next() {
 		var id int64
 		var distance sql.NullFloat64
 		if err := rows.Scan(&id, &distance); err != nil {
-			return chunkIDs, fmt.Errorf("error scanning top k row result: %s", err.Error())
+			return chunkIDs, fmt.Errorf("error scanning top k row result: %w", err)
 		}
 		chunkIDs = append(chunkIDs, id)
 	}
-
-	return chunkIDs, nil
+	if rows.Err() != nil {
+		return chunkIDs, rows.Err()
+	} else {
+		return chunkIDs, nil
+	}
 }

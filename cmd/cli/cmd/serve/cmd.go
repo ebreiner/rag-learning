@@ -2,13 +2,15 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	cmdpkg "rag/cmd/cli/cmd"
 	"rag/internal/platform/config"
 	"rag/internal/platform/telemetry/logging"
-	"rag/internal/platform/telemetry/tracing"
+
 	"strconv"
 	"syscall"
 	"time"
@@ -21,65 +23,50 @@ func NewServeCmd() *cobra.Command {
 	mcpCmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "serve retrieval via mcp",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			logger, err := logging.FromCommand(cmd)
+			logger, otelShutdownFunc, err := cmdpkg.Setup(ctx, cmd)
 			if err != nil {
-				log.Fatal(err)
+				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
-
-			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
-			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
-			}
+			logger.With(logging.KeyStep, "serve-mcp")
 			defer func() {
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				if err := shutdownOTEL(shutdownCtx); err != nil {
+				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
-					os.Exit(1)
 				}
 			}()
 
 			globals := config.GlobalOptions
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			modelFlag := cmd.Flags().Lookup("model")
 			if !modelFlag.Changed || modelFlag.Value.String() == "" {
-				logger.ErrorContext(ctx, "wiring", "err", "missing required flag model")
-				os.Exit(1)
+				return fmt.Errorf("missing required flag model")
 			}
 
 			model := modelFlag.Value.String()
 
 			dimFlag := cmd.Flags().Lookup("dim")
 			if !dimFlag.Changed || dimFlag.Value.String() == "" {
-				logger.ErrorContext(ctx, "wiring", "err", "missing required flag dim")
-				os.Exit(1)
+				return fmt.Errorf("missing required flag dim")
 			}
 			dim, err := strconv.Atoi(dimFlag.Value.String())
 			if err != nil {
-				err = fmt.Errorf("error parsing int give for 'dim': %w", err)
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return fmt.Errorf("error parsing int give for 'dim': %w", err)
 			}
 
 			bindAddrFlag := cmd.Flags().Lookup("bind-addr")
@@ -98,38 +85,38 @@ func NewServeCmd() *cobra.Command {
 					Dim:   int64(dim),
 				}
 			} else {
-				logger.ErrorContext(ctx, "wiring", "err", "missing required flag for embedding provider")
-				os.Exit(1)
+				return fmt.Errorf("missing required flag for embedding provider")
 			}
 
 			apiToken, ok := os.LookupEnv("RAG_CLI_API_TOKEN")
 			if !ok {
-				logger.ErrorContext(ctx, "wiring", "err", "missing required env 'RAG_CLI_API_TOKEN'")
-				os.Exit(1)
+				return fmt.Errorf("missing required env 'RAG_CLI_API_TOKEN'")
 			}
 			if len(apiToken) == 0 {
-				logger.ErrorContext(ctx, "wiring", "err", "env 'RAG_CLI_API_TOKEN' cannot be empty")
-				os.Exit(1)
+				return fmt.Errorf("env 'RAG_CLI_API_TOKEN' cannot be empty")
 			}
 
-			hydrator, retriever, embedClient, closeDB, err := wireUp(dbPath, embedConfig, ctx, logger)
+			// TODO: db mit defer schließen
+			hydrator, retriever, embedClient, closeDB, err := wireUp(ctx, dbPath, embedConfig, logger)
+
 			if err != nil {
 				if closeDB == nil {
-					logger.ErrorContext(ctx, "wiring", "err", err)
-					os.Exit(1)
+					return err
 				} else {
-					closeDB(ctx)
-					logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error closing db: %w", err))
-					os.Exit(1)
+					if closeDBErr := closeDB(ctx); closeDBErr != nil {
+						return errors.Join(err, closeDBErr)
+					}
+					return err
 				}
 			}
 
 			var queryLogger *logging.QueryLogger
 			queryLogger, err = logging.NewQueryLogger(logging.WithLogPath(queryLogPath))
 			if err != nil {
-				closeDB(ctx)
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error setting up querry logger: %w", err))
-				os.Exit(1)
+				if closeDBErr := closeDB(ctx); closeDBErr != nil {
+					return errors.Join(err, closeDBErr)
+				}
+				return fmt.Errorf("error setting up querry logger: %w", err)
 			}
 
 			hybridTool := hyridRetrievalTool(&hydrator, retriever, embedClient, logger, queryLogger)
@@ -151,9 +138,10 @@ func NewServeCmd() *cobra.Command {
 			logger.InfoContext(ctx, "wiring", "info", "server started and ready for requests")
 			err = server.Run(ctx)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", fmt.Errorf("error running server: %w", err))
-				os.Exit(1)
+				return fmt.Errorf("error running server: %w", err)
 			}
+
+			return nil
 		},
 	}
 
@@ -166,8 +154,9 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			log.Println("missing sub-command 'mcp'")
+			return nil
 		},
 	}
 

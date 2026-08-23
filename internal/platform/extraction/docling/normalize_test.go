@@ -373,7 +373,7 @@ func runTextNodeCases(t *testing.T, cases []textNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := textNode(node, testCase.input, testCtx, testLogger)
+			err := textNode(testCtx, node, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -397,7 +397,7 @@ func runGroupNodeCases(t *testing.T, cases []groupNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := groupNode(node, testCase.input, testCtx, testLogger)
+			err := groupNode(testCtx, node, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -421,7 +421,7 @@ func runTableNodeCases(t *testing.T, cases []tableNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := tableNode(node, *testCase.input, testCase.heights, testCtx, testLogger)
+			err := tableNode(testCtx, node, *testCase.input, testCase.heights, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -456,7 +456,7 @@ func TestBuildNodes(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			nodes, err := buildNodes(testCase.doc, testCtx, testLogger)
+			nodes, err := buildNodes(testCtx, testCase.doc, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -541,7 +541,7 @@ func runPictureNodeCases(t *testing.T, cases []pictureNodeCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			node := &step.Node{}
-			err := pictureNode(node, testCase.input, testCtx, testLogger)
+			err := pictureNode(testCtx, node, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -591,7 +591,7 @@ func tableCase(name, label, selfRef string, pageNo int, wantErr bool, heightLook
 	provRaw := rawProv{PageNo: int64(pageNo), BBox: bbox}
 	prov := wantProvOnPage(1)
 	prov.BBox = &step.BBox{Left: 0, Top: 0, Bottom: 10, Right: 10}
-	cells := make([]step.TableCell, 0, 0)
+	cells := make([]step.TableCell, 0)
 	tableContent := &step.TableContent{Cells: cells}
 	tableCase := tableNodeCase{
 		name: name,
@@ -627,7 +627,7 @@ func wantProvWithBBox(page int64, bbox step.BBox) step.Provenance {
 }
 
 func tableProvCase(name string, provs []rawProv, wantErr bool, want []step.Provenance, heightLookup pageHeightLookup, layer step.ContentLayer) tableNodeCase {
-	cells := make([]step.TableCell, 0, 0)
+	cells := make([]step.TableCell, 0)
 	tableContent := &step.TableContent{Cells: cells}
 	return tableNodeCase{
 		name:    name,
@@ -715,7 +715,7 @@ func tableCellCaseHeaderFlags(name string) tableCellCase {
 func runTableCellCases(t *testing.T, cases []tableCellCase) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := tableCell(testCase.input, testCtx, testLogger)
+			got, err := tableCell(testCtx, testCase.input, testLogger)
 			if testCase.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

@@ -16,15 +16,17 @@ import (
 type ClientKreuzberg struct {
 	BaseURL string
 	logger  *slog.Logger
+	client  *http.Client
 }
 
-func NewKreuzbergClient(xbergBaseURL string, logger *slog.Logger) (ClientKreuzberg, error) {
+func NewKreuzbergClient(xbergBaseURL string, logger *slog.Logger, httpClient *http.Client) (ClientKreuzberg, error) {
 	client := ClientKreuzberg{}
 	if _, err := url.Parse(xbergBaseURL); err != nil {
 		return client, err
 	}
 	client.BaseURL = xbergBaseURL
 	client.logger = logger
+	client.client = httpClient
 
 	return client, nil
 }
@@ -35,7 +37,7 @@ type embedResp struct {
 	Dimension  int32       `json:"dimensions"`
 }
 
-func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embedResp, error) {
+func (c ClientKreuzberg) runEmbedding(ctx context.Context, texts []string) (embedResp, error) {
 	type embedPayload struct {
 		Texts []string `json:"texts"`
 	}
@@ -45,40 +47,43 @@ func (c ClientKreuzberg) runEmbedding(texts []string, ctx context.Context) (embe
 	}
 	bytePayload, err := json.Marshal(payload)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error marshaling payload: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error marshaling payload: %w", err)
 	}
 	embedURL, err := url.JoinPath(c.BaseURL, "/embed")
 	if err != nil {
 		return embedResp{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, embedURL, bytes.NewBufferString(string(bytePayload)))
-	httpResp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error received for embedding request: %s", err.Error())
+		return embedResp{}, err
+	}
+	httpResp, err := c.client.Do(req)
+	if err != nil {
+		return embedResp{}, fmt.Errorf("error received for embedding request: %w", err)
 	}
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error reading response body: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error reading response body: %w", err)
 	}
 	err = httpResp.Body.Close()
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error closing response body: %s", err.Error())
+		return embedResp{}, fmt.Errorf("error closing response body: %w", err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
-		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s\n", string(body))
+		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s", string(body))
 	}
 
 	resp := embedResp{}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return embedResp{}, fmt.Errorf("cannot unmarshal embedding response: %s", err.Error())
+		return embedResp{}, fmt.Errorf("cannot unmarshal embedding response: %w", err)
 	} else {
 		return resp, nil
 	}
 }
 
-func (c ClientKreuzberg) EmbedQuery(query string, ctx context.Context) (retrieval.Query, error) {
-	resp, err := c.runEmbedding([]string{query}, ctx)
+func (c ClientKreuzberg) EmbedQuery(ctx context.Context, query string) (retrieval.Query, error) {
+	resp, err := c.runEmbedding(ctx, []string{query})
 	if err != nil {
 		return retrieval.Query{}, err
 	}
@@ -96,13 +101,13 @@ func (c ClientKreuzberg) EmbedQuery(query string, ctx context.Context) (retrieva
 	return q, nil
 }
 
-func (c ClientKreuzberg) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Context) (step.EmbeddingsToSave, error) {
+func (c ClientKreuzberg) EmbedChunks(ctx context.Context, chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
 	toSave := step.EmbeddingsToSave{}
 	texts := make([]string, 0)
 	for _, c := range chunks {
 		texts = append(texts, c.Text)
 	}
-	resp, err := c.runEmbedding(texts, ctx)
+	resp, err := c.runEmbedding(ctx, texts)
 	if err != nil {
 		return toSave, err
 	}
@@ -118,6 +123,7 @@ func (c ClientKreuzberg) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Con
 
 	toSave.Dim = int64(resp.Dimension)
 	toSave.Model = resp.Model
+	toSave.Embeddings = embeddings
 
 	return toSave, nil
 }

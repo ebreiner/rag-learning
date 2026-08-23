@@ -14,8 +14,8 @@ type RetrievalStrategy string
 
 const (
 	Hybrid    RetrievalStrategy = "hybrid"
-	FTS                         = "fts"
-	Embedding                   = "ann"
+	FTS       RetrievalStrategy = "fts"
+	Embedding RetrievalStrategy = "ann"
 )
 
 type Query struct {

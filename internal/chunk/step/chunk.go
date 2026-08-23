@@ -11,67 +11,57 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-func Chunk(source ExtractionSource, sink ResultSink, ctx context.Context, logger *slog.Logger) error {
-	var counter int
-	var outerErr error
+func Chunk(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
 	for {
-		tracer := otel.Tracer("rag-cli-sdk")
-		stepCtx, stepSpan := tracer.Start(ctx, "chunk-step")
-		counter++
-		nextExtractionCtx, nextExtractionSpan := tracer.Start(stepCtx, "next_extraction")
-		extract, err := source.NextExtraction(nextExtractionCtx)
-		if errors.Is(err, io.EOF) {
-			nextExtractionSpan.End()
-			stepSpan.End()
-			break
+		if err := processDoc(ctx, source, sink, logger); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			} else {
+				return err
+			}
 		}
-
-		if err != nil {
-			logger.ErrorContext(ctx, "run-chunk", "err", err)
-			outerErr = err
-			nextExtractionSpan.End()
-			stepSpan.End()
-			break
-		}
-		stepSpan.SetAttributes(
-			attribute.Int64("doc.id", extract.DocumentID),
-		)
-		nextExtractionSpan.End()
-
-		processDocCtx, processDocSpan := tracer.Start(stepCtx, "process_doc")
-		result, err := processDoc(extract, processDocCtx, logger)
-		if err != nil {
-			outerErr = err
-			stepSpan.End()
-			processDocSpan.End()
-			break
-		}
-		processDocSpan.SetAttributes(attribute.Int("doc.chunks.processed", len(result.ChunksToSave)))
-		processDocSpan.End()
-
-		sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_chunks")
-		err = sink.SaveChunks(result, sinkCtx)
-		if err != nil {
-			outerErr = err
-			sinkSpan.End()
-			stepSpan.End()
-			break
-		}
-		sinkSpan.End()
-		stepSpan.End()
 	}
 
-	return outerErr
+	return nil
 }
 
-func processDoc(extraction ExtractionToChunk, ctx context.Context, logger *slog.Logger) (ChunkResult, error) {
-	result := ChunkResult{DocumentID: extraction.DocumentID}
-	chunkCandidates, err := walk(extraction.Roots, ctx, logger)
+func processDoc(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
+	tracer := otel.Tracer("rag-cli-sdk")
+	stepCtx, stepSpan := tracer.Start(ctx, "chunk-step")
+	defer stepSpan.End()
+
+	nextExtractionCtx, nextExtractionSpan := tracer.Start(stepCtx, "next_extraction")
+	defer nextExtractionSpan.End()
+	extract, err := source.NextExtraction(nextExtractionCtx)
 	if err != nil {
-		return result, err
+		return err
 	}
-	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(chunkCandidates, ctx, logger)...)
-	return result, nil
+
+	stepSpan.SetAttributes(
+		attribute.Int64("doc.id", extract.DocumentID),
+	)
+	nextExtractionSpan.End()
+
+	processDocCtx, processDocSpan := tracer.Start(stepCtx, "process_doc")
+	defer processDocSpan.End()
+	result := ChunkResult{DocumentID: extract.DocumentID}
+	chunkCandidates, err := walk(processDocCtx, extract.Roots, logger)
+	if err != nil {
+		return err
+	}
+	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(processDocCtx, chunkCandidates, logger)...)
+	processDocSpan.SetAttributes(attribute.Int("doc.chunks.processed", len(result.ChunksToSave)))
+	processDocSpan.End()
+
+	sinkCtx, sinkSpan := tracer.Start(stepCtx, "save_chunks")
+	defer sinkSpan.End()
+	err = sink.SaveChunks(sinkCtx, result)
+	if err != nil {
+		return err
+	}
+	sinkSpan.End()
+
+	return nil
 }
 
 type chunkCandidate struct {
@@ -80,7 +70,7 @@ type chunkCandidate struct {
 	Text       string
 }
 
-func walk(roots []*ExtractionNode, ctx context.Context, logger *slog.Logger) ([]chunkCandidate, error) {
+func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]chunkCandidate, error) {
 	var breadCrumbs []*HeadingContent
 	candidates := make([]chunkCandidate, 0)
 
@@ -232,7 +222,7 @@ func walk(roots []*ExtractionNode, ctx context.Context, logger *slog.Logger) ([]
 	return candidates, nil
 }
 
-func mergeCandidates(candidates []chunkCandidate, ctx context.Context, logger *slog.Logger) []ChunkToSave {
+func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *slog.Logger) []ChunkToSave {
 	merged := make([]ChunkToSave, 0)
 	maxBudget := 1000
 	budget := maxBudget
@@ -273,15 +263,22 @@ func mergeCandidates(candidates []chunkCandidate, ctx context.Context, logger *s
 		}
 
 		if budget-tokenCount(candidate.Text) > 0 {
-			buffer = buffer + candidate.Text
+			if len(buffer) == 0 {
+				buffer = candidate.Text
+			} else {
+				buffer = fmt.Sprintf("%s\n\n%s", buffer, candidate.Text)
+			}
 			budget = budget - len(candidate.Text)
 		} else if len(buffer) > 0 {
 			flush()
 			startBuffer(candidate.Breadcrumb)
 			if len(candidate.Text) > 0 {
-				buffer = buffer + candidate.Text
+				buffer = candidate.Text
 				budget = budget - tokenCount(candidate.Text)
 			}
+		} else if len(candidate.Text) > 0 {
+			buffer = candidate.Text
+			budget = budget - tokenCount(candidate.Text)
 		}
 
 		lastCrumb = candidate.Breadcrumb

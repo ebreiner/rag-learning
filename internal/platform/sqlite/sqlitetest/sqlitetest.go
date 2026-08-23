@@ -24,12 +24,14 @@ func New(t *testing.T) *sql.DB {
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := sqlite.NewConn(dbPath)
+	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {
 		t.Fatalf("sqlitetest.New: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Close()
+		if err := db.Close(); err != nil {
+			t.Errorf("sqlitetest.New: closing db: %v", err)
+		}
 	})
 
 	return db

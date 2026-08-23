@@ -1,4 +1,5 @@
 .idea
+.env
 scrape
 docs/graph-design.md
 examples
@@ -10,3 +11,5 @@ scrape
 venv
 .venv
 rag-cli.log
+./data.*
+

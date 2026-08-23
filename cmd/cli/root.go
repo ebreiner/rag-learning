@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"log"
 	"os"
 	"rag/cmd/cli/cmd"
 	"rag/cmd/cli/cmd/serve"
@@ -15,6 +16,8 @@ func NewRootCmd() *cobra.Command {
 		Short: "A brief description of your application",
 		Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application`,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	config.RegisterFlags(root.PersistentFlags(), config.GlobalsList())
 
@@ -34,6 +37,7 @@ func Execute() {
 
 	err := rootCmd.Execute()
 	if err != nil {
+		log.Print(err)
 		os.Exit(1)
 	}
 }

@@ -115,7 +115,7 @@ func TestWalk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := walk([]*ExtractionNode{tt.root}, testCtx, testLogger)
+			got, err := walk(testCtx, []*ExtractionNode{tt.root}, testLogger)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("walk() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -232,7 +232,7 @@ func TestWalkTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := walk([]*ExtractionNode{tt.root}, testCtx, testLogger)
+			got, err := walk(testCtx, []*ExtractionNode{tt.root}, testLogger)
 			if err != nil {
 				t.Fatalf("walk() error = %v", err)
 			}
@@ -271,7 +271,7 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", "B"),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\nAB", Breadcrumb: "Ch1", Position: 0},
+				{Text: "Ch1\n\nA\n\nB", Breadcrumb: "Ch1", Position: 0},
 			},
 		},
 		{
@@ -310,6 +310,23 @@ func TestMergeCandidates(t *testing.T) {
 			},
 		},
 		{
+			// regression test: a single candidate whose own text already
+			// exceeds maxBudget must still be emitted -- specifically when it
+			// arrives with an empty buffer (e.g. right after a flush), where
+			// neither the "fits in budget" branch nor the "flush what's
+			// buffered so far" branch fires. Distinct from "overflowing
+			// candidate is not dropped" above, which never actually exercises
+			// a candidate that's oversized on its own -- both of its
+			// candidates individually fit under 1000 chars.
+			name: "candidate larger than maxBudget alone is not dropped when buffer is empty",
+			candidates: []chunkCandidate{
+				mkCandidate("Ch1", strings.Repeat("a", 1200)),
+			},
+			want: []ChunkToSave{
+				{Text: "Ch1\n\n" + strings.Repeat("a", 1200), Breadcrumb: "Ch1", Position: 0},
+			},
+		},
+		{
 			name: "nil paragraph content is skipped without panicking",
 			candidates: []chunkCandidate{
 				{Node: &ExtractionNode{Kind: "paragraph", Paragraph: nil}, Breadcrumb: "Ch1"},
@@ -323,7 +340,7 @@ func TestMergeCandidates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mergeCandidates(tt.candidates, testCtx, testLogger)
+			got := mergeCandidates(testCtx, tt.candidates, testLogger)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("mergeCandidates() mismatch (-want +got):\n%s", diff)
 			}

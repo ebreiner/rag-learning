@@ -15,7 +15,9 @@ import (
 
 type embedBackendConfig interface{ isEmbedBackendConfig() }
 
-type xbergConfig struct{ URL string }
+type xbergConfig struct {
+	URL string
+}
 
 func (xbergConfig) isEmbedBackendConfig() {}
 
@@ -27,9 +29,9 @@ type openAIConfig struct {
 
 func (openAIConfig) isEmbedBackendConfig() {}
 
-func wireUp(dbPath string, embedConfig embedBackendConfig, ctx context.Context, logger *slog.Logger) (
+func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, logger *slog.Logger) (
 	hydrator retrieval.ChunkHydrator, retriever step.TopKRetriever, embedClient step.EmbedClient, closeDB func(context.Context) error, err error) {
-	db, err := sqlite.NewConn(dbPath)
+	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {
 		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, nil, err
 	}
@@ -69,7 +71,8 @@ func wireUp(dbPath string, embedConfig embedBackendConfig, ctx context.Context, 
 func newEmbedClient(cnf embedBackendConfig, logger *slog.Logger) (step.EmbedClient, error) {
 	switch c := cnf.(type) {
 	case xbergConfig:
-		return kreuzberg.NewKreuzbergClient(c.URL, logger)
+		httpClient := httpclient.New(60 * time.Second)
+		return kreuzberg.NewKreuzbergClient(c.URL, logger, httpClient)
 	case openAIConfig:
 		httpClient := httpclient.New(60 * time.Second)
 		return openai.NewOpenAIClient(c.Model, c.URL, c.Dim, httpClient, logger)

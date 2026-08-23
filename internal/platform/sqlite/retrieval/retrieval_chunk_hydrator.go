@@ -25,7 +25,7 @@ func NewChunkHydrator(db *sql.DB, logger *slog.Logger) (ChunkHydrator, error) {
 }
 
 // TODO: rank explizit über boundaries transportieren und nicht nur auf implizites ordering verlassen
-func (h *ChunkHydrator) HydrateChunks(chunkIDs step.RetrievedChunkIDs, ctx context.Context) ([]step.RetrievedChunk, error) {
+func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs step.RetrievedChunkIDs) ([]step.RetrievedChunk, error) {
 	chunks := make([]step.RetrievedChunk, 0, len(chunkIDs))
 
 	rows, err := h.q.RetrievalChunksByIDs(ctx, chunkIDs)

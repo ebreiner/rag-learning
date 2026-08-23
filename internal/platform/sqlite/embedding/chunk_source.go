@@ -25,7 +25,7 @@ func NewChunkSource(db *sql.DB, tableName string, logger *slog.Logger) (ChunksSo
 	return source, nil
 }
 
-func (s *ChunksSource) NextChunks(limit int64, ctx context.Context) ([]step.ChunkToEmbed, error) {
+func (s *ChunksSource) NextChunks(ctx context.Context, limit int64) ([]step.ChunkToEmbed, error) {
 	q := fmt.Sprintf(`SELECT c.id, c.text, c.document_id
 FROM chunks c
 WHERE c.id > ?
@@ -37,7 +37,12 @@ LIMIT ?`, s.tableName)
 	if err != nil {
 		return []step.ChunkToEmbed{}, err
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			s.Logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+	}()
 
 	type chunkRow struct {
 		ID    int64

@@ -50,8 +50,8 @@ type embedPayload struct {
 	Dim   int64    `json:"dimensions"`
 }
 
-func (c ClientOpenAI) EmbedQuery(query string, ctx context.Context) (retrieval.Query, error) {
-	resp, err := c.runEmbedding([]string{query}, ctx)
+func (c ClientOpenAI) EmbedQuery(ctx context.Context, query string) (retrieval.Query, error) {
+	resp, err := c.runEmbedding(ctx, []string{query})
 	if err != nil {
 		return retrieval.Query{}, err
 	}
@@ -73,7 +73,7 @@ func (c ClientOpenAI) EmbedQuery(query string, ctx context.Context) (retrieval.Q
 	return q, nil
 }
 
-func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Context) (step.EmbeddingsToSave, error) {
+func (c ClientOpenAI) EmbedChunks(ctx context.Context, chunks []step.ChunkToEmbed) (step.EmbeddingsToSave, error) {
 	toSave := step.EmbeddingsToSave{}
 
 	texts := make([]string, 0, len(chunks))
@@ -81,7 +81,7 @@ func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Contex
 		texts = append(texts, c.Text)
 	}
 
-	resp, err := c.runEmbedding(texts, ctx)
+	resp, err := c.runEmbedding(ctx, texts)
 	if err != nil {
 		return toSave, err
 	}
@@ -109,7 +109,7 @@ func (c ClientOpenAI) EmbedChunks(chunks []step.ChunkToEmbed, ctx context.Contex
 	return toSave, nil
 }
 
-func (c ClientOpenAI) runEmbedding(texts []string, ctx context.Context) (embeddingResponse, error) {
+func (c ClientOpenAI) runEmbedding(ctx context.Context, texts []string) (embeddingResponse, error) {
 	payload := embedPayload{
 		Texts: texts,
 		Model: c.Model,
@@ -142,7 +142,7 @@ func (c ClientOpenAI) runEmbedding(texts []string, ctx context.Context) (embeddi
 		return embeddingResponse{}, fmt.Errorf("error closing response body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return embeddingResponse{}, fmt.Errorf("error status code of embedding not 200: %s\n", string(body))
+		return embeddingResponse{}, fmt.Errorf("error status code of embedding not 200: %s", string(body))
 	}
 
 	desResp := embeddingResponse{}

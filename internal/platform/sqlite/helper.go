@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"rag/internal/platform/sqlite/querries"
 	"strings"
 )
@@ -38,7 +39,7 @@ func vecTableName(dim int64, model string) (string, error) {
 // model comes from a local cli flag, not via remote serve stuff, already has direct fs access to sqlite.
 // no privilege boundary for injection here, but keep an eye out for future changes, this can get dangerous really
 // sneaky.
-func SetupVecTable(client *sql.DB, ctx context.Context, dim int64, model string) (tableName string, err error) {
+func SetupVecTable(ctx context.Context, client *sql.DB, dim int64, model string) (tableName string, err error) {
 	table, err := vecTableName(dim, model)
 	if err != nil {
 		return "", err
@@ -63,7 +64,7 @@ func (e VecTableNotExistErr) Error() string {
 }
 
 // returns the table name for this model+dim only if it already exists
-func LookupVecTable(client *sql.DB, ctx context.Context, dim int64, model string) (tableName string, err error) {
+func LookupVecTable(ctx context.Context, client *sql.DB, dim int64, model string) (tableName string, err error) {
 	table, err := vecTableName(dim, model)
 	if err != nil {
 		return "", err
@@ -83,12 +84,17 @@ func LookupVecTable(client *sql.DB, ctx context.Context, dim int64, model string
 	return found, nil
 }
 
-func FlushAllEmbeddings(db *sql.DB, ctx context.Context) error {
+func FlushAllEmbeddings(ctx context.Context, db *sql.DB, logger *slog.Logger) error {
 	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'embeddings_%'`)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logger.ErrorContext(ctx, "close-db", "err", err)
+		}
+	}()
 
 	var tables []string
 	for rows.Next() {
@@ -107,7 +113,7 @@ func FlushAllEmbeddings(db *sql.DB, ctx context.Context) error {
 	return nil
 }
 
-func FlushChunkTable(db *sql.DB, ctx context.Context) error {
+func FlushChunkTable(ctx context.Context, db *sql.DB) error {
 	q := querries.New(db)
 	if err := q.FlushChunks(ctx); err != nil {
 		return err

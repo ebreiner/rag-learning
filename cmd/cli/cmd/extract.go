@@ -3,10 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
-	"os"
 	"rag/internal/extract/step"
 	"rag/internal/platform/config"
 	"rag/internal/platform/extraction/docling"
@@ -15,7 +13,6 @@ import (
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/extraction"
 	"rag/internal/platform/telemetry/logging"
-	"rag/internal/platform/telemetry/tracing"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -31,65 +28,55 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
-			logger, err := logging.FromCommand(cmd)
+
+			logger, otelShutdownFunc, err := Setup(ctx, cmd)
 			if err != nil {
-				log.Fatal(fmt.Errorf("error setting up logger: %w", err))
+				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
 			logger = logger.With(logging.KeyStep, "extract")
-
-			shutdownOTEL, err := tracing.SetupOTelSDK(ctx, tracing.AutarcConfig{}, logger)
-			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
-			}
 			defer func() {
-				if err := shutdownOTEL(ctx); err != nil {
+				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
-					os.Exit(1)
 				}
 			}()
 
 			globals := config.GlobalOptions
 			doclingURL, err := config.ResolveGlobal(cmd, globals.DoclingURL)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			inputDirFlag := cmd.Flags().Lookup("input-dir")
 			inputDir := inputDirFlag.Value.String()
 			if len(inputDir) == 0 {
-				logger.ErrorContext(ctx, "wiring", "err", "missing required flag input-dir")
-				os.Exit(1)
+				return fmt.Errorf("missing required flag input-dir")
 			}
 			inputDir, err = config.ResolvePath(inputDir)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
 
 			dumpDirFlag := cmd.Flags().Lookup("dump-dir")
 			dumpDir := dumpDirFlag.Value.String()
 			if dumpDirFlag.Changed {
 				if len(dumpDir) == 0 {
-					logger.ErrorContext(ctx, "wiring", "err", "dump-dir cannot be set to empty string if specified")
-					os.Exit(1)
+					return fmt.Errorf("dump-dir cannot be set to empty string if specified")
 				}
 			}
 
-			err = createExtractions(inputDir, doclingURL, dbPath, dumpDir, logger, ctx)
+			err = createExtractions(ctx, inputDir, doclingURL, dbPath, dumpDir, logger)
 			if err != nil {
-				logger.ErrorContext(ctx, "wiring", "err", err)
-				os.Exit(1)
+				return err
 			}
+
+			return nil
 		},
 	}
 
@@ -100,19 +87,19 @@ to quickly create a Cobra application.`,
 	return extractCmd
 }
 
-func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger, ctx context.Context) error {
+func createExtractions(ctx context.Context, inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger) error {
 	sourceDocSource, err := source.NewSourceDocSource(inputDir, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs source: %s", err.Error())
+		return fmt.Errorf("error creating docs source: %w", err)
 	}
-	db, err := sqlite.NewConn(dbPath)
+	db, err := sqlite.NewConn(dbPath, false)
 	if err != nil {
 		return err
 	}
 
 	extracedDocSink, err := extraction.NewExtractedDocSink(db, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs sink: %s", err.Error())
+		return fmt.Errorf("error creating docs sink: %w", err)
 	}
 
 	var client *http.Client
@@ -123,16 +110,19 @@ func createExtractions(inputDir, doclingURL, dbPath, dumpDir string, logger *slo
 			return err
 		}
 		client, err = httpclient.NewDump(timeout, dumpDir, logger)
+		if err != nil {
+			return err
+		}
 	} else {
 		client = httpclient.New(timeout)
 	}
 
 	extractor, err := docling.NewDoclingExtractor(doclingURL, client, logger)
 	if err != nil {
-		return fmt.Errorf("error creating docs sink: %s", err.Error())
+		return fmt.Errorf("error creating docling extractor: %w", err)
 	}
 
-	err = step.RunExtract(&sourceDocSource, &extracedDocSink, &extractor, logger, ctx)
+	err = step.RunExtract(ctx, &sourceDocSource, &extracedDocSink, &extractor, logger)
 	if err != nil {
 		return err
 	}
