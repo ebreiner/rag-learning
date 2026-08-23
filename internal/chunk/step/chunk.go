@@ -263,17 +263,21 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 		}
 
 		if budget-tokenCount(candidate.Text) > 0 {
-			buffer = buffer + candidate.Text
+			if len(buffer) == 0 {
+				buffer = candidate.Text
+			} else {
+				buffer = fmt.Sprintf("%s\n\n%s", buffer, candidate.Text)
+			}
 			budget = budget - len(candidate.Text)
 		} else if len(buffer) > 0 {
 			flush()
 			startBuffer(candidate.Breadcrumb)
 			if len(candidate.Text) > 0 {
-				buffer = buffer + candidate.Text
+				buffer = candidate.Text
 				budget = budget - tokenCount(candidate.Text)
 			}
 		} else if len(candidate.Text) > 0 {
-			buffer = buffer + candidate.Text
+			buffer = candidate.Text
 			budget = budget - tokenCount(candidate.Text)
 		}
 

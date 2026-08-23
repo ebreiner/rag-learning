@@ -271,7 +271,7 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", "B"),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\nAB", Breadcrumb: "Ch1", Position: 0},
+				{Text: "Ch1\n\nA\n\nB", Breadcrumb: "Ch1", Position: 0},
 			},
 		},
 		{
