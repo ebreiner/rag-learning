@@ -56,5 +56,5 @@ serve-mcp: build
 	#!/usr/bin/env bash
 	set -euxo pipefail
 	export RAG_CLI_API_TOKEN=super-super-sicher
-	./main --db-path ./data/data.db serve mcp  --openai-url http://127.0.0.1:11434 --model bge-m3 --dim 1024
+	./main --db-path ./data/data.db serve mcp  --openai-url http://127.0.0.1:11434 --model bge-m3 --dim 1024 --query-log ./data/query.log
 
