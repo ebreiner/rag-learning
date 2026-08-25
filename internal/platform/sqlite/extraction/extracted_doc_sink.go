@@ -25,19 +25,18 @@ func NewExtractedDocSink(db *sql.DB, logger *slog.Logger) (ExtractedDocSink, err
 	return sink, nil
 }
 
-func (e *ExtractedDocSink) ExistsDoc(ctx context.Context, sha256 string) (bool, error) {
+func (e *ExtractedDocSink) ExistsDoc(ctx context.Context, sha256 string) (bool, string, error) {
 	q := querries.New(e.dbClient)
-	_, err := q.ExistsDocument(ctx, sha256)
+	rows, err := q.ExistsDocument(ctx, sha256)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
+			return false, "", nil
 		} else {
-			return false, err
+			return false, "", err
 		}
 	} else {
-		return true, nil
+		return true, rows.CollectionName, nil
 	}
-
 }
 
 func (e *ExtractedDocSink) SaveExtractedDoc(ctx context.Context, doc step.ExtractedDoc) (int64, error) {
@@ -48,10 +47,18 @@ func (e *ExtractedDocSink) SaveExtractedDoc(ctx context.Context, doc step.Extrac
 	q := querries.New(tx)
 	defer tx.Rollback()
 
+	collectionParam := querries.CreateCollectionOrUpdateWeightParams{
+		Name:   doc.Source.CollectionName,
+		Weight: doc.Source.CollectionWeight,
+	}
+	if err := q.CreateCollectionOrUpdateWeight(ctx, collectionParam); err != nil {
+		return -1, err
+	}
 	docParam := querries.CreateDocumentParams{
-		CreatedAt: time.Now(),
-		Name:      doc.Source.Name,
-		Sha256:    doc.Source.SHA256,
+		CreatedAt:      time.Now(),
+		Name:           doc.Source.Name,
+		Sha256:         doc.Source.SHA256,
+		CollectionName: doc.Source.CollectionName,
 	}
 	if len(doc.Source.Additional) > 0 {
 		docAdditotionalMetadata, err := json.Marshal(doc.Source.Additional)

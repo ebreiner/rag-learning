@@ -13,6 +13,7 @@ import (
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/extraction"
 	"rag/internal/platform/telemetry/logging"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -71,7 +72,32 @@ to quickly create a Cobra application.`,
 				}
 			}
 
-			err = createExtractions(ctx, inputDir, doclingURL, dbPath, dumpDir, logger)
+			collectionWeightFlag := cmd.Flags().Lookup("collection-weight")
+			collectionWeightString := collectionWeightFlag.Value.String()
+			if len(collectionWeightString) == 0 {
+				return fmt.Errorf("missing required flag collection-weight")
+			}
+			collectionWeight, err := strconv.ParseFloat(collectionWeightString, 64)
+			if err != nil {
+				return fmt.Errorf("error parsing collection-weight %s to float: %w", collectionWeightString, err)
+			}
+
+			collectionNameFlag := cmd.Flags().Lookup("collection-name")
+			collectionName := collectionNameFlag.Value.String()
+			if len(collectionName) == 0 {
+				return fmt.Errorf("missing required flag collection-name")
+			}
+
+			params := createExtractionsParams{
+				InputDir:         inputDir,
+				DoclingURL:       doclingURL,
+				DBPath:           dbPath,
+				DumpDir:          dumpDir,
+				CollectionName:   collectionName,
+				CollectionWeight: collectionWeight,
+			}
+
+			err = createExtractions(ctx, params, logger)
 			if err != nil {
 				return err
 			}
@@ -83,16 +109,27 @@ to quickly create a Cobra application.`,
 	flags := extractCmd.Flags()
 	flags.StringP("input-dir", "i", "", "-i | --input-dir /path/to/input-dir | ./input-dir")
 	flags.StringP("dump-dir", "d", "", "-d | --dump-dir /where/to/dump/resp-req")
+	flags.String("collection-name", "", "--collection-name regulations")
+	flags.String("collection-weight", "", "--collection-weight 0.8 # default 1")
 
 	return extractCmd
 }
 
-func createExtractions(ctx context.Context, inputDir, doclingURL, dbPath, dumpDir string, logger *slog.Logger) error {
-	sourceDocSource, err := source.NewSourceDocSource(ctx, inputDir, logger)
+type createExtractionsParams struct {
+	InputDir         string
+	DoclingURL       string
+	DBPath           string
+	DumpDir          string
+	CollectionName   string
+	CollectionWeight float64
+}
+
+func createExtractions(ctx context.Context, params createExtractionsParams, logger *slog.Logger) error {
+	sourceDocSource, err := source.NewSourceDocSource(ctx, params.InputDir, params.CollectionWeight, params.CollectionName, logger)
 	if err != nil {
 		return fmt.Errorf("error creating docs source: %w", err)
 	}
-	db, err := sqlite.NewConn(dbPath, false)
+	db, err := sqlite.NewConn(params.DBPath, false)
 	if err != nil {
 		return err
 	}
@@ -104,8 +141,8 @@ func createExtractions(ctx context.Context, inputDir, doclingURL, dbPath, dumpDi
 
 	var client *http.Client
 	timeout := time.Second * 1800
-	if len(dumpDir) != 0 {
-		dumpDir, err := config.ResolvePath(dumpDir)
+	if len(params.DumpDir) != 0 {
+		dumpDir, err := config.ResolvePath(params.DumpDir)
 		if err != nil {
 			return err
 		}
@@ -117,7 +154,7 @@ func createExtractions(ctx context.Context, inputDir, doclingURL, dbPath, dumpDi
 		client = httpclient.New(timeout)
 	}
 
-	extractor, err := docling.NewDoclingExtractor(doclingURL, client, logger)
+	extractor, err := docling.NewDoclingExtractor(params.DoclingURL, client, logger)
 	if err != nil {
 		return fmt.Errorf("error creating docling extractor: %w", err)
 	}

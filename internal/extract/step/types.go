@@ -1,10 +1,12 @@
 package step
 
 type SourceDoc struct {
-	SourcePath string
-	Name       string
-	SHA256     string
-	Additional map[string]string
+	SourcePath       string
+	Name             string
+	SHA256           string
+	CollectionName   string
+	CollectionWeight float64
+	Additional       map[string]string
 }
 
 type ExtractedDoc struct {

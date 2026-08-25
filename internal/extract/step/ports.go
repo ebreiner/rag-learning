@@ -12,5 +12,5 @@ type Extractor interface {
 
 type DocSink interface {
 	SaveExtractedDoc(ctx context.Context, doc ExtractedDoc) (int64, error)
-	ExistsDoc(ctx context.Context, sha256 string) (bool, error)
+	ExistsDoc(ctx context.Context, sha256 string) (bool, string, error)
 }

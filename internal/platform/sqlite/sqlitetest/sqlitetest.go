@@ -52,9 +52,17 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 	ctx := context.Background()
 	now := time.Now()
 
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO collections (name, weight) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`,
+		"test-collection", 1.0,
+	)
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertChunk: inserting collection: %v", err)
+	}
+
 	docRes, err := db.ExecContext(ctx,
-		`INSERT INTO documents (created_at, name, sha256) VALUES (?, ?, ?)`,
-		now, "test-doc", "deadbeef",
+		`INSERT INTO documents (created_at, name, sha256, collection_name) VALUES (?, ?, ?, ?)`,
+		now, "test-doc", "deadbeef", "test-collection",
 	)
 	if err != nil {
 		t.Fatalf("sqlitetest.InsertChunk: inserting document: %v", err)

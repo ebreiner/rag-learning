@@ -87,27 +87,29 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 
 		logCtx, logSpan := tracer.Start(handlerCtx, "log_query")
 		defer logSpan.End()
-		ids := make([]int64, 0, len(chunks))
+		chunksToLog := make([]logging.Chunk, 0, len(chunks))
+		chunkIDs := make([]int64, 0, len(chunks))
+		chunkScores := make([]float64, 0, len(chunks))
+		chunkCharCounts := make([]int64, 0, len(chunks))
 		for _, chunk := range chunks {
-			ids = append(ids, chunk.ID)
+			chunksToLog = append(chunksToLog, logging.Chunk{ID: chunk.ID, Score: chunk.Score})
+			chunkIDs = append(chunkIDs, chunk.ID)
+			chunkScores = append(chunkScores, chunk.Score)
+			chunkCharCounts = append(chunkCharCounts, int64(utf8.RuneCountInString(chunk.Text)))
 		}
 
 		queryLog := logging.QueryLog{
 			Query:    query,
 			K:        int64(k),
 			Strategy: "hybrid",
-			ChunkIDs: ids,
-		}
-
-		var charCount int
-		for _, chunk := range chunks {
-			charCount = charCount + utf8.RuneCountInString(chunk.Text)
+			Chunks:   chunksToLog,
 		}
 
 		queryLogger.LogQuery(logCtx, queryLog)
 		handlerSpan.SetAttributes(
-			attribute.Int64Slice("query.chunks.ids", ids),
-			attribute.Int64("query.chunks.total_chars", int64(charCount)),
+			attribute.Int64Slice("query.chunks.ids", chunkIDs),
+			attribute.Int64Slice("query.chunks.char_counts", chunkCharCounts),
+			attribute.Float64Slice("query.chunks.scores", chunkScores),
 		)
 		logSpan.End()
 

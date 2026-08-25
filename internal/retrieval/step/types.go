@@ -1,13 +1,15 @@
 package step
 
 type RetrievedChunk struct {
-	ID         int64
-	Rank       int64
-	DocTitle   string
-	Position   int64
-	Score      float64
-	Breadcrumb string
-	Text       string
+	ID               int64
+	Rank             int64
+	DocTitle         string
+	Position         int64
+	Score            float64
+	Breadcrumb       string
+	Text             string
+	CollectionWeight float64
+	CollectionName   string
 }
 
 type RetrievedChunkIDs []int64

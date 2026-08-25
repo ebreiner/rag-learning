@@ -3,16 +3,28 @@ INSERT INTO documents (
 	created_at,
 	name,
 	sha256,
+	collection_name,
 	metadata_json
 ) VALUES (
-	?,?,?,?
+	?,?,?,?,?
 )
 RETURNING id;
 
 -- name: ExistsDocument :one
-SELECT  id, sha256
-FROM documents
-WHERE sha256 = ?;
+SELECT  d.id, d.sha256, c.name AS collection_name
+FROM documents d
+JOIN collections c
+ON d.collection_name = c.name
+WHERE d.sha256 = ?;
+
+
+-- name: CreateCollectionOrUpdateWeight :exec
+INSERT INTO collections (
+	name,
+	weight
+) VALUES (?,?)
+ON CONFLICT DO
+UPDATE SET weight = excluded.weight;
 
 
 -- name: InsertChunk :exec
@@ -84,8 +96,11 @@ WHERE e.document_id = ?
 ORDER BY en.id;
 
 
+-- name: GetAllCollectionWeights :many
+SELECT name, weight FROM collections;
+
 -- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, c.position, c.text, c.breadcrumb
+SELECT c.id, d.name, d.collection_name, c.position, c.text, c.breadcrumb
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id

@@ -15,9 +15,11 @@ import (
 )
 
 type DocSource struct {
-	InputPaths []string
-	Index      int
-	Logger     *slog.Logger
+	InputPaths       []string
+	Index            int
+	Logger           *slog.Logger
+	CollectionName   string
+	CollectionWeight float64
 }
 
 var allowedExtensions = map[string]struct{}{
@@ -43,7 +45,7 @@ var allowedExtensions = map[string]struct{}{
 	".tex": {}, ".latex": {},
 }
 
-func NewSourceDocSource(ctx context.Context, inputPath string, logger *slog.Logger) (DocSource, error) {
+func NewSourceDocSource(ctx context.Context, inputPath string, collWeight float64, collName string, logger *slog.Logger) (DocSource, error) {
 	source := DocSource{Logger: logger}
 	if !filepath.IsAbs(inputPath) {
 		cwd, _ := os.Getwd()
@@ -71,6 +73,8 @@ func NewSourceDocSource(ctx context.Context, inputPath string, logger *slog.Logg
 
 	source.InputPaths = paths
 	source.Index = 0
+	source.CollectionName = collName
+	source.CollectionWeight = collWeight
 
 	return source, nil
 }
@@ -90,6 +94,8 @@ func (s *DocSource) NextSourceDoc() (step.SourceDoc, error) {
 	doc.Name = name
 	doc.SourcePath = s.InputPaths[s.Index]
 	s.Index++
+	doc.CollectionName = s.CollectionName
+	doc.CollectionWeight = s.CollectionWeight
 
 	return doc, nil
 }

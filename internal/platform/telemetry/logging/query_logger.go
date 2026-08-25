@@ -11,11 +11,16 @@ type QueryLogger struct {
 	logger *slog.Logger
 }
 
+type Chunk struct {
+	ID    int64
+	Score float64
+}
+
 type QueryLog struct {
 	Query    string
 	Strategy string
 	K        int64
-	ChunkIDs []int64
+	Chunks   []Chunk
 }
 
 func NewQueryLogger(opts ...Option) (*QueryLogger, error) {
@@ -44,6 +49,6 @@ func (q *QueryLogger) LogQuery(ctx context.Context, queryLog QueryLog) {
 		slog.String("query", queryLog.Query),
 		slog.String("strategy", queryLog.Strategy),
 		slog.Int64("k", queryLog.K),
-		slog.Any("chunk_ids", queryLog.ChunkIDs),
+		slog.Any("chunks", queryLog.Chunks),
 	)
 }
