@@ -138,7 +138,7 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 	}
 
 	ctx := context.Background()
-	hydrator, err := retrieval.NewChunkHydrator(db, logger)
+	hydrator, err := retrieval.NewChunkHydrator(ctx, db, logger)
 	if err != nil {
 		return err
 

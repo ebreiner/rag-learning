@@ -10,13 +10,28 @@ import (
 )
 
 type ChunkHydrator struct {
-	db     *sql.DB
-	q      *querries.Queries
-	Logger *slog.Logger
+	db          *sql.DB
+	q           *querries.Queries
+	Logger      *slog.Logger
+	collections map[string]float64
 }
 
-func NewChunkHydrator(db *sql.DB, logger *slog.Logger) (ChunkHydrator, error) {
+func NewChunkHydrator(ctx context.Context, db *sql.DB, logger *slog.Logger) (ChunkHydrator, error) {
+	rows, err := querries.New(db).GetAllCollectionWeights(ctx)
+	if err != nil {
+		return ChunkHydrator{}, err
+	}
+	if len(rows) == 0 {
+		return ChunkHydrator{}, fmt.Errorf("empty collection table")
+	}
+
+	collMap := make(map[string]float64)
+	for _, row := range rows {
+		collMap[row.Name] = row.Weight
+	}
+
 	hydrator := ChunkHydrator{}
+	hydrator.collections = collMap
 	hydrator.db = db
 	hydrator.q = querries.New(hydrator.db)
 	hydrator.Logger = logger
@@ -54,6 +69,14 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs step.Retriev
 			Text:       row.Text,
 			ID:         row.ID,
 			Breadcrumb: row.Breadcrumb,
+		}
+
+		collName := rowByID[id].CollectionName
+		if weight, ok := h.collections[collName]; !ok {
+			return chunks, fmt.Errorf("docs collection not found in collection cache")
+		} else {
+			chunk.CollectionWeight = weight
+			chunk.CollectionName = collName
 		}
 
 		chunks = append(chunks, chunk)

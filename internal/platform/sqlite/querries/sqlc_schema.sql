@@ -4,8 +4,17 @@ CREATE TABLE IF NOT EXISTS documents (
   name TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   metadata_json TEXT,
+  collection_name TEXT NOT NULL,
 
+  FOREIGN KEY(collection_name) REFERENCES collections(name),
   CHECK(metadata_json IS NULL OR json_valid(metadata_json))
+);
+
+CREATE TABLE IF NOT EXISTS collections (
+  name TEXT PRIMARY KEY,
+  weight REAL NOT NULL,
+
+  CHECK(weight >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS chunks (

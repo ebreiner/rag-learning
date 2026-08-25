@@ -36,7 +36,7 @@ func RunRetrieval(
 	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "retrieval-run")
 	defer retrieveSpan.End()
 	var chunkIDs RetrievedChunkIDs
-	var scoreByID map[int64]float64
+	scoreByID := make(map[int64]float64)
 	switch strategy {
 	case FTS:
 		ids, err := fts(retrieveCtx, query, k, retriever)
@@ -57,10 +57,9 @@ func RunRetrieval(
 		if err != nil {
 			return retrievedChunks, err
 		}
-		chunkIDs = make(RetrievedChunkIDs, len(scored))
-		scoreByID = make(map[int64]float64, len(scored))
-		for i, s := range scored {
-			chunkIDs[i] = s.ID
+
+		for _, s := range scored {
+			chunkIDs = append(chunkIDs, s.ID)
 			scoreByID[s.ID] = math.Round(s.Score*1e4) / 1e4
 		}
 
@@ -82,13 +81,39 @@ func RunRetrieval(
 		}
 	}
 
-	hydrateSpan.End()
-	stepSpan.End()
-	return hydratedChunks, nil
+	if strategy != Hybrid {
+		hydrateSpan.End()
+		stepSpan.End()
+		return hydratedChunks, nil
+	}
+
+	toRerank := make([]rerankChunk, 0, len(hydratedChunks))
+	for _, hydratedChunk := range hydratedChunks {
+		toRerank = append(toRerank, rerankChunk{ID: hydratedChunk.ID, Score: hydratedChunk.Score, Weight: hydratedChunk.CollectionWeight})
+	}
+	reranked := collectionRerank(toRerank)
+
+	byID := make(map[int64]RetrievedChunk)
+	for _, c := range hydratedChunks {
+		byID[c.ID] = c
+	}
+
+	rerankedHydractedCs := make([]RetrievedChunk, 0, len(reranked))
+	for _, c := range reranked {
+		rhChunk := byID[c.ID]
+		rhChunk.Score = c.Score
+		rerankedHydractedCs = append(rerankedHydractedCs, rhChunk)
+	}
+
+	if len(rerankedHydractedCs) < int(k) {
+		return rerankedHydractedCs, nil
+	} else {
+		return rerankedHydractedCs[:k], nil
+	}
 }
 
 func hybrid(ctx context.Context, query string, k int64, retriever TopKRetriever, embedClient EmbedClient) ([]scoredChunkID, error) {
-	hybridK := k * 2
+	hybridK := k * 4
 
 	ftsIDs, err := fts(ctx, query, hybridK, retriever)
 	if err != nil {
@@ -100,7 +125,7 @@ func hybrid(ctx context.Context, query string, k int64, retriever TopKRetriever,
 		return nil, err
 	}
 
-	return rrfMerge(k, ftsIDs, annIDs), nil
+	return rrfMerge(ftsIDs, annIDs), nil
 }
 
 func fts(ctx context.Context, query string, k int64, retriever TopKRetriever) (RetrievedChunkIDs, error) {
@@ -133,7 +158,7 @@ type scoredChunkID struct {
 	Score float64
 }
 
-func rrfMerge(limit int64, rankings ...RetrievedChunkIDs) []scoredChunkID {
+func rrfMerge(rankings ...RetrievedChunkIDs) []scoredChunkID {
 	scores := make(map[int64]float64)
 
 	for _, ranking := range rankings {
@@ -158,9 +183,22 @@ func rrfMerge(limit int64, rankings ...RetrievedChunkIDs) []scoredChunkID {
 		return scored[i].Score > scored[j].Score
 	})
 
-	if limit > int64(len(scored)) {
-		limit = int64(len(scored))
-	}
+	return scored
+}
 
-	return scored[:limit]
+type rerankChunk struct {
+	ID     int64
+	Score  float64
+	Weight float64
+}
+
+func collectionRerank(chunks []rerankChunk) []rerankChunk {
+	for idx, chunk := range chunks {
+		chunks[idx].Score = chunk.Score * chunk.Weight
+	}
+	sort.Slice(chunks, func(i, j int) bool {
+		return chunks[i].Score > chunks[j].Score
+	})
+
+	return chunks
 }

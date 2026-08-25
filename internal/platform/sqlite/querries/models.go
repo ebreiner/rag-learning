@@ -18,12 +18,18 @@ type Chunk struct {
 	Breadcrumb string
 }
 
+type Collection struct {
+	Name   string
+	Weight float64
+}
+
 type Document struct {
-	ID           int64
-	CreatedAt    time.Time
-	Name         string
-	Sha256       string
-	MetadataJson sql.NullString
+	ID             int64
+	CreatedAt      time.Time
+	Name           string
+	Sha256         string
+	MetadataJson   sql.NullString
+	CollectionName string
 }
 
 type Extraction struct {

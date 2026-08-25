@@ -50,7 +50,7 @@ func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, 
 	if err != nil {
 		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, closeDB, err
 	}
-	hydrator, err = retrieval.NewChunkHydrator(db, logger)
+	hydrator, err = retrieval.NewChunkHydrator(ctx, db, logger)
 	if err != nil {
 		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, closeDB, err
 	}

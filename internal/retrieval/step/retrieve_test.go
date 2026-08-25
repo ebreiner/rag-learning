@@ -173,9 +173,9 @@ func TestHybrid(t *testing.T) {
 		t.Fatalf("ann should be called exactly once, got %d", len(retriever.annCalls))
 	}
 
-	// hybrid() scales k by 2 before querying either ranking -- assert it
+	// hybrid() scales k by 4 before querying either ranking -- assert it
 	// actually happens rather than just trusting the comment.
-	wantHybridK := int64(20)
+	wantHybridK := int64(40)
 	if retriever.ftsKCalls[0] != wantHybridK {
 		t.Errorf("fts called with k=%d, want %d", retriever.ftsKCalls[0], wantHybridK)
 	}
@@ -187,13 +187,11 @@ func TestHybrid(t *testing.T) {
 func TestRrfMerge(t *testing.T) {
 	tests := []struct {
 		name     string
-		limit    int64
 		rankings []RetrievedChunkIDs
 		want     []scoredChunkID
 	}{
 		{
 			name:     "single ranking preserves order",
-			limit:    3,
 			rankings: []RetrievedChunkIDs{{1, 2, 3}},
 			want: []scoredChunkID{
 				{ID: 1, Score: rrfScore(1)},
@@ -202,46 +200,29 @@ func TestRrfMerge(t *testing.T) {
 			},
 		},
 		{
-			name:  "chunk appearing in both rankings outranks one appearing in only one",
-			limit: 3,
+			name: "chunk appearing in both rankings outranks one appearing in only one",
 			rankings: []RetrievedChunkIDs{
 				{10, 1, 2},
 				{20, 1, 3},
 			},
-			// 1 appears at a good rank in both lists, so it should win overall.
+			// 1 appears at a good rank in both lists, so it should win overall;
+			// rrfMerge no longer truncates, so every unique id from both
+			// rankings comes back, not just the top few.
 			want: []scoredChunkID{
 				{ID: 1, Score: rrfScore(2, 2)},
 				{ID: 10, Score: rrfScore(1)},
 				{ID: 20, Score: rrfScore(1)},
-			},
-		},
-		{
-			name:     "limit truncates the result",
-			limit:    2,
-			rankings: []RetrievedChunkIDs{{1, 2, 3, 4, 5}},
-			want: []scoredChunkID{
-				{ID: 1, Score: rrfScore(1)},
-				{ID: 2, Score: rrfScore(2)},
-			},
-		},
-		{
-			name:     "limit larger than available results does not panic or pad",
-			limit:    10,
-			rankings: []RetrievedChunkIDs{{1, 2}},
-			want: []scoredChunkID{
-				{ID: 1, Score: rrfScore(1)},
-				{ID: 2, Score: rrfScore(2)},
+				{ID: 2, Score: rrfScore(3)},
+				{ID: 3, Score: rrfScore(3)},
 			},
 		},
 		{
 			name:     "empty rankings produce an empty result",
-			limit:    5,
 			rankings: []RetrievedChunkIDs{},
 			want:     []scoredChunkID{},
 		},
 		{
-			name:  "equal scores tie-break by ascending chunk id",
-			limit: 2,
+			name: "equal scores tie-break by ascending chunk id",
 			rankings: []RetrievedChunkIDs{
 				{20},
 				{10},
@@ -255,7 +236,7 @@ func TestRrfMerge(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := rrfMerge(tt.limit, tt.rankings...)
+			got := rrfMerge(tt.rankings...)
 			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("rrfMerge() mismatch (-want +got):\n%s", diff)
 			}
