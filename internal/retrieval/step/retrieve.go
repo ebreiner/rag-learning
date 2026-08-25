@@ -196,7 +196,11 @@ func collectionRerank(chunks []rerankChunk) []rerankChunk {
 	for idx, chunk := range chunks {
 		chunks[idx].Score = chunk.Score * chunk.Weight
 	}
+
 	sort.Slice(chunks, func(i, j int) bool {
+		if chunks[i].Score == chunks[j].Score {
+			return chunks[i].ID < chunks[j].ID
+		}
 		return chunks[i].Score > chunks[j].Score
 	})
 
