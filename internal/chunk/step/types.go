@@ -29,6 +29,7 @@ const (
 	TypeGeneric ChunkType = "generic"
 	TypeContent ChunkType = "content"
 	TypeCode    ChunkType = "code"
+	TypeFormula ChunkType = "formula"
 	TypeList    ChunkType = "list"
 	TypeTable   ChunkType = "table"
 )
@@ -40,6 +41,7 @@ const (
 	KindParagraph   NodeKind = "paragraph"
 	KindCaption     NodeKind = "caption"
 	KindCode        NodeKind = "code"
+	KindFormula     NodeKind = "formula"
 	KindFootnote    NodeKind = "footnote"
 	KindListItem    NodeKind = "list_item"
 	KindList        NodeKind = "list"
@@ -65,6 +67,7 @@ type ExtractionNode struct {
 	Children         []*ExtractionNode
 	Paragraph        *ParagraphContent
 	Code             *CodeContent
+	Formula          *FormulaContent
 	Heading          *HeadingContent
 	List             *ListItemContent
 	Table            *TableContent
@@ -91,6 +94,10 @@ type HeadingContent struct {
 }
 
 type ParagraphContent struct {
+	Text string `json:"text"`
+}
+
+type FormulaContent struct {
 	Text string `json:"text"`
 }
 

@@ -100,6 +100,19 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 				}
 
 			}
+		case "formula":
+			node.Kind = step.KindFormula
+			if !row.ContentJson.Valid {
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("formula node with id '%s' has no code content", row.NodeID))
+			} else {
+				content := &step.FormulaContent{}
+				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
+					return nodeMap, err
+				} else {
+					node.Formula = content
+				}
+			}
+
 		case "code":
 			node.Kind = step.KindCode
 			if !row.ContentJson.Valid {

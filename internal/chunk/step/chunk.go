@@ -122,6 +122,20 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			candidates = append(candidates, candidate)
 
+		case KindFormula:
+			candidate := chunkCandidate{
+				Node:       node,
+				Breadcrumb: currentBreadCrumb(),
+			}
+			if node.Formula != nil && node.Formula.Text != "" {
+				candidate.Text = node.Formula.Text
+			}
+			candidates = append(candidates, candidate)
+			if len(node.Children) > 0 {
+				logger.WarnContext(ctx, "walk-nodes", "warn", "formula node has children")
+			}
+			continue
+
 		case KindCode:
 			candidate := chunkCandidate{
 				Node:       node,
@@ -378,6 +392,25 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 			merged = append(merged, toSave)
 			positionCounter++
 			continue
+
+		case KindFormula:
+			if len(candidate.Text) == 0 {
+				logger.WarnContext(ctx, "merge-nodes", "warn", "formula node text is empty, skipping")
+				continue
+			}
+			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
+			toSave := ChunkToSave{
+				Breadcrumb:        candidate.Breadcrumb,
+				Position:          positionCounter,
+				ExtractionNodeIDs: ids,
+				Text:              candidate.Text,
+				Type:              TypeFormula,
+			}
+
+			merged = append(merged, toSave)
+			positionCounter++
+			continue
+
 		case KindCode:
 			if len(candidate.Text) == 0 {
 				logger.WarnContext(ctx, "merge-nodes", "warn", "code node text is empty, skipping")
