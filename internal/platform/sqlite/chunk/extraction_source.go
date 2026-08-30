@@ -163,6 +163,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 		}
 
 		node.ID = row.NodeID
+		node.ExtractionNodeID = row.ExtractionNodeID
 		nodeMap[node.ID] = node
 	}
 

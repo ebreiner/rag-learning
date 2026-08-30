@@ -3,7 +3,7 @@ package step
 import (
 	"context"
 	"fmt"
-	"math"
+	"log/slog"
 	"sort"
 
 	"go.opentelemetry.io/otel"
@@ -12,17 +12,7 @@ import (
 
 const rrfK int64 = 60
 
-func RunRetrieval(
-	ctx context.Context,
-	query string,
-	strategy RetrievalStrategy,
-	k int64,
-	hydrator ChunkHydrator,
-	retriever TopKRetriever,
-	embedClient EmbedClient,
-) ([]RetrievedChunk, error) {
-	retrievedChunks := make([]RetrievedChunk, 0)
-
+func RunRetrieval(ctx context.Context, query string, k int64, strategy RetrievalStrategy, deps RetrievalDeps) ([]RetrievedChunk, error) {
 	tracer := otel.Tracer("rag-cli-sdk")
 	stepCtx, stepSpan := tracer.Start(ctx, "step-retrieval")
 	defer stepSpan.End()
@@ -33,144 +23,123 @@ func RunRetrieval(
 		attribute.String("query.strategy", string(strategy)),
 	)
 
-	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "retrieval-run")
+	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "run-query")
 	defer retrieveSpan.End()
-	var chunkIDs RetrievedChunkIDs
-	scoreByID := make(map[int64]float64)
+
+	var err error
+	var chunkIDs []ScoredChunkID
+	var chunks []RetrievedChunk
 	switch strategy {
-	case FTS:
-		ids, err := fts(retrieveCtx, query, k, retriever)
-		if err != nil {
-			return retrievedChunks, err
-		}
-		chunkIDs = ids
-
-	case Embedding:
-		ids, err := ann(retrieveCtx, query, k, embedClient, retriever)
-		if err != nil {
-			return retrievedChunks, err
-		}
-		chunkIDs = ids
-
-	case Hybrid:
-		scored, err := hybrid(retrieveCtx, query, k, retriever, embedClient)
-		if err != nil {
-			return retrievedChunks, err
-		}
-
-		for _, s := range scored {
-			chunkIDs = append(chunkIDs, s.ID)
-			scoreByID[s.ID] = math.Round(s.Score*1e4) / 1e4
-		}
-
+	case StrategyANN:
+		chunkIDs, err = runANN(retrieveCtx, query, k, deps.EmbeddingsClient, deps.Retriever)
+	case StrategyFTS:
+		chunkIDs, err = runFTS(retrieveCtx, query, k, deps.Retriever)
+	case StrategyHybrid:
+		chunkIDs, err = runHybrid(retrieveCtx, query, k, deps.EmbeddingsClient, deps.Retriever, deps.CollWeigher, deps.Logger)
 	default:
-		return retrievedChunks, fmt.Errorf("unknown retrieval strategy: %s", strategy)
+		return nil, fmt.Errorf("unknown strategy: '%s'", strategy)
 	}
+	if err != nil {
+		return nil, err
+	}
+
 	retrieveSpan.End()
 
-	hydrateCtx, hydrateSpan := tracer.Start(stepCtx, "hydrate_chunks")
+	hydrateCtx, hydrateSpan := tracer.Start(stepCtx, "hydrate-chunks")
 	defer hydrateSpan.End()
-	hydratedChunks, err := hydrator.HydrateChunks(hydrateCtx, chunkIDs)
+	hydrated, err := deps.Hydrator.HydrateChunks(hydrateCtx, chunkIDs)
 	if err != nil {
-		return retrievedChunks, err
+		return nil, err
 	}
+	hydrateSpan.End()
 
-	for i := range hydratedChunks {
-		if score, ok := scoreByID[hydratedChunks[i].ID]; ok {
-			hydratedChunks[i].Score = score
-		}
+	renderCtx, renderSpan := tracer.Start(stepCtx, "render-chunks")
+	defer renderSpan.End()
+	rendered, err := deps.Renderer.RenderChunks(renderCtx, hydrated)
+	if err != nil {
+		return nil, err
 	}
+	chunks = rendered
+	renderSpan.End()
 
-	if strategy != Hybrid {
-		hydrateSpan.End()
-		stepSpan.End()
-		return hydratedChunks, nil
-	}
-
-	toRerank := make([]rerankChunk, 0, len(hydratedChunks))
-	for _, hydratedChunk := range hydratedChunks {
-		toRerank = append(toRerank, rerankChunk{ID: hydratedChunk.ID, Score: hydratedChunk.Score, Weight: hydratedChunk.CollectionWeight})
-	}
-	reranked := collectionRerank(toRerank)
-
-	byID := make(map[int64]RetrievedChunk)
-	for _, c := range hydratedChunks {
-		byID[c.ID] = c
-	}
-
-	rerankedHydractedCs := make([]RetrievedChunk, 0, len(reranked))
-	for _, c := range reranked {
-		rhChunk := byID[c.ID]
-		rhChunk.Score = c.Score
-		rerankedHydractedCs = append(rerankedHydractedCs, rhChunk)
-	}
-
-	if len(rerankedHydractedCs) < int(k) {
-		return rerankedHydractedCs, nil
-	} else {
-		return rerankedHydractedCs[:k], nil
-	}
+	return chunks, nil
 }
 
-func hybrid(ctx context.Context, query string, k int64, retriever TopKRetriever, embedClient EmbedClient) ([]scoredChunkID, error) {
-	hybridK := k * 4
-
-	ftsIDs, err := fts(ctx, query, hybridK, retriever)
+func runANN(ctx context.Context, query string, k int64, embed EmbedClient, retriever TopKRetriever) ([]ScoredChunkID, error) {
+	embeddedQ, err := embed.EmbedQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	annIDs, err := ann(ctx, query, hybridK, embedClient, retriever)
+	chunkIDs, err := retriever.TopKByANN(ctx, embeddedQ, k)
 	if err != nil {
-		return nil, err
+		return chunkIDs, err
 	}
 
-	return rrfMerge(ftsIDs, annIDs), nil
+	rank := int64(0)
+	for i := range chunkIDs {
+		rank++
+		chunkIDs[i].Rank = rank
+	}
+
+	return chunkIDs, nil
 }
 
-func fts(ctx context.Context, query string, k int64, retriever TopKRetriever) (RetrievedChunkIDs, error) {
+func runFTS(ctx context.Context, query string, k int64, retriever TopKRetriever) ([]ScoredChunkID, error) {
 	chunkIDs, err := retriever.TopKByFTS(ctx, query, k)
 	if err != nil {
-		return chunkIDs, err
+		return nil, err
+	}
+	rank := int64(0)
+	for i := range chunkIDs {
+		rank++
+		chunkIDs[i].Rank = rank
 	}
 
 	return chunkIDs, nil
 }
 
-func ann(ctx context.Context, query string, k int64, embedClient EmbedClient, retriever TopKRetriever) (RetrievedChunkIDs, error) {
-	var chunkIDs RetrievedChunkIDs
+func runHybrid(ctx context.Context, query string, k int64, embed EmbedClient, retriever TopKRetriever, collweigher CollectionWeigher, logger *slog.Logger) ([]ScoredChunkID, error) {
+	hybridK := k * 4
 
-	embeddedQ, err := embedClient.EmbedQuery(ctx, query)
+	ftsIDs, err := runFTS(ctx, query, hybridK, retriever)
 	if err != nil {
-		return chunkIDs, err
+		return nil, err
 	}
 
-	chunkIDs, err = retriever.TopKByANN(ctx, embeddedQ, k)
+	annIDs, err := runANN(ctx, query, hybridK, embed, retriever)
 	if err != nil {
-		return chunkIDs, err
+		return nil, err
 	}
 
-	return chunkIDs, nil
+	scored := rrfMerge(ftsIDs, annIDs)
+
+	collWeights, err := collweigher.WeighChunks(ctx, scored)
+	if err != nil {
+		return nil, err
+	}
+	collectionReranked := collectionRerank(ctx, scored, collWeights, logger)
+
+	if len(collectionReranked) > int(k) {
+		return collectionReranked[:k], nil
+	} else {
+		return collectionReranked, nil
+	}
 }
 
-type scoredChunkID struct {
-	ID    int64
-	Score float64
-}
-
-func rrfMerge(rankings ...RetrievedChunkIDs) []scoredChunkID {
+func rrfMerge(rankings ...[]ScoredChunkID) []ScoredChunkID {
 	scores := make(map[int64]float64)
 
 	for _, ranking := range rankings {
 		for idx, chunkID := range ranking {
 			rank := int64(idx) + 1
-			scores[chunkID] += 1.0 / float64(rrfK+rank)
+			scores[chunkID.ID] += 1.0 / float64(rrfK+rank)
 		}
 	}
 
-	scored := make([]scoredChunkID, 0, len(scores))
+	scored := make([]ScoredChunkID, 0, len(scores))
 	for id, score := range scores {
-		scored = append(scored, scoredChunkID{
+		scored = append(scored, ScoredChunkID{
 			ID:    id,
 			Score: score,
 		})
@@ -183,26 +152,33 @@ func rrfMerge(rankings ...RetrievedChunkIDs) []scoredChunkID {
 		return scored[i].Score > scored[j].Score
 	})
 
+	for i := range scored {
+		scored[i].Rank = int64(i + 1)
+	}
+
 	return scored
 }
 
-type rerankChunk struct {
-	ID     int64
-	Score  float64
-	Weight float64
-}
-
-func collectionRerank(chunks []rerankChunk) []rerankChunk {
-	for idx, chunk := range chunks {
-		chunks[idx].Score = chunk.Score * chunk.Weight
+func collectionRerank(ctx context.Context, chunks []ScoredChunkID, weights map[int64]float64, logger *slog.Logger) []ScoredChunkID {
+	filtered := make([]ScoredChunkID, 0, len(chunks))
+	for _, c := range chunks {
+		if weight, ok := weights[c.ID]; ok {
+			c.Score *= weight
+			filtered = append(filtered, c)
+		} else {
+			logger.WarnContext(ctx, "collection-rerank", "warn", fmt.Sprintf("dropping chunk %d: no collection weight found", c.ID))
+		}
 	}
 
-	sort.Slice(chunks, func(i, j int) bool {
-		if chunks[i].Score == chunks[j].Score {
-			return chunks[i].ID < chunks[j].ID
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].Score == filtered[j].Score {
+			return filtered[i].ID < filtered[j].ID
 		}
-		return chunks[i].Score > chunks[j].Score
+		return filtered[i].Score > filtered[j].Score
 	})
+	for i := range filtered {
+		filtered[i].Rank = int64(i + 1)
+	}
 
-	return chunks
+	return filtered
 }

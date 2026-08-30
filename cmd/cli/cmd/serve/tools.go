@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"rag/internal/platform/telemetry/logging"
 	"rag/internal/retrieval/step"
 	"unicode/utf8"
@@ -16,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetriever, embedClient step.EmbedClient, logger *slog.Logger, queryLogger *logging.QueryLogger) server.ServerTool {
+func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogger) server.ServerTool {
 	tool := mcp.NewTool(
 		"rag",
 		mcp.WithDescription(`Retrieves relevant context chunks from the application's manual using semantic and keyword search. 
@@ -39,7 +38,7 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 
 		defer func() {
 			if r := recover(); r != nil {
-				logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("panic recovery in retrieval handler: %v", r))
+				deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("panic recovery in retrieval handler: %v", r))
 				handlerSpan.RecordError(fmt.Errorf("panic: %v", r))
 				handlerSpan.SetStatus(codes.Error, "panic")
 				result = mcp.NewToolResultError("internal error")
@@ -50,37 +49,37 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 
 		query, err := request.RequireString("retrieval_query")
 		if err != nil {
-			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("missing or malformed retrieval_query in request: %w", err))
+			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("missing or malformed retrieval_query in request: %w", err))
 			return mcp.NewToolResultError("retrieval query not found in request"), nil
 		}
 
 		if len(query) == 0 {
-			logger.ErrorContext(ctx, "mcp", "err", "empty string received as retrieval query")
+			deps.Logger.ErrorContext(ctx, "mcp", "err", "empty string received as retrieval query")
 			return mcp.NewToolResultError("empty retrieval_query received"), nil
 		}
 
 		k, err := request.RequireInt("k")
 		if err != nil {
-			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("missing or malformed k in request: %w", err))
+			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("missing or malformed k in request: %w", err))
 			return mcp.NewToolResultError("k not found in request"), nil
 		}
 
 		if k > 10 || k <= 0 {
-			logger.ErrorContext(ctx, "mcp", "err", "k is outside 1 and 10")
+			deps.Logger.ErrorContext(ctx, "mcp", "err", "k is outside 1 and 10")
 			return mcp.NewToolResultError("value for 'k' is outside 1 and 10"), nil
 		}
 
 		handlerSpan.SetAttributes(
 			attribute.String("query.query", query),
 			attribute.Int("query.k", k),
-			attribute.String("query.strategy", string(step.Hybrid)),
+			attribute.String("query.strategy", string(step.StrategyHybrid)),
 		)
 
 		retrievalCtx, retrievalSpan := tracer.Start(handlerCtx, "run_retrieval")
 		defer retrievalSpan.End()
-		chunks, err := step.RunRetrieval(retrievalCtx, query, step.Hybrid, int64(k), hydrator, retriever, embedClient)
+		chunks, err := step.RunRetrieval(retrievalCtx, query, int64(k), step.StrategyHybrid, deps)
 		if err != nil {
-			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error running retrieval: %w", err))
+			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error running retrieval: %w", err))
 			return mcp.NewToolResultError("error running chunk retrieval"), nil
 		}
 		retrievalSpan.End()
@@ -115,7 +114,7 @@ func hyridRetrievalTool(hydrator step.ChunkHydrator, retriever step.TopKRetrieve
 
 		jsonChunks, err := json.Marshal(chunks)
 		if err != nil {
-			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error marshaling chunks: %w", err))
+			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error marshaling chunks: %w", err))
 			return mcp.NewToolResultError("error marshaling chunks"), nil
 		}
 

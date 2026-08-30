@@ -9,8 +9,8 @@ import (
 	"rag/internal/retrieval/step"
 )
 
-func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int64) (step.RetrievedChunkIDs, error) {
-	chunkIDs := make([]int64, 0)
+func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int64) ([]step.ScoredChunkID, error) {
+	chunkIDs := make([]step.ScoredChunkID, 0)
 
 	packed, err := sqlite.PackVector(query.Vector)
 	if err != nil {
@@ -45,7 +45,11 @@ func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int
 		if err := rows.Scan(&id, &distance); err != nil {
 			return chunkIDs, fmt.Errorf("error scanning top k row result: %w", err)
 		}
-		chunkIDs = append(chunkIDs, id)
+		if distance.Valid {
+			chunkIDs = append(chunkIDs, step.ScoredChunkID{ID: id, Score: distance.Float64})
+		} else {
+			return chunkIDs, fmt.Errorf("empty distance for ANN received")
+		}
 	}
 	if rows.Err() != nil {
 		return chunkIDs, rows.Err()

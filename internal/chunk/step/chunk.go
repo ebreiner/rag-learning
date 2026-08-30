@@ -68,6 +68,7 @@ type chunkCandidate struct {
 	Node       *ExtractionNode
 	Breadcrumb string
 	Text       string
+	MemberIDs  []int64 // for storing content of a container node like group or list
 }
 
 func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]chunkCandidate, error) {
@@ -123,11 +124,14 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 
 		case "list":
 			var parts []string
+			candidate := chunkCandidate{}
+			candidate.MemberIDs = make([]int64, 0)
 			for _, child := range node.Children {
 				if child.List == nil || child.List.Text == "" {
 					logger.WarnContext(ctx, "walk-nodes", "warn", "warning: list_item missing content, skipping")
 					continue
 				}
+				candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
 				parts = append(parts, child.List.Marker+" "+child.List.Text)
 			}
 			if len(parts) > 0 {
@@ -135,34 +139,37 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 				for _, s := range parts {
 					text = text + s + "\n"
 				}
-				candidates = append(candidates, chunkCandidate{
-					Node:       node,
-					Breadcrumb: currentBreadCrumb(),
-					Text:       text,
-				})
+				candidate.Breadcrumb = currentBreadCrumb()
+				candidate.Node = node
+				candidate.Text = text
+				candidates = append(candidates, candidate)
 			}
 			continue // list_items consumed dont push
 
 		case "group":
 			var parts []string
-			for _, child := range node.Children {
+			candidate := chunkCandidate{}
+			candidate.MemberIDs = make([]int64, 0)
 
+			for _, child := range node.Children {
 				switch child.Kind {
 				case KindParagraph:
 					if child.Paragraph == nil || child.Paragraph.Text == "" {
 						logger.WarnContext(ctx, "walk-nodes", "warn", "warning: group item missing content, skipping")
 						continue
 					}
+					candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
 					parts = append(parts, child.Paragraph.Text)
 				case KindUnsupported:
-					logger.WarnContext(ctx, "walk-nodes", "warn", "node type unsupported")
+					logger.WarnContext(ctx, "walk-nodes", "warn", "node type unsupported as group item")
 					continue
 				case KindGroup:
 					logger.WarnContext(ctx, "walk-nodes", "warn", "group node in group node found, unexpected!")
 					continue
 				default:
-					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("unsupported node kind %s", child.Kind))
+					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("unsupported node kind in group node: %s", child.Kind))
 				}
+
 			}
 
 			if len(parts) > 0 {
@@ -170,13 +177,12 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 				for _, s := range parts {
 					text = text + s
 				}
-				candidates = append(candidates, chunkCandidate{
-					Node:       node,
-					Breadcrumb: currentBreadCrumb(),
-					Text:       text,
-				})
+				candidate.Breadcrumb = currentBreadCrumb()
+				candidate.Node = node
+				candidate.Text = text
+				candidates = append(candidates, candidate)
 			}
-			continue // list_items consumed dont push
+			continue
 
 		case "table":
 			if node.Table == nil {
@@ -242,6 +248,10 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 				Text:       headersRow + rows,
 			}
 			candidates = append(candidates, candidate)
+			if len(node.Children) > 0 {
+				logger.WarnContext(ctx, "walk-nodes", "warn", "table with children received, unexpected")
+			}
+			continue // warn for possible children but skip consuming them for now, should be not children in a table
 
 		case "unsupported":
 			logger.WarnContext(ctx, "walk-nodes", "warn", "unsupported node kind, skipping")
@@ -263,6 +273,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 	budget := maxBudget
 	lastCrumb := ""
 	buffer := ""
+	extNodeIDs := make([]ChunkExtractionNodeID, 0)
 	positionCounter := int64(0)
 
 	flush := func() {
@@ -270,25 +281,88 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 			return
 		}
 		merged = append(merged, ChunkToSave{
-			Text:       lastCrumb + "\n\n" + buffer,
-			Breadcrumb: lastCrumb,
-			Position:   positionCounter,
+			Text:              lastCrumb + "\n\n" + buffer,
+			Breadcrumb:        lastCrumb,
+			Position:          positionCounter,
+			ExtractionNodeIDs: extNodeIDs,
+			Type:              TypeContent,
 		})
 		positionCounter++
 		buffer = ""
+		extNodeIDs = make([]ChunkExtractionNodeID, 0)
 	}
 
 	startBuffer := func(breadcrumb string) {
 		budget = maxBudget - len(breadcrumb)
 	}
 
+	candidatePos := int64(0)
 	for _, candidate := range candidates {
-		if candidate.Node.Kind == "unknown" {
-			logger.WarnContext(ctx, "walk-nodes", "warn", "unknown node kind, skipping")
+		// Handle exceptions like container nodes and edge-cases
+		switch candidate.Node.Kind {
+		case KindUnsupported:
+			logger.WarnContext(ctx, "merge-nodes", "warn", "unsupported node kind, skipping")
 			continue
-		}
-		if candidate.Node.Kind == "unsupported" {
-			logger.WarnContext(ctx, "walk-nodes", "warn", "unsupported node kind, skipping")
+		case KindTable:
+			if len(candidate.Text) == 0 {
+				logger.WarnContext(ctx, "merge-nodes", "warn", "table node text is empty, skipping")
+				continue
+			}
+			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
+			toSave := ChunkToSave{
+				Breadcrumb:        candidate.Breadcrumb,
+				Position:          positionCounter,
+				ExtractionNodeIDs: ids,
+				Text:              candidate.Text,
+				Type:              TypeTable,
+			}
+
+			merged = append(merged, toSave)
+			positionCounter++
+			continue
+
+		case KindGroup:
+			if len(candidate.Text) == 0 {
+				logger.WarnContext(ctx, "merge-nodes", "warn", "group node text is empty, skipping")
+				continue
+			}
+			ids := make([]ChunkExtractionNodeID, 0)
+			for pos, id := range candidate.MemberIDs {
+				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
+			}
+
+			toSave := ChunkToSave{
+				Breadcrumb:        candidate.Breadcrumb,
+				Position:          positionCounter,
+				ExtractionNodeIDs: ids,
+				Text:              candidate.Text,
+				Type:              TypeGeneric,
+			}
+
+			merged = append(merged, toSave)
+			positionCounter++
+			continue
+
+		case KindList:
+			if len(candidate.Text) == 0 {
+				logger.WarnContext(ctx, "merge-nodes", "warn", "list node text is empty, skipping")
+				continue
+			}
+			ids := make([]ChunkExtractionNodeID, 0)
+			for pos, id := range candidate.MemberIDs {
+				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
+			}
+
+			toSave := ChunkToSave{
+				Breadcrumb:        candidate.Breadcrumb,
+				Position:          positionCounter,
+				ExtractionNodeIDs: ids,
+				Text:              candidate.Text,
+				Type:              TypeList,
+			}
+
+			merged = append(merged, toSave)
+			positionCounter++
 			continue
 		}
 
@@ -303,6 +377,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 			} else {
 				buffer = fmt.Sprintf("%s\n\n%s", buffer, candidate.Text)
 			}
+			extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: candidatePos})
 			budget = budget - len(candidate.Text)
 		} else if len(buffer) > 0 {
 			flush()
@@ -310,13 +385,16 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 			if len(candidate.Text) > 0 {
 				buffer = candidate.Text
 				budget = budget - tokenCount(candidate.Text)
+				extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: candidatePos})
 			}
 		} else if len(candidate.Text) > 0 {
 			buffer = candidate.Text
 			budget = budget - tokenCount(candidate.Text)
+			extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: candidatePos})
 		}
 
 		lastCrumb = candidate.Breadcrumb
+		candidatePos++
 	}
 
 	if len(buffer) > 0 {

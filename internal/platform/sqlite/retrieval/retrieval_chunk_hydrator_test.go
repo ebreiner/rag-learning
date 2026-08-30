@@ -40,8 +40,8 @@ func insertChunkInCollection(t *testing.T, db *sql.DB, text, collectionName stri
 	}
 
 	chunkRes, err := db.ExecContext(ctx,
-		`INSERT INTO chunks (created_at, document_id, position, text, breadcrumb) VALUES (?, ?, ?, ?, ?)`,
-		now, docID, 0, text, "",
+		`INSERT INTO chunks (created_at, document_id, position, type, text, breadcrumb) VALUES (?, ?, ?, ?, ?, ?)`,
+		now, docID, 0, "content", text, "",
 	)
 	if err != nil {
 		t.Fatalf("insertChunkInCollection: inserting chunk: %v", err)
@@ -88,7 +88,7 @@ func TestHydrateChunks(t *testing.T) {
 			t.Fatalf("NewChunkHydrator() error = %v", err)
 		}
 
-		chunks, err := hydrator.HydrateChunks(ctx, step.RetrievedChunkIDs{manualID, changelogID})
+		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: manualID}, {ID: changelogID}})
 		if err != nil {
 			t.Fatalf("HydrateChunks() error = %v", err)
 		}
@@ -123,7 +123,7 @@ func TestHydrateChunks(t *testing.T) {
 		// hydrator's collection-weight snapshot) already started.
 		lateID := insertChunkInCollection(t, db, "late chunk", "late-collection", 0.5)
 
-		chunks, err := hydrator.HydrateChunks(ctx, step.RetrievedChunkIDs{lateID})
+		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: lateID}})
 		if err == nil {
 			t.Fatalf("HydrateChunks() error = nil, want an error for a collection unknown to the snapshot, got chunks %+v", chunks)
 		}
@@ -139,7 +139,7 @@ func TestHydrateChunks(t *testing.T) {
 			t.Fatalf("NewChunkHydrator() error = %v", err)
 		}
 
-		chunks, err := hydrator.HydrateChunks(ctx, step.RetrievedChunkIDs{999999})
+		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: 999999}})
 		if err != nil {
 			t.Fatalf("HydrateChunks() error = %v, want nil", err)
 		}
@@ -148,7 +148,7 @@ func TestHydrateChunks(t *testing.T) {
 		}
 	})
 
-	t.Run("rank reflects the order of the requested ids, not db insertion order", func(t *testing.T) {
+	t.Run("output order follows the order of the requested ids, not db insertion order, and Rank/Score pass through unchanged", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
 		idA := insertChunkInCollection(t, db, "chunk A", "manual", 1.0)
@@ -159,18 +159,26 @@ func TestHydrateChunks(t *testing.T) {
 			t.Fatalf("NewChunkHydrator() error = %v", err)
 		}
 
-		chunks, err := hydrator.HydrateChunks(ctx, step.RetrievedChunkIDs{idB, idA})
+		// Rank/Score are set here because HydrateChunks no longer derives
+		// Rank from position -- it's the caller's job (rrfMerge/runFTS/
+		// runANN/collectionRerank) to have already assigned the real final
+		// Rank before hydration ever runs; HydrateChunks just carries it
+		// through onto the RetrievedChunk unchanged.
+		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{
+			{ID: idB, Rank: 1, Score: 0.9},
+			{ID: idA, Rank: 2, Score: 0.5},
+		})
 		if err != nil {
 			t.Fatalf("HydrateChunks() error = %v", err)
 		}
 		if len(chunks) != 2 {
 			t.Fatalf("got %d chunks, want 2", len(chunks))
 		}
-		if chunks[0].ID != idB || chunks[0].Rank != 1 {
-			t.Errorf("chunks[0] = (ID: %d, Rank: %d), want (ID: %d, Rank: 1)", chunks[0].ID, chunks[0].Rank, idB)
+		if chunks[0].ID != idB || chunks[0].Rank != 1 || chunks[0].Score != 0.9 {
+			t.Errorf("chunks[0] = (ID: %d, Rank: %d, Score: %v), want (ID: %d, Rank: 1, Score: 0.9)", chunks[0].ID, chunks[0].Rank, chunks[0].Score, idB)
 		}
-		if chunks[1].ID != idA || chunks[1].Rank != 2 {
-			t.Errorf("chunks[1] = (ID: %d, Rank: %d), want (ID: %d, Rank: 2)", chunks[1].ID, chunks[1].Rank, idA)
+		if chunks[1].ID != idA || chunks[1].Rank != 2 || chunks[1].Score != 0.5 {
+			t.Errorf("chunks[1] = (ID: %d, Rank: %d, Score: %v), want (ID: %d, Rank: 2, Score: 0.5)", chunks[1].ID, chunks[1].Rank, chunks[1].Score, idA)
 		}
 	})
 }

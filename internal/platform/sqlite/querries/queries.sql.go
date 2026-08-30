@@ -12,6 +12,54 @@ import (
 	"time"
 )
 
+const collectionWeightForChunkIDs = `-- name: CollectionWeightForChunkIDs :many
+SELECT chunks.id, collections.weight
+FROM chunks
+JOIN documents
+ON chunks.document_id = documents.id
+JOIN collections
+ON documents.collection_name = collections.name
+WHERE chunks.id IN (/*SLICE:chunk_ids*/?)
+`
+
+type CollectionWeightForChunkIDsRow struct {
+	ID     int64
+	Weight float64
+}
+
+func (q *Queries) CollectionWeightForChunkIDs(ctx context.Context, chunkIds []int64) ([]CollectionWeightForChunkIDsRow, error) {
+	query := collectionWeightForChunkIDs
+	var queryParams []interface{}
+	if len(chunkIds) > 0 {
+		for _, v := range chunkIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:chunk_ids*/?", strings.Repeat(",?", len(chunkIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:chunk_ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CollectionWeightForChunkIDsRow
+	for rows.Next() {
+		var i CollectionWeightForChunkIDsRow
+		if err := rows.Scan(&i.ID, &i.Weight); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createCollectionOrUpdateWeight = `-- name: CreateCollectionOrUpdateWeight :exec
 INSERT INTO collections (
 	name,
@@ -218,6 +266,7 @@ SELECT
 	e.id AS extraction_id,
 	e.document_id,
 	e.mime_type,
+	en.id AS extraction_node_id,
 	en.node_id,
 	en.parent_id,
 	en.kind,
@@ -232,15 +281,16 @@ ORDER BY en.id
 `
 
 type GetLatestExtractionOfDocRow struct {
-	ExtractionID   int64
-	DocumentID     int64
-	MimeType       string
-	NodeID         string
-	ParentID       sql.NullString
-	Kind           string
-	Layer          string
-	ProvenanceJson sql.NullString
-	ContentJson    sql.NullString
+	ExtractionID     int64
+	DocumentID       int64
+	MimeType         string
+	ExtractionNodeID int64
+	NodeID           string
+	ParentID         sql.NullString
+	Kind             string
+	Layer            string
+	ProvenanceJson   sql.NullString
+	ContentJson      sql.NullString
 }
 
 func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64) ([]GetLatestExtractionOfDocRow, error) {
@@ -256,6 +306,7 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 			&i.ExtractionID,
 			&i.DocumentID,
 			&i.MimeType,
+			&i.ExtractionNodeID,
 			&i.NodeID,
 			&i.ParentID,
 			&i.Kind,
@@ -276,37 +327,69 @@ func (q *Queries) GetLatestExtractionOfDoc(ctx context.Context, documentID int64
 	return items, nil
 }
 
-const insertChunk = `-- name: InsertChunk :exec
+const insertChunk = `-- name: InsertChunk :one
 INSERT INTO chunks (
 	document_id,
 	position,
+	type,
 	text,
 	breadcrumb,
 	created_at
-) VALUES (?,?,?,?,?)
+) VALUES (?,?,?,?,?,?)
+RETURNING id
 `
 
 type InsertChunkParams struct {
 	DocumentID int64
 	Position   int64
+	Type       string
 	Text       string
 	Breadcrumb string
 	CreatedAt  time.Time
 }
 
-func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error {
-	_, err := q.exec(ctx, q.insertChunkStmt, insertChunk,
+func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) (int64, error) {
+	row := q.queryRow(ctx, q.insertChunkStmt, insertChunk,
 		arg.DocumentID,
 		arg.Position,
+		arg.Type,
 		arg.Text,
 		arg.Breadcrumb,
 		arg.CreatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertChunkNodes = `-- name: InsertChunkNodes :exec
+INSERT INTO chunk_nodes(
+	chunk_id,
+	extraction_node_id,
+	created_at,
+	position
+) VALUES(?,?,?,?)
+`
+
+type InsertChunkNodesParams struct {
+	ChunkID          int64
+	ExtractionNodeID int64
+	CreatedAt        time.Time
+	Position         int64
+}
+
+func (q *Queries) InsertChunkNodes(ctx context.Context, arg InsertChunkNodesParams) error {
+	_, err := q.exec(ctx, q.insertChunkNodesStmt, insertChunkNodes,
+		arg.ChunkID,
+		arg.ExtractionNodeID,
+		arg.CreatedAt,
+		arg.Position,
 	)
 	return err
 }
 
 const retrievalChunksByIDs = `-- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, d.collection_name, c.position, c.text, c.breadcrumb
+SELECT c.id, d.name, d.collection_name, c.position, c.breadcrumb, c.text
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
@@ -318,8 +401,8 @@ type RetrievalChunksByIDsRow struct {
 	Name           string
 	CollectionName string
 	Position       int64
-	Text           string
 	Breadcrumb     string
+	Text           string
 }
 
 func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([]RetrievalChunksByIDsRow, error) {
@@ -346,8 +429,8 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 			&i.Name,
 			&i.CollectionName,
 			&i.Position,
-			&i.Text,
 			&i.Breadcrumb,
+			&i.Text,
 		); err != nil {
 			return nil, err
 		}

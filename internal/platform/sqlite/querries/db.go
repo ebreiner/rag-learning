@@ -24,6 +24,9 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
+	if q.collectionWeightForChunkIDsStmt, err = db.PrepareContext(ctx, collectionWeightForChunkIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query CollectionWeightForChunkIDs: %w", err)
+	}
 	if q.createCollectionOrUpdateWeightStmt, err = db.PrepareContext(ctx, createCollectionOrUpdateWeight); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateCollectionOrUpdateWeight: %w", err)
 	}
@@ -57,6 +60,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.insertChunkStmt, err = db.PrepareContext(ctx, insertChunk); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertChunk: %w", err)
 	}
+	if q.insertChunkNodesStmt, err = db.PrepareContext(ctx, insertChunkNodes); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertChunkNodes: %w", err)
+	}
 	if q.retrievalChunksByIDsStmt, err = db.PrepareContext(ctx, retrievalChunksByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query RetrievalChunksByIDs: %w", err)
 	}
@@ -65,6 +71,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 
 func (q *Queries) Close() error {
 	var err error
+	if q.collectionWeightForChunkIDsStmt != nil {
+		if cerr := q.collectionWeightForChunkIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing collectionWeightForChunkIDsStmt: %w", cerr)
+		}
+	}
 	if q.createCollectionOrUpdateWeightStmt != nil {
 		if cerr := q.createCollectionOrUpdateWeightStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createCollectionOrUpdateWeightStmt: %w", cerr)
@@ -120,6 +131,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing insertChunkStmt: %w", cerr)
 		}
 	}
+	if q.insertChunkNodesStmt != nil {
+		if cerr := q.insertChunkNodesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertChunkNodesStmt: %w", cerr)
+		}
+	}
 	if q.retrievalChunksByIDsStmt != nil {
 		if cerr := q.retrievalChunksByIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing retrievalChunksByIDsStmt: %w", cerr)
@@ -164,6 +180,7 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 type Queries struct {
 	db                                 DBTX
 	tx                                 *sql.Tx
+	collectionWeightForChunkIDsStmt    *sql.Stmt
 	createCollectionOrUpdateWeightStmt *sql.Stmt
 	createDocumentStmt                 *sql.Stmt
 	createExtractionStmt               *sql.Stmt
@@ -175,6 +192,7 @@ type Queries struct {
 	getDocumentIDsAfterIDStmt          *sql.Stmt
 	getLatestExtractionOfDocStmt       *sql.Stmt
 	insertChunkStmt                    *sql.Stmt
+	insertChunkNodesStmt               *sql.Stmt
 	retrievalChunksByIDsStmt           *sql.Stmt
 }
 
@@ -182,6 +200,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                                 tx,
 		tx:                                 tx,
+		collectionWeightForChunkIDsStmt:    q.collectionWeightForChunkIDsStmt,
 		createCollectionOrUpdateWeightStmt: q.createCollectionOrUpdateWeightStmt,
 		createDocumentStmt:                 q.createDocumentStmt,
 		createExtractionStmt:               q.createExtractionStmt,
@@ -193,6 +212,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getDocumentIDsAfterIDStmt:          q.getDocumentIDsAfterIDStmt,
 		getLatestExtractionOfDocStmt:       q.getLatestExtractionOfDocStmt,
 		insertChunkStmt:                    q.insertChunkStmt,
+		insertChunkNodesStmt:               q.insertChunkNodesStmt,
 		retrievalChunksByIDsStmt:           q.retrievalChunksByIDsStmt,
 	}
 }

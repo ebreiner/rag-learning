@@ -29,11 +29,11 @@ type openAIConfig struct {
 
 func (openAIConfig) isEmbedBackendConfig() {}
 
-func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, logger *slog.Logger) (
-	hydrator retrieval.ChunkHydrator, retriever step.TopKRetriever, embedClient step.EmbedClient, closeDB func(context.Context) error, err error) {
+func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, logger *slog.Logger) (deps step.RetrievalDeps, closeDB func(context.Context) error, err error) {
 	db, err := sqlite.NewConn(dbPath, false)
+	deps = step.RetrievalDeps{}
 	if err != nil {
-		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, nil, err
+		return deps, nil, err
 	}
 
 	closeDB = func(ctx context.Context) error {
@@ -48,24 +48,42 @@ func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, 
 	}
 
 	if err != nil {
-		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, closeDB, err
-	}
-	hydrator, err = retrieval.NewChunkHydrator(ctx, db, logger)
-	if err != nil {
-		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, closeDB, err
+		return deps, closeDB, err
 	}
 
-	retriever, err = retrieval.NewSQLiteRetriever(db, logger)
-	if err != nil {
-		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, closeDB, err
-	}
+	deps.Logger = logger
 
-	embedClient, err = newEmbedClient(embedConfig, logger)
+	hydrator, err := retrieval.NewChunkHydrator(ctx, db, logger)
 	if err != nil {
-		return retrieval.ChunkHydrator{}, &retrieval.SQLiteRetriever{}, openai.ClientOpenAI{}, closeDB, err
+		return deps, closeDB, err
 	}
+	deps.Hydrator = &hydrator
 
-	return hydrator, retriever, embedClient, closeDB, nil
+	retriever, err := retrieval.NewSQLiteRetriever(db, logger)
+	if err != nil {
+		return deps, closeDB, err
+	}
+	deps.Retriever = retriever
+
+	embedClient, err := newEmbedClient(embedConfig, logger)
+	if err != nil {
+		return deps, closeDB, err
+	}
+	deps.EmbeddingsClient = embedClient
+
+	renderer, err := retrieval.NewChunkRenderer(ctx, db, logger)
+	if err != nil {
+		return deps, closeDB, err
+	}
+	deps.Renderer = &renderer
+
+	collWeigher, err := retrieval.NewCollectionWeigher(ctx, db, logger)
+	if err != nil {
+		return deps, closeDB, err
+	}
+	deps.CollWeigher = &collWeigher
+
+	return deps, closeDB, nil
 }
 
 func newEmbedClient(cnf embedBackendConfig, logger *slog.Logger) (step.EmbedClient, error) {

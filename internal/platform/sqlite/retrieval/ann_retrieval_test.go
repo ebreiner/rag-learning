@@ -50,8 +50,8 @@ func TestTopKByANN(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("got %d results, want 2", len(got))
 		}
-		if got[0] != idClose {
-			t.Errorf("closest result = %d, want %d (the identical vector)", got[0], idClose)
+		if got[0].ID != idClose {
+			t.Errorf("closest result = %d, want %d (the identical vector)", got[0].ID, idClose)
 		}
 	})
 
@@ -103,7 +103,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
 		for _, id := range got {
-			if id == idA {
+			if id.ID == idA {
 				t.Fatalf("querying modelB returned modelA's chunk %d -- vector spaces leaked across models", idA)
 			}
 		}

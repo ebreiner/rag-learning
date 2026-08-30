@@ -22,9 +22,20 @@ CREATE TABLE IF NOT EXISTS chunks (
   created_at DATETIME NOT NULL,
   document_id INTEGER NOT NULL,
   position INTEGER NOT NULL,
+  type TEXT NOT NULL,
   text TEXT NOT NULL,
   breadcrumb TEXT NOT NULL,
   FOREIGN KEY(document_id) REFERENCES documents(id)
+);
+
+CREATE TABLE IF NOT EXISTS chunk_nodes (
+  chunk_id INTEGER NOT NULL,
+  extraction_node_id INTEGER NOT NULL,
+  created_at DATETIME NOT NULL,
+  position INTEGER NOT NULL,
+
+  FOREIGN KEY(chunk_id) REFERENCES chunks(id),
+  FOREIGN KEY(extraction_node_id) REFERENCES extraction_nodes(id)
 );
 
 CREATE TABLE IF NOT EXISTS extractions (
