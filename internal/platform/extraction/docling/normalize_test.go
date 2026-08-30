@@ -180,6 +180,8 @@ func TestTextNodeBuild(t *testing.T) {
 		headingCase("section node guard invalid upper level", &upperLimit, "i am a heading", 6, "", step.LayerBody, true),
 		paragraphCase("paragraph becomes paragraph node", "i am representing a full paragraph, hello.", "i am representing a full paragraph, hello.", step.LayerBody, false),
 		paragraphCase("paragraph empty content layer", "i am representing a full paragraph, hello.", "i am representing a full paragraph, hello.", "", true),
+		codeCase("code becomes code node", "func main() {}", "func main() {}", step.LayerBody, false),
+		codeCase("code empty content layer", "func main() {}", "func main() {}", "", true),
 	}
 
 	runTextNodeCases(t, baselineCases)
@@ -200,7 +202,6 @@ func TestTextNodeBuild(t *testing.T) {
 		unsupportedTextCase("footnote is unsupported", "footnote", step.LayerBody),
 		unsupportedTextCase("page_header is unsupported", "page_header", step.LayerFurniture),
 		unsupportedTextCase("page_footer is unsupported", "page_footer", step.LayerFurniture),
-		unsupportedTextCase("code is unsupported", "code", step.LayerBody),
 	}
 
 	runTextNodeCases(t, unsupportedCases)
@@ -512,6 +513,25 @@ func paragraphCase(name string, text string, wantText string, layer step.Content
 			ID: "#/text/1", Kind: step.KindParagraph,
 			Provenance: []step.Provenance{wantProvOnPage(1)},
 			Paragraph:  &step.ParagraphContent{Text: wantText},
+			Layer:      layer,
+		},
+		wantErr: wantErr,
+	}
+}
+
+func codeCase(name string, text string, wantText string, layer step.ContentLayer, wantErr bool) textNodeCase {
+	provs := []rawProv{provOnPage(1)}
+	return textNodeCase{
+		name: name,
+		input: rawTextItem{
+			SelfRef: "#/text/1", Label: "code",
+			Text: text, Prov: provs,
+			ContentLayer: string(layer),
+		},
+		want: &step.Node{
+			ID: "#/text/1", Kind: step.KindCode,
+			Provenance: []step.Provenance{wantProvOnPage(1)},
+			Code:       &step.CodeContent{Text: wantText},
 			Layer:      layer,
 		},
 		wantErr: wantErr,

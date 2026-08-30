@@ -165,6 +165,8 @@ func marshalContent(node *step.Node) ([]byte, error) {
 		return json.Marshal(node.Heading)
 	case step.KindParagraph:
 		return json.Marshal(node.Paragraph)
+	case step.KindCode:
+		return json.Marshal(node.Code)
 	case step.KindCaption:
 		return json.Marshal(node.Caption)
 	case step.KindFootnote:

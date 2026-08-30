@@ -28,6 +28,7 @@ type ChunkType string
 const (
 	TypeGeneric ChunkType = "generic"
 	TypeContent ChunkType = "content"
+	TypeCode    ChunkType = "code"
 	TypeList    ChunkType = "list"
 	TypeTable   ChunkType = "table"
 )
@@ -38,6 +39,7 @@ const (
 	KindHeading     NodeKind = "heading"
 	KindParagraph   NodeKind = "paragraph"
 	KindCaption     NodeKind = "caption"
+	KindCode        NodeKind = "code"
 	KindFootnote    NodeKind = "footnote"
 	KindListItem    NodeKind = "list_item"
 	KindList        NodeKind = "list"
@@ -62,6 +64,7 @@ type ExtractionNode struct {
 	Layer            ContentLayer
 	Children         []*ExtractionNode
 	Paragraph        *ParagraphContent
+	Code             *CodeContent
 	Heading          *HeadingContent
 	List             *ListItemContent
 	Table            *TableContent
@@ -88,6 +91,10 @@ type HeadingContent struct {
 }
 
 type ParagraphContent struct {
+	Text string `json:"text"`
+}
+
+type CodeContent struct {
 	Text string `json:"text"`
 }
 
