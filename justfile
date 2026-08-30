@@ -44,7 +44,9 @@ e2e input-dir collection-name collection-weight: build
 	./main --db-path ./data/data.db chunk
 	./main --db-path ./data/data.db embed --openai-url "http://127.0.0.1:11434" --model bge-m3 --dim 1024
 
-e2e-clear: build cleanup
+e2e-clear: build cleanup e2e-static
+
+e2e-static: build
 	#!/usr/bin/env bash
 	set -euxo pipefail
 	./main --db-path ./data/data.db extract -i build/manual --docling-url "http://127.0.0.1:5001" --collection-weight 0.8  --collection-name manual

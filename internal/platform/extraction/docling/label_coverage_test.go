@@ -57,7 +57,7 @@ func TestTextNodeLabelCoverage(t *testing.T) {
 		{"page_footer", step.KindUnsupported},
 		{"code", step.KindCode},
 		{"chart", step.KindUnsupported},
-		{"formula", step.KindUnsupported},
+		{"formula", step.KindFormula},
 		{"document_index", step.KindUnsupported},
 		{"checkbox_selected", step.KindUnsupported},
 		{"checkbox_unselected", step.KindUnsupported},

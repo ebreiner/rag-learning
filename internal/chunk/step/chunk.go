@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"unicode"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
+
+const mergeSmallChunkThreshold = 75
 
 func Chunk(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
 	for {
@@ -49,7 +52,11 @@ func processDoc(ctx context.Context, source ExtractionSource, sink ResultSink, l
 	if err != nil {
 		return err
 	}
-	result.ChunksToSave = append(result.ChunksToSave, mergeCandidates(processDocCtx, chunkCandidates, logger)...)
+	toSave := mergeCandidates(processDocCtx, chunkCandidates, logger)
+	merged := mergeSmallChunks(toSave, mergeSmallChunkThreshold)
+	logger.InfoContext(processDocCtx, "merge-small-chunks", "merged-chunks", len(toSave)-len(merged))
+	processDocSpan.SetAttributes(attribute.Int("doc.chunks.small_merged", len(toSave)-len(merged)))
+	result.ChunksToSave = append(result.ChunksToSave, merged...)
 	processDocSpan.SetAttributes(attribute.Int("doc.chunks.processed", len(result.ChunksToSave)))
 	processDocSpan.End()
 
@@ -98,7 +105,17 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 		stack = stack[:len(stack)-1]
 
 		switch node.Kind {
-		case "heading":
+		case KindCaption, KindFootnote:
+			parentKind, parentID := "none", "none"
+			if node.Parent != nil {
+				parentKind, parentID = string(node.Parent.Kind), node.Parent.ID
+			}
+			logger.WarnContext(ctx, "walk-nodes", "warn",
+				fmt.Sprintf("%s node not consumed by its parent -- dropping. node_id=%s parent_kind=%s parent_id=%s layer=%s",
+					node.Kind, node.ID, parentKind, parentID, node.Layer))
+			continue
+
+		case KindHeading:
 			if node.Heading != nil && node.Heading.Level > 0 {
 				if node.Heading.Text == "" {
 					node.Heading.Text = "MISSING_TITLE_PLACEHOLDER"
@@ -112,7 +129,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 				logger.WarnContext(ctx, "walk-nodes", "warn", "warning: missing heading info, falling back on placeholder or skip")
 			}
 
-		case "paragraph":
+		case KindParagraph:
 			candidate := chunkCandidate{
 				Node:       node,
 				Breadcrumb: currentBreadCrumb(),
@@ -150,7 +167,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			continue
 
-		case "list":
+		case KindList:
 			var parts []string
 			candidate := chunkCandidate{}
 			candidate.MemberIDs = make([]int64, 0)
@@ -174,7 +191,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			continue // list_items consumed dont push
 
-		case "group":
+		case KindGroup:
 			var parts []string
 			candidate := chunkCandidate{}
 			candidate.MemberIDs = make([]int64, 0)
@@ -203,6 +220,9 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			if len(parts) > 0 {
 				text := ""
 				for _, s := range parts {
+					if text != "" && !unicode.IsSpace([]rune(text)[len([]rune(text))-1]) && !unicode.IsSpace([]rune(s)[0]) {
+						text += " "
+					}
 					text = text + s
 				}
 				candidate.Breadcrumb = currentBreadCrumb()
@@ -212,7 +232,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			continue
 
-		case "table":
+		case KindTable:
 			if node.Table == nil {
 				logger.WarnContext(ctx, "walk-nodes", "warn", "empty table content, skipping node in walk")
 				continue
@@ -275,13 +295,26 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 				Breadcrumb: currentBreadCrumb(),
 				Text:       headersRow + rows,
 			}
-			candidates = append(candidates, candidate)
-			if len(node.Children) > 0 {
-				logger.WarnContext(ctx, "walk-nodes", "warn", "table with children received, unexpected")
-			}
-			continue // warn for possible children but skip consuming them for now, should be not children in a table
 
-		case "unsupported":
+			candidate.MemberIDs = []int64{node.ExtractionNodeID}
+			for _, child := range node.Children {
+				switch child.Kind {
+				case KindCaption, KindFootnote:
+					if child.Paragraph != nil && len(child.Paragraph.Text) > 0 {
+						candidate.Text = candidate.Text + "\n" + child.Paragraph.Text
+						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
+					} else {
+						logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("empty '%s'", child.Kind))
+					}
+				default:
+					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("table children of unsupported type: '%s'", child.Kind))
+				}
+			}
+
+			candidates = append(candidates, candidate)
+			continue
+
+		case KindUnsupported:
 			logger.WarnContext(ctx, "walk-nodes", "warn", "unsupported node kind, skipping")
 		default:
 			return candidates, fmt.Errorf("unknown node kind: %s", node.Kind)
@@ -336,7 +369,11 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "table node text is empty, skipping")
 				continue
 			}
-			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
+
+			ids := make([]ChunkExtractionNodeID, 0)
+			for pos, id := range candidate.MemberIDs {
+				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
+			}
 			toSave := ChunkToSave{
 				Breadcrumb:        candidate.Breadcrumb,
 				Position:          positionCounter,
