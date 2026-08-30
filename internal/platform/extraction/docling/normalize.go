@@ -91,7 +91,6 @@ func textNode(ctx context.Context, node *step.Node, text rawTextItem, logger *sl
 			return fmt.Errorf("level %d out of expected range [1,5]", *text.Level)
 		}
 		if text.Text == "" {
-			// TODO: how should this be handled? whats the required stuff for the domain model, whats optional?
 			logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", "empty text")
 		}
 		headingContent := &step.HeadingContent{Level: *text.Level, Text: text.Text}

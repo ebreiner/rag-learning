@@ -73,8 +73,8 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 	}
 
 	chunkRes, err := db.ExecContext(ctx,
-		`INSERT INTO chunks (created_at, document_id, position, text, breadcrumb) VALUES (?, ?, ?, ?, ?)`,
-		now, docID, 0, text, breadcrumb,
+		`INSERT INTO chunks (created_at, document_id, position, type, text, breadcrumb) VALUES (?, ?, ?, ?, ?, ?)`,
+		now, docID, 0, "content", text, breadcrumb,
 	)
 	if err != nil {
 		t.Fatalf("sqlitetest.InsertChunk: inserting chunk: %v", err)
@@ -85,4 +85,75 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 	}
 
 	return chunkID
+}
+
+// InsertDocument seeds a minimal collections -> documents chain and returns
+// the new document's id. Every real chunks/extractions row needs a valid
+// document_id, so this exists to keep that boilerplate out of every
+// individual test that only needs a document to hang something else off of.
+func InsertDocument(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now()
+
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO collections (name, weight) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`,
+		"test-collection", 1.0,
+	)
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertDocument: inserting collection: %v", err)
+	}
+
+	docRes, err := db.ExecContext(ctx,
+		`INSERT INTO documents (created_at, name, sha256, collection_name) VALUES (?, ?, ?, ?)`,
+		now, "test-doc", "deadbeef", "test-collection",
+	)
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertDocument: inserting document: %v", err)
+	}
+	docID, err := docRes.LastInsertId()
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertDocument: document id: %v", err)
+	}
+
+	return docID
+}
+
+// InsertExtractionNode seeds a minimal documents -> extractions ->
+// extraction_nodes chain and returns the new extraction_node's id.
+// chunk_nodes.extraction_node_id has a real FK to extraction_nodes.id
+// (foreign_keys=ON in production and in this fixture), so a chunk_nodes test
+// can't just reference an arbitrary made-up int64 -- it needs a real row.
+func InsertExtractionNode(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now()
+
+	docID := InsertDocument(t, db)
+
+	extRes, err := db.ExecContext(ctx,
+		`INSERT INTO extractions (document_id, created_at, mime_type) VALUES (?, ?, ?)`,
+		docID, now, "application/pdf",
+	)
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertExtractionNode: inserting extraction: %v", err)
+	}
+	extID, err := extRes.LastInsertId()
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertExtractionNode: extraction id: %v", err)
+	}
+
+	nodeRes, err := db.ExecContext(ctx,
+		`INSERT INTO extraction_nodes (extraction_id, created_at, node_id, kind, layer) VALUES (?, ?, ?, ?, ?)`,
+		extID, now, "#/texts/0", "paragraph", "body",
+	)
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertExtractionNode: inserting extraction_node: %v", err)
+	}
+	nodeID, err := nodeRes.LastInsertId()
+	if err != nil {
+		t.Fatalf("sqlitetest.InsertExtractionNode: extraction_node id: %v", err)
+	}
+
+	return nodeID
 }

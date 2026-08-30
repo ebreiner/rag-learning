@@ -1,9 +1,16 @@
 package step
 
 type ChunkToSave struct {
-	Text       string
-	Breadcrumb string
-	Position   int64
+	Text              string
+	Breadcrumb        string
+	Position          int64
+	ExtractionNodeIDs []ChunkExtractionNodeID
+	Type              ChunkType
+}
+
+type ChunkExtractionNodeID struct {
+	ExtractionNodeID int64
+	Position         int64
 }
 
 type ChunkResult struct {
@@ -15,6 +22,15 @@ type ExtractionToChunk struct {
 	DocumentID int64
 	Roots      []*ExtractionNode
 }
+
+type ChunkType string
+
+const (
+	TypeGeneric ChunkType = "generic"
+	TypeContent ChunkType = "content"
+	TypeList    ChunkType = "list"
+	TypeTable   ChunkType = "table"
+)
 
 type NodeKind string
 
@@ -39,15 +55,16 @@ const (
 )
 
 type ExtractionNode struct {
-	ID        string
-	Kind      NodeKind
-	Parent    *ExtractionNode
-	Layer     ContentLayer
-	Children  []*ExtractionNode
-	Paragraph *ParagraphContent
-	Heading   *HeadingContent
-	List      *ListItemContent
-	Table     *TableContent
+	ID               string
+	ExtractionNodeID int64
+	Kind             NodeKind
+	Parent           *ExtractionNode
+	Layer            ContentLayer
+	Children         []*ExtractionNode
+	Paragraph        *ParagraphContent
+	Heading          *HeadingContent
+	List             *ListItemContent
+	Table            *TableContent
 }
 
 type TableContent struct {

@@ -39,11 +39,15 @@ func NewChunkHydrator(ctx context.Context, db *sql.DB, logger *slog.Logger) (Chu
 	return hydrator, nil
 }
 
-// TODO: rank explizit über boundaries transportieren und nicht nur auf implizites ordering verlassen
-func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs step.RetrievedChunkIDs) ([]step.RetrievedChunk, error) {
+func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs []step.ScoredChunkID) ([]step.RetrievedChunk, error) {
 	chunks := make([]step.RetrievedChunk, 0, len(chunkIDs))
 
-	rows, err := h.q.RetrievalChunksByIDs(ctx, chunkIDs)
+	ids := make([]int64, 0)
+	for i := range chunkIDs {
+		ids = append(ids, chunkIDs[i].ID)
+	}
+
+	rows, err := h.q.RetrievalChunksByIDs(ctx, ids)
 	if err != nil {
 		return chunks, err
 	}
@@ -56,19 +60,20 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs step.Retriev
 		rowByID[row.ID] = row
 	}
 
-	for idx, id := range chunkIDs {
+	for idx, id := range ids {
 		row, ok := rowByID[id]
 		if !ok {
 			h.Logger.WarnContext(ctx, "run-retrieval", "warn", fmt.Sprintf("chunk hydration failed: no row returned for chunk id %d, skipping chunk\n", id))
 			continue
 		}
 		chunk := step.RetrievedChunk{
-			Rank:       int64(idx + 1),
+			Rank:       chunkIDs[idx].Rank,
 			DocTitle:   row.Name,
 			Position:   row.Position,
 			Text:       row.Text,
 			ID:         row.ID,
 			Breadcrumb: row.Breadcrumb,
+			Score:      chunkIDs[idx].Score,
 		}
 
 		collName := rowByID[id].CollectionName

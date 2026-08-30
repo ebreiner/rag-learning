@@ -27,14 +27,24 @@ ON CONFLICT DO
 UPDATE SET weight = excluded.weight;
 
 
--- name: InsertChunk :exec
+-- name: InsertChunk :one
 INSERT INTO chunks (
 	document_id,
 	position,
+	type,
 	text,
 	breadcrumb,
 	created_at
-) VALUES (?,?,?,?,?);
+) VALUES (?,?,?,?,?,?)
+RETURNING id;
+
+-- name: InsertChunkNodes :exec
+INSERT INTO chunk_nodes(
+	chunk_id,
+	extraction_node_id,
+	created_at,
+	position
+) VALUES(?,?,?,?);
 
 -- name: DocAlreadyChunked :one
 SELECT id
@@ -83,6 +93,7 @@ SELECT
 	e.id AS extraction_id,
 	e.document_id,
 	e.mime_type,
+	en.id AS extraction_node_id,
 	en.node_id,
 	en.parent_id,
 	en.kind,
@@ -100,9 +111,18 @@ ORDER BY en.id;
 SELECT name, weight FROM collections;
 
 -- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, d.collection_name, c.position, c.text, c.breadcrumb
+SELECT c.id, d.name, d.collection_name, c.position, c.breadcrumb, c.text
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
 WHERE c.id IN (sqlc.slice('chunk_ids'));
+
+-- name: CollectionWeightForChunkIDs :many
+SELECT chunks.id, collections.weight
+FROM chunks
+JOIN documents
+ON chunks.document_id = documents.id
+JOIN collections
+ON documents.collection_name = collections.name
+WHERE chunks.id IN (sqlc.slice('chunk_ids'));
 

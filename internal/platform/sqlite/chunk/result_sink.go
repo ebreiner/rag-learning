@@ -34,17 +34,32 @@ func (store ResultSink) SaveChunks(ctx context.Context, chunkResult step.ChunkRe
 	q := querries.New(tx)
 
 	for index := range chunkResult.ChunksToSave {
-		param := querries.InsertChunkParams{
-			Text:       chunkResult.ChunksToSave[index].Text,
+		chunk := chunkResult.ChunksToSave[index]
+		chunkParam := querries.InsertChunkParams{
+			Text:       chunk.Text,
 			DocumentID: chunkResult.DocumentID,
 			CreatedAt:  time.Now(),
-			Position:   chunkResult.ChunksToSave[index].Position,
-			Breadcrumb: chunkResult.ChunksToSave[index].Breadcrumb,
+			Position:   chunk.Position,
+			Breadcrumb: chunk.Breadcrumb,
+			Type:       string(chunk.Type),
 		}
-		err := q.InsertChunk(ctx, param)
+		chunkID, err := q.InsertChunk(ctx, chunkParam)
 		if err != nil {
 			return err
 		}
+
+		for _, extID := range chunkResult.ChunksToSave[int(index)].ExtractionNodeIDs {
+			param := querries.InsertChunkNodesParams{
+				ChunkID:          chunkID,
+				ExtractionNodeID: extID.ExtractionNodeID,
+				CreatedAt:        time.Now(),
+				Position:         extID.Position,
+			}
+			if err := q.InsertChunkNodes(ctx, param); err != nil {
+				return fmt.Errorf("error inserting chunk_nodes: %w", err)
+			}
+		}
+
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)

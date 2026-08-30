@@ -167,6 +167,21 @@ func TestBuildMap(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			// regression test: node.ExtractionNodeID must come from the row's
+			// ExtractionNodeID column (en.id, the per-node surrogate PK), not
+			// from ExtractionID (e.id, the extraction row's PK -- shared by
+			// every node in the same document). Uses distinct, deliberately
+			// mismatched values for the two so a mixup produces a visibly
+			// wrong number instead of accidentally passing.
+			name: "ExtractionNodeID comes from the row's per-node id, not the shared extraction id",
+			rows: []querries.GetLatestExtractionOfDocRow{
+				{ExtractionID: 1, ExtractionNodeID: 42, NodeID: "#/texts/0", Kind: "paragraph", Layer: "body"},
+			},
+			want: map[string]*step.ExtractionNode{
+				"#/texts/0": {ID: "#/texts/0", ExtractionNodeID: 42, Kind: step.KindParagraph, Layer: step.LayerBody},
+			},
+		},
+		{
 			name: "furniture layer",
 			rows: []querries.GetLatestExtractionOfDocRow{
 				mkRow("#/texts/0", "", "paragraph", "furniture", ""),

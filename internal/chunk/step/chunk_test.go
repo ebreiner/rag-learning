@@ -41,6 +41,14 @@ func mkTableNode(rows, cols int64, cells ...TableCell) *ExtractionNode {
 	}
 }
 
+func mkListItemNode(id int64, marker, text string) *ExtractionNode {
+	return &ExtractionNode{
+		Kind:             KindListItem,
+		ExtractionNodeID: id,
+		List:             &ListItemContent{Marker: marker, Text: text},
+	}
+}
+
 func TestWalk(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -249,6 +257,95 @@ func TestWalkTable(t *testing.T) {
 	}
 }
 
+// TestWalkList exercises the "list" case in walk(), including MemberIDs --
+// the per-child node id list that lets mergeCandidates reference each
+// list-item individually in chunk_nodes, instead of the container's own
+// (content-less) node id.
+func TestWalkList(t *testing.T) {
+	type wantCandidate struct {
+		breadcrumb string
+		text       string
+		memberIDs  []int64
+	}
+
+	tests := []struct {
+		name string
+		root *ExtractionNode
+		want []wantCandidate
+	}{
+		{
+			name: "list joins items with marker and a newline per item, and records each item's node id",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(10, "-", "first"),
+					mkListItemNode(11, "-", "second"),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "- first\n- second\n", memberIDs: []int64{10, 11}},
+			},
+		},
+		{
+			name: "list item missing content is skipped, its id is not recorded, remaining items are unaffected",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(1, "-", "keep"),
+					&ExtractionNode{Kind: KindListItem, ExtractionNodeID: 2, List: nil},
+					mkListItemNode(3, "-", "also keep"),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "- keep\n- also keep\n", memberIDs: []int64{1, 3}},
+			},
+		},
+		{
+			// mirrors group's "if len(parts) > 0" guard: a list with nothing
+			// usable inside it must not emit a stray empty-text candidate,
+			// and walk() must still continue on to process later siblings.
+			name: "list with no usable items produces no candidate, siblings still processed",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					&ExtractionNode{Kind: KindListItem, ExtractionNodeID: 1, List: nil},
+				),
+				mkParagraphNode("after"),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "after"},
+			},
+		},
+		{
+			name: "list candidate carries the active breadcrumb",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkHeadingNode(1, "Ch1"),
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(5, "-", "x"),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "Ch1", text: "- x\n", memberIDs: []int64{5}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := walk(testCtx, []*ExtractionNode{tt.root}, testLogger)
+			if err != nil {
+				t.Fatalf("walk() error = %v", err)
+			}
+
+			gotCandidates := make([]wantCandidate, len(got))
+			for i, c := range got {
+				gotCandidates[i] = wantCandidate{breadcrumb: c.Breadcrumb, text: c.Text, memberIDs: c.MemberIDs}
+			}
+
+			if diff := cmp.Diff(tt.want, gotCandidates, cmpopts.EquateEmpty(), cmp.AllowUnexported(wantCandidate{})); diff != "" {
+				t.Errorf("walk() candidates mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 // TestWalkGroup captures the design decisions for group-node support before
 // it's implemented -- walk() has no `case "group"` yet, so every case here
 // is expected to fail red (walk() currently returns "unknown node kind:
@@ -353,6 +450,21 @@ func TestMergeCandidates(t *testing.T) {
 	mkCandidate := func(breadcrumb, text string) chunkCandidate {
 		return chunkCandidate{Node: mkParagraphNode(text), Breadcrumb: breadcrumb, Text: text}
 	}
+	mkIDCandidate := func(id int64, breadcrumb, text string) chunkCandidate {
+		return chunkCandidate{
+			Node:       &ExtractionNode{Kind: KindParagraph, ExtractionNodeID: id, Paragraph: &ParagraphContent{Text: text}},
+			Breadcrumb: breadcrumb,
+			Text:       text,
+		}
+	}
+	mkContainerCandidate := func(kind NodeKind, id int64, breadcrumb, text string, memberIDs ...int64) chunkCandidate {
+		return chunkCandidate{
+			Node:       &ExtractionNode{Kind: kind, ExtractionNodeID: id},
+			Breadcrumb: breadcrumb,
+			Text:       text,
+			MemberIDs:  memberIDs,
+		}
+	}
 
 	tests := []struct {
 		name       string
@@ -371,7 +483,8 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", "B"),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\nA\n\nB", Breadcrumb: "Ch1", Position: 0},
+				{Text: "Ch1\n\nA\n\nB", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{}, {Position: 1}}},
 			},
 		},
 		{
@@ -381,8 +494,10 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch2", "B"),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0},
-				{Text: "Ch2\n\nB", Breadcrumb: "Ch2", Position: 1},
+				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{}}},
+				{Text: "Ch2\n\nB", Breadcrumb: "Ch2", Position: 1, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{Position: 1}}},
 			},
 		},
 		{
@@ -392,8 +507,10 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", strings.Repeat("b", 600)),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\n" + strings.Repeat("a", 600), Breadcrumb: "Ch1", Position: 0},
-				{Text: "Ch1\n\n" + strings.Repeat("b", 600), Breadcrumb: "Ch1", Position: 1},
+				{Text: "Ch1\n\n" + strings.Repeat("a", 600), Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{}}},
+				{Text: "Ch1\n\n" + strings.Repeat("b", 600), Breadcrumb: "Ch1", Position: 1, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{Position: 1}}},
 			},
 		},
 		{
@@ -405,8 +522,10 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", strings.Repeat("b", 200)),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\n" + strings.Repeat("a", 900), Breadcrumb: "Ch1", Position: 0},
-				{Text: "Ch1\n\n" + strings.Repeat("b", 200), Breadcrumb: "Ch1", Position: 1},
+				{Text: "Ch1\n\n" + strings.Repeat("a", 900), Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{}}},
+				{Text: "Ch1\n\n" + strings.Repeat("b", 200), Breadcrumb: "Ch1", Position: 1, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{Position: 1}}},
 			},
 		},
 		{
@@ -423,7 +542,8 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", strings.Repeat("a", 1200)),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\n" + strings.Repeat("a", 1200), Breadcrumb: "Ch1", Position: 0},
+				{Text: "Ch1\n\n" + strings.Repeat("a", 1200), Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{}}},
 			},
 		},
 		{
@@ -433,7 +553,88 @@ func TestMergeCandidates(t *testing.T) {
 				mkCandidate("Ch1", "A"),
 			},
 			want: []ChunkToSave{
-				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0},
+				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{}, {Position: 1}}},
+			},
+		},
+		// The next three cases are expected to fail red: mergeCandidates'
+		// table/group/list branches stamp the emitted ChunkToSave's
+		// Breadcrumb from `lastCrumb` (the content-merge buffer's carried-
+		// over state), not from the container candidate's own (already
+		// correct, walk()-assigned) Breadcrumb field. That's indistinguishable
+		// from correct whenever a container happens to be preceded by a
+		// content candidate under the same breadcrumb (lastCrumb already
+		// matches by coincidence -- see the splice case below), but is wrong
+		// standalone: a table/list/group with no preceding content candidate
+		// under its heading -- including one that opens a document -- gets
+		// stamped with a stale or empty breadcrumb instead of its own. Real
+		// bug, not a test mistake; left failing on purpose rather than
+		// asserting the wrong value.
+		{
+			name: "table candidate is emitted standalone, tagged, and referenced by its own node id",
+			candidates: []chunkCandidate{
+				mkContainerCandidate(KindTable, 200, "Ch1", "header | row\n"),
+			},
+			want: []ChunkToSave{
+				{Text: "header | row\n", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
+			},
+		},
+		{
+			// group's own node id must never appear in ExtractionNodeIDs --
+			// only its members', since the group container itself carries no
+			// content_json (marshalContent has no case for it).
+			name: "group candidate is referenced by its members' node ids, not its own",
+			candidates: []chunkCandidate{
+				mkContainerCandidate(KindGroup, 300, "Ch1", "AB", 10, 11),
+			},
+			want: []ChunkToSave{
+				{Text: "AB", Breadcrumb: "Ch1", Position: 0, Type: TypeGeneric,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 10}, {ExtractionNodeID: 11, Position: 1}}},
+			},
+		},
+		{
+			name: "list candidate is referenced by its members' node ids, not its own",
+			candidates: []chunkCandidate{
+				mkContainerCandidate(KindList, 400, "Ch1", "- a\n- b\n", 20, 21),
+			},
+			want: []ChunkToSave{
+				{Text: "- a\n- b\n", Breadcrumb: "Ch1", Position: 0, Type: TypeList,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 20}, {ExtractionNodeID: 21, Position: 1}}},
+			},
+		},
+		{
+			name: "a container candidate with empty text is dropped, not emitted as an empty chunk",
+			candidates: []chunkCandidate{
+				mkContainerCandidate(KindGroup, 300, "Ch1", ""),
+			},
+			want: nil,
+		},
+		{
+			name: "an unsupported candidate is dropped and never reaches the output",
+			candidates: []chunkCandidate{
+				{Node: &ExtractionNode{Kind: KindUnsupported, ExtractionNodeID: 999}, Breadcrumb: "Ch1", Text: "ignored"},
+			},
+			want: nil,
+		},
+		{
+			// regression test: a container candidate spliced between two
+			// content candidates under the same breadcrumb must neither flush
+			// nor split the surrounding buffer -- the content on both sides
+			// merges into one chunk, with the container emitted as its own
+			// separate chunk alongside it, not blocking or duplicating
+			// position numbers.
+			name: "a container candidate spliced between content candidates does not disturb the surrounding merge",
+			candidates: []chunkCandidate{
+				mkIDCandidate(100, "Ch1", "A"),
+				mkContainerCandidate(KindTable, 200, "Ch1", "TABLE"),
+				mkIDCandidate(101, "Ch1", "B"),
+			},
+			want: []ChunkToSave{
+				{Text: "TABLE", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
+				{Text: "Ch1\n\nA\n\nB", Breadcrumb: "Ch1", Position: 1, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 100}, {ExtractionNodeID: 101, Position: 1}}},
 			},
 		},
 	}

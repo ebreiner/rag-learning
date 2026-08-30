@@ -14,8 +14,16 @@ type Chunk struct {
 	CreatedAt  time.Time
 	DocumentID int64
 	Position   int64
+	Type       string
 	Text       string
 	Breadcrumb string
+}
+
+type ChunkNode struct {
+	ChunkID          int64
+	ExtractionNodeID int64
+	CreatedAt        time.Time
+	Position         int64
 }
 
 type Collection struct {

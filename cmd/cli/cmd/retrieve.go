@@ -117,7 +117,7 @@ to quickly create a Cobra application.`,
 	}
 
 	retrieveCmd.Flags().StringP("query", "q", "", "-q 'alles zur farbe grün")
-	retrieveCmd.Flags().StringP("retrieval-type", "t", "hybrid", "-t fts | embedding | hybrid")
+	retrieveCmd.Flags().StringP("retrieval-type", "t", "hybrid", "-t fts | ann | hybrid")
 	retrieveCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
 	retrieveCmd.Flags().Int64P("dim", "d", -1, "--dimension | -d 768")
 
@@ -128,11 +128,11 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 	var strategy step.RetrievalStrategy
 	switch retrievalType {
 	case "fts":
-		strategy = step.FTS
+		strategy = step.StrategyFTS
 	case "hybrid":
-		strategy = step.Hybrid
-	case "embedding":
-		strategy = step.Embedding
+		strategy = step.StrategyHybrid
+	case "ann":
+		strategy = step.StrategyANN
 	default:
 		return fmt.Errorf("unknown retrieval type: %s", retrievalType)
 	}
@@ -149,7 +149,26 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 		return err
 	}
 
-	chunks, err := step.RunRetrieval(ctx, query, strategy, 10, &hydrator, retriever, embedClient)
+	collWeigher, err := retrieval.NewCollectionWeigher(ctx, db, logger)
+	if err != nil {
+		return err
+	}
+
+	renderer, err := retrieval.NewChunkRenderer(ctx, db, logger)
+	if err != nil {
+		return err
+	}
+
+	deps := step.RetrievalDeps{
+		Logger:           logger,
+		Hydrator:         &hydrator,
+		Retriever:        retriever,
+		EmbeddingsClient: embedClient,
+		CollWeigher:      &collWeigher,
+		Renderer:         &renderer,
+	}
+
+	chunks, err := step.RunRetrieval(ctx, query, 10, strategy, deps)
 	if err != nil {
 		return err
 	}

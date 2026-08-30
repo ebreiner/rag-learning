@@ -23,7 +23,7 @@ func TestTopKByFTS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
-		if len(got) != 1 || got[0] != id {
+		if len(got) != 1 || got[0].ID != id {
 			t.Fatalf("got %v, want exactly [%d]", got, id)
 		}
 	})
@@ -46,11 +46,11 @@ func TestTopKByFTS(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("got %d results, want 2", len(got))
 		}
-		if got[0] != idStrong {
-			t.Errorf("top result = %d, want %d (the chunk repeating the term should rank first)", got[0], idStrong)
+		if got[0].ID != idStrong {
+			t.Errorf("top result = %d, want %d (the chunk repeating the term should rank first)", got[0].ID, idStrong)
 		}
-		if got[1] != idWeak {
-			t.Errorf("second result = %d, want %d", got[1], idWeak)
+		if got[1].ID != idWeak {
+			t.Errorf("second result = %d, want %d", got[1].ID, idWeak)
 		}
 	})
 
@@ -87,7 +87,7 @@ func TestTopKByFTS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
-		if len(got) != 1 || got[0] != id {
+		if len(got) != 1 || got[0].ID != id {
 			t.Fatalf("got %v, want [%d] -- chunk contains 'ldap' even though it lacks 'auth0'", got, id)
 		}
 	})
@@ -109,7 +109,7 @@ func TestTopKByFTS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
-		if len(got) != 1 || got[0] != id {
+		if len(got) != 1 || got[0].ID != id {
 			t.Fatalf("got %v, want [%d]", got, id)
 		}
 	})
@@ -128,7 +128,7 @@ func TestTopKByFTS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
-		if len(got) != 1 || got[0] != id {
+		if len(got) != 1 || got[0].ID != id {
 			t.Fatalf("got %v, want [%d] -- every word is <=2 runes, so only the raw-query fallback term can match", got, id)
 		}
 	})

@@ -97,7 +97,7 @@ func NewServeCmd() *cobra.Command {
 			}
 
 			// TODO: db mit defer schließen
-			hydrator, retriever, embedClient, closeDB, err := wireUp(ctx, dbPath, embedConfig, logger)
+			deps, closeDB, err := wireUp(ctx, dbPath, embedConfig, logger)
 
 			if err != nil {
 				if closeDB == nil {
@@ -119,7 +119,7 @@ func NewServeCmd() *cobra.Command {
 				return fmt.Errorf("error setting up querry logger: %w", err)
 			}
 
-			hybridTool := hyridRetrievalTool(&hydrator, retriever, embedClient, logger, queryLogger)
+			hybridTool := hyridRetrievalTool(deps, queryLogger)
 			tools := []server.ServerTool{hybridTool}
 			mcpHandler := MCPHandler(tools)
 			wrappedAuth := BearerAuth(apiToken, logger)(mcpHandler)

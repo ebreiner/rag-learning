@@ -37,11 +37,10 @@ lint:
 	go vet ./...
 	golangci-lint run -c golangci-lint.yaml
 
-
-e2e input-dir: build
+e2e input-dir collection-name collection-weight: build
 	#!/usr/bin/env bash
 	set -euxo pipefail
-	./main --db-path ./data/data.db extract -i {{input-dir}} --docling-url "http://127.0.0.1:5001"
+	./main --db-path ./data/data.db extract -i {{input-dir}} --docling-url "http://127.0.0.1:5001" --collection-name {{collection-name}} --collection-weight {{collection-weight}}
 	./main --db-path ./data/data.db chunk
 	./main --db-path ./data/data.db embed --openai-url "http://127.0.0.1:11434" --model bge-m3 --dim 1024
 

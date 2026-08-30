@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) (step.RetrievedChunkIDs, error) {
-	chunkIDs := make([]int64, 0)
+func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) ([]step.ScoredChunkID, error) {
+	chunkIDs := make([]step.ScoredChunkID, 0)
 
 	parts := strings.Fields(query)
 	terms := make([]string, 0, len(parts))
@@ -64,7 +64,7 @@ func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) 
 		if err := rows.Scan(&id, &score); err != nil {
 			return chunkIDs, fmt.Errorf("error scanning top k row result: %w", err)
 		}
-		chunkIDs = append(chunkIDs, id)
+		chunkIDs = append(chunkIDs, step.ScoredChunkID{ID: id, Score: score})
 	}
 	if err := rows.Err(); err != nil {
 		return chunkIDs, fmt.Errorf("error scanning rows for fts: %w", err)
