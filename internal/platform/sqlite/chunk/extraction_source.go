@@ -100,6 +100,58 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 				}
 
 			}
+		case "formula":
+			node.Kind = step.KindFormula
+			if !row.ContentJson.Valid {
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("formula node with id '%s' has no content", row.NodeID))
+			} else {
+				content := &step.FormulaContent{}
+				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
+					return nodeMap, err
+				} else {
+					node.Formula = content
+				}
+			}
+
+		case "code":
+			node.Kind = step.KindCode
+			if !row.ContentJson.Valid {
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("code node with id '%s' has no code content", row.NodeID))
+			} else {
+				content := &step.CodeContent{}
+				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
+					return nodeMap, err
+				} else {
+					node.Code = content
+				}
+			}
+
+		case "footnote":
+			node.Kind = step.KindFootnote
+			if !row.ContentJson.Valid {
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("footnote with id '%s' has no content", row.NodeID))
+			} else {
+				content := &step.ParagraphContent{}
+				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
+					return nodeMap, err
+				} else {
+					node.Paragraph = content
+				}
+			}
+
+		case "caption":
+			node.Kind = step.KindCaption
+			if !row.ContentJson.Valid {
+				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("caption with id '%s' has no content", row.NodeID))
+			} else {
+				content := &step.ParagraphContent{}
+				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
+					return nodeMap, err
+				} else {
+					node.Paragraph = content
+				}
+			}
+
 		case "paragraph":
 			node.Kind = step.KindParagraph
 			if !row.ContentJson.Valid {
@@ -146,7 +198,7 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 		case "group":
 			node.Kind = step.KindGroup
 
-		case "unsupported", "caption", "footnote", "picture":
+		case "unsupported", "picture":
 			node.Kind = step.KindUnsupported
 			logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("unsupported kind %s", row.Kind))
 		default:

@@ -406,7 +406,7 @@ func TestWalkGroup(t *testing.T) {
 					mkParagraphNode("B"),
 				),
 			),
-			want: []string{"Ch1|AB"},
+			want: []string{"Ch1|A B"},
 		},
 		{
 			// groups-in-groups: kept dumb on purpose (no recursion). A
@@ -573,11 +573,28 @@ func TestMergeCandidates(t *testing.T) {
 		{
 			name: "table candidate is emitted standalone, tagged, and referenced by its own node id",
 			candidates: []chunkCandidate{
-				mkContainerCandidate(KindTable, 200, "Ch1", "header | row\n"),
+				// walk() always seeds a table candidate's MemberIDs with the
+				// table's own node id first (position 0), then appends any
+				// consumed caption/footnote children after it.
+				mkContainerCandidate(KindTable, 200, "Ch1", "header | row\n", 200),
 			},
 			want: []ChunkToSave{
 				{Text: "header | row\n", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
+			},
+		},
+		{
+			// a table with a consumed caption: MemberIDs is [table's own id,
+			// caption's id] (walk() seeds its own id first, then appends the
+			// caption it inlined) -- both must end up referenced, table's own
+			// id still at position 0.
+			name: "table candidate referencing its own node id plus a consumed caption's node id",
+			candidates: []chunkCandidate{
+				mkContainerCandidate(KindTable, 200, "Ch1", "header | row\nFigure 1: a caption", 200, 300),
+			},
+			want: []ChunkToSave{
+				{Text: "header | row\nFigure 1: a caption", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}, {ExtractionNodeID: 300, Position: 1}}},
 			},
 		},
 		{
@@ -627,7 +644,7 @@ func TestMergeCandidates(t *testing.T) {
 			name: "a container candidate spliced between content candidates does not disturb the surrounding merge",
 			candidates: []chunkCandidate{
 				mkIDCandidate(100, "Ch1", "A"),
-				mkContainerCandidate(KindTable, 200, "Ch1", "TABLE"),
+				mkContainerCandidate(KindTable, 200, "Ch1", "TABLE", 200),
 				mkIDCandidate(101, "Ch1", "B"),
 			},
 			want: []ChunkToSave{

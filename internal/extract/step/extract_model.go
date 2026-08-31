@@ -5,8 +5,10 @@ type NodeKind string
 const (
 	KindHeading     NodeKind = "heading"
 	KindParagraph   NodeKind = "paragraph"
+	KindCode        NodeKind = "code"
 	KindCaption     NodeKind = "caption"
 	KindFootnote    NodeKind = "footnote"
+	KindFormula     NodeKind = "formula"
 	KindListItem    NodeKind = "list_item"
 	KindList        NodeKind = "list"
 	KindTable       NodeKind = "table"
@@ -36,6 +38,8 @@ type Node struct {
 
 	Heading   *HeadingContent
 	Paragraph *ParagraphContent
+	Code      *CodeContent
+	Formula   *FormulaContent
 	Caption   *ParagraphContent // same shape as paragraph
 	Footnote  *ParagraphContent
 	ListItem  *ListItemContent
@@ -65,6 +69,9 @@ type HeadingContent struct {
 	Level int64
 }
 type ParagraphContent struct{ Text string }
+
+type CodeContent struct{ Text string }
+type FormulaContent struct{ Text string }
 
 type ListItemContent struct {
 	Text       string

@@ -182,6 +182,44 @@ func TestBuildMap(t *testing.T) {
 			},
 		},
 		{
+			name: "caption maps to KindCaption, content unmarshals into Paragraph (shared shape)",
+			rows: []querries.GetLatestExtractionOfDocRow{
+				mkRow("#/texts/0", "", "caption", "body", `{"text":"Figure 1: a caption"}`),
+			},
+			want: map[string]*step.ExtractionNode{
+				"#/texts/0": {ID: "#/texts/0", Kind: step.KindCaption, Layer: step.LayerBody,
+					Paragraph: &step.ParagraphContent{Text: "Figure 1: a caption"}},
+			},
+		},
+		{
+			name: "caption without content is not an error",
+			rows: []querries.GetLatestExtractionOfDocRow{
+				mkRow("#/texts/0", "", "caption", "body", ""),
+			},
+			want: map[string]*step.ExtractionNode{
+				"#/texts/0": {ID: "#/texts/0", Kind: step.KindCaption, Layer: step.LayerBody},
+			},
+		},
+		{
+			name: "footnote maps to KindFootnote, content unmarshals into Paragraph (shared shape)",
+			rows: []querries.GetLatestExtractionOfDocRow{
+				mkRow("#/texts/0", "", "footnote", "body", `{"text":"1. see appendix"}`),
+			},
+			want: map[string]*step.ExtractionNode{
+				"#/texts/0": {ID: "#/texts/0", Kind: step.KindFootnote, Layer: step.LayerBody,
+					Paragraph: &step.ParagraphContent{Text: "1. see appendix"}},
+			},
+		},
+		{
+			name: "footnote without content is not an error",
+			rows: []querries.GetLatestExtractionOfDocRow{
+				mkRow("#/texts/0", "", "footnote", "body", ""),
+			},
+			want: map[string]*step.ExtractionNode{
+				"#/texts/0": {ID: "#/texts/0", Kind: step.KindFootnote, Layer: step.LayerBody},
+			},
+		},
+		{
 			name: "furniture layer",
 			rows: []querries.GetLatestExtractionOfDocRow{
 				mkRow("#/texts/0", "", "paragraph", "furniture", ""),
@@ -206,7 +244,7 @@ func TestBuildMap(t *testing.T) {
 		},
 	}
 
-	for _, kind := range []string{"unsupported", "caption", "footnote", "picture"} {
+	for _, kind := range []string{"unsupported", "picture"} {
 		cases = append(cases, buildMapCase{
 			name: kind + " maps to KindUnsupported",
 			rows: []querries.GetLatestExtractionOfDocRow{
