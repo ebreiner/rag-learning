@@ -138,6 +138,41 @@ func TestNewSourceDocSource(t *testing.T) {
 		}
 	})
 
+	t.Run("an unreadable file is reported once and skipped, the following file is still yielded", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, "a.md"), "a")
+		writeFile(t, filepath.Join(dir, "b.md"), "b")
+		writeFile(t, filepath.Join(dir, "c.md"), "c")
+
+		src, err := NewSourceDocSource(testCtx, dir, 1.0, "manual", testLogger)
+		if err != nil {
+			t.Fatalf("NewSourceDocSource() error = %v", err)
+		}
+		// Paths are collected at construction; removing b.md afterwards makes
+		// hashing fail for exactly that entry when it comes up.
+		if err := os.Remove(filepath.Join(dir, "b.md")); err != nil {
+			t.Fatalf("Remove: %v", err)
+		}
+
+		doc, err := src.NextSourceDoc()
+		if err != nil || doc.Name != "a.md" {
+			t.Fatalf("first NextSourceDoc() = (%q, %v), want (a.md, nil)", doc.Name, err)
+		}
+
+		if _, err := src.NextSourceDoc(); err == nil || err == io.EOF {
+			t.Fatalf("second NextSourceDoc() error = %v, want a non-EOF error for the unreadable file", err)
+		}
+
+		doc, err = src.NextSourceDoc()
+		if err != nil || doc.Name != "c.md" {
+			t.Fatalf("third NextSourceDoc() = (%q, %v), want (c.md, nil): the unreadable file must not be retried", doc.Name, err)
+		}
+
+		if _, err := src.NextSourceDoc(); err != io.EOF {
+			t.Fatalf("fourth NextSourceDoc() error = %v, want io.EOF", err)
+		}
+	})
+
 	t.Run("NextSourceDoc returns io.EOF once exhausted", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, "a.md"), "a")

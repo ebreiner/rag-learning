@@ -86,14 +86,14 @@ func (s *DocSource) NextSourceDoc() (step.SourceDoc, error) {
 	}
 	path := s.InputPaths[s.Index]
 	_, name := filepath.Split(path)
+	s.Index++
 	hash, err := calculateSHA256Content(path)
 	if err != nil {
 		return doc, err
 	}
 	doc.SHA256 = hash
 	doc.Name = name
-	doc.SourcePath = s.InputPaths[s.Index]
-	s.Index++
+	doc.SourcePath = path
 	doc.CollectionName = s.CollectionName
 	doc.CollectionWeight = s.CollectionWeight
 
