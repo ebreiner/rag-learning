@@ -113,6 +113,21 @@ func TestWalk(t *testing.T) {
 			want: []string{"|A"},
 		},
 		{
+			// Real trigger path: a docling "ordered_list" group is mapped to
+			// unsupported, whose list_item children then surface at the top
+			// level of the walk with no list parent to consume them. They must
+			// be dropped, not abort the whole run, and siblings still walk.
+			name: "orphan list_items under an unsupported parent are dropped, siblings still walk",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "unsupported"},
+					mkListItemNode(1, "1.", "first"),
+					mkListItemNode(2, "2.", "second"),
+				),
+				mkParagraphNode("after"),
+			),
+			want: []string{"|after"},
+		},
+		{
 			name: "unknown kind returns an error",
 			root: withChildren(&ExtractionNode{Kind: "unsupported"},
 				&ExtractionNode{Kind: "bogus"},

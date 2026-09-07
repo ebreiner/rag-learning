@@ -105,7 +105,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 		stack = stack[:len(stack)-1]
 
 		switch node.Kind {
-		case KindCaption, KindFootnote:
+		case KindCaption, KindFootnote, KindListItem:
 			parentKind, parentID := "none", "none"
 			if node.Parent != nil {
 				parentKind, parentID = string(node.Parent.Kind), node.Parent.ID
