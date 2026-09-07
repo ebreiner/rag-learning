@@ -114,9 +114,21 @@ func FlushAllEmbeddings(ctx context.Context, db *sql.DB, logger *slog.Logger) er
 }
 
 func FlushChunkTable(ctx context.Context, db *sql.DB) error {
-	q := querries.New(db)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	q := querries.New(tx)
+	defer tx.Rollback()
+	if err := q.FlushChunkNodes(ctx); err != nil {
+		return err
+	}
 	if err := q.FlushChunks(ctx); err != nil {
 		return err
 	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -52,6 +52,9 @@ FROM chunks
 WHERE document_id = ?
 LIMIT 1;
 
+-- name: FlushChunkNodes :exec
+DELETE FROM chunk_nodes;
+
 -- name: FlushChunks :exec
 DELETE FROM chunks;
 

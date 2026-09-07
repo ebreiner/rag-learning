@@ -212,6 +212,15 @@ func (q *Queries) ExistsDocument(ctx context.Context, sha256 string) (ExistsDocu
 	return i, err
 }
 
+const flushChunkNodes = `-- name: FlushChunkNodes :exec
+DELETE FROM chunk_nodes
+`
+
+func (q *Queries) FlushChunkNodes(ctx context.Context) error {
+	_, err := q.exec(ctx, q.flushChunkNodesStmt, flushChunkNodes)
+	return err
+}
+
 const flushChunks = `-- name: FlushChunks :exec
 DELETE FROM chunks
 `

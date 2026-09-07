@@ -68,6 +68,8 @@ type ExtractionNode struct {
 	Paragraph        *ParagraphContent
 	Code             *CodeContent
 	Formula          *FormulaContent
+	Caption          *CaptionContent
+	Footnote         *FootnoteContent
 	Heading          *HeadingContent
 	List             *ListItemContent
 	Table            *TableContent
@@ -94,6 +96,14 @@ type HeadingContent struct {
 }
 
 type ParagraphContent struct {
+	Text string `json:"text"`
+}
+
+type CaptionContent struct {
+	Text string `json:"text"`
+}
+
+type FootnoteContent struct {
 	Text string `json:"text"`
 }
 

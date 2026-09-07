@@ -299,13 +299,21 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			candidate.MemberIDs = []int64{node.ExtractionNodeID}
 			for _, child := range node.Children {
 				switch child.Kind {
-				case KindCaption, KindFootnote:
-					if child.Paragraph != nil && len(child.Paragraph.Text) > 0 {
-						candidate.Text = candidate.Text + "\n" + child.Paragraph.Text
+				case KindCaption:
+					if child.Caption != nil && len(child.Caption.Text) > 0 {
+						candidate.Text = candidate.Text + "\n" + child.Caption.Text
 						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
 					} else {
-						logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("empty '%s'", child.Kind))
+						logger.WarnContext(ctx, "walk-nodes", "warn", "empty caption")
 					}
+				case KindFootnote:
+					if child.Footnote != nil && len(child.Footnote.Text) > 0 {
+						candidate.Text = candidate.Text + "\n" + child.Footnote.Text
+						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
+					} else {
+						logger.WarnContext(ctx, "walk-nodes", "warn", "empty footnote")
+					}
+
 				default:
 					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("table children of unsupported type: '%s'", child.Kind))
 				}

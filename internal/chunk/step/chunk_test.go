@@ -276,6 +276,41 @@ func TestWalkTable(t *testing.T) {
 // the per-child node id list that lets mergeCandidates reference each
 // list-item individually in chunk_nodes, instead of the container's own
 // (content-less) node id.
+// The table case must inline-consume its caption/footnote children into its
+// own candidate (text appended, ids recorded after the table's own id) and
+// must not let them fall through to the generic child push, where the
+// walk's "not consumed by its parent" guard would drop them.
+func TestWalkTableConsumesCaptionAndFootnote(t *testing.T) {
+	table := mkTableNode(2, 1,
+		TableCell{Text: "Name", RowStart: 0, RowEnd: 0, ColStart: 0, ColEnd: 0, IsColumnHeader: true},
+		TableCell{Text: "Widget", RowStart: 1, RowEnd: 1, ColStart: 0, ColEnd: 0},
+	)
+	table.ExtractionNodeID = 200
+	caption := &ExtractionNode{Kind: KindCaption, ExtractionNodeID: 300, Caption: &CaptionContent{Text: "Table 1: widgets"}}
+	footnote := &ExtractionNode{Kind: KindFootnote, ExtractionNodeID: 400, Footnote: &FootnoteContent{Text: "1. prices excl. VAT"}}
+	emptyCaption := &ExtractionNode{Kind: KindCaption, ExtractionNodeID: 500, Caption: &CaptionContent{Text: ""}}
+	root := withChildren(&ExtractionNode{Kind: "unsupported"},
+		withChildren(table, caption, footnote, emptyCaption),
+	)
+
+	got, err := walk(testCtx, []*ExtractionNode{root}, testLogger)
+	if err != nil {
+		t.Fatalf("walk() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want exactly 1 (the table): %+v", len(got), got)
+	}
+
+	wantText := "Name\nWidget\n\nTable 1: widgets\n1. prices excl. VAT"
+	if diff := cmp.Diff(wantText, got[0].Text); diff != "" {
+		t.Errorf("table text mismatch (-want +got):\n%s", diff)
+	}
+	wantIDs := []int64{200, 300, 400}
+	if diff := cmp.Diff(wantIDs, got[0].MemberIDs); diff != "" {
+		t.Errorf("MemberIDs mismatch, empty caption must not be recorded (-want +got):\n%s", diff)
+	}
+}
+
 func TestWalkList(t *testing.T) {
 	type wantCandidate struct {
 		breadcrumb string

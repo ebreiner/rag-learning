@@ -40,8 +40,8 @@ type Node struct {
 	Paragraph *ParagraphContent
 	Code      *CodeContent
 	Formula   *FormulaContent
-	Caption   *ParagraphContent // same shape as paragraph
-	Footnote  *ParagraphContent
+	Caption   *CaptionContent // same shape as paragraph
+	Footnote  *FootnoteContent
 	ListItem  *ListItemContent
 	Table     *TableContent
 	Picture   *PictureContent
@@ -72,6 +72,8 @@ type ParagraphContent struct{ Text string }
 
 type CodeContent struct{ Text string }
 type FormulaContent struct{ Text string }
+type CaptionContent struct{ Text string }
+type FootnoteContent struct{ Text string }
 
 type ListItemContent struct {
 	Text       string

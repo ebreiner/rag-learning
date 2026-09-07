@@ -131,11 +131,11 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 			if !row.ContentJson.Valid {
 				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("footnote with id '%s' has no content", row.NodeID))
 			} else {
-				content := &step.ParagraphContent{}
+				content := &step.FootnoteContent{}
 				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
 					return nodeMap, err
 				} else {
-					node.Paragraph = content
+					node.Footnote = content
 				}
 			}
 
@@ -144,11 +144,11 @@ func buildMap(rows []querries.GetLatestExtractionOfDocRow, ctx context.Context, 
 			if !row.ContentJson.Valid {
 				logger.WarnContext(ctx, "next_extraction", "warn", fmt.Sprintf("caption with id '%s' has no content", row.NodeID))
 			} else {
-				content := &step.ParagraphContent{}
+				content := &step.CaptionContent{}
 				if err := json.Unmarshal([]byte(row.ContentJson.String), content); err != nil {
 					return nodeMap, err
 				} else {
-					node.Paragraph = content
+					node.Caption = content
 				}
 			}
 

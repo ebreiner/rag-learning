@@ -51,8 +51,8 @@ func TestTextNodeLabelCoverage(t *testing.T) {
 		{"section_header", step.KindHeading},
 		{"title", step.KindHeading},
 		{"list_item", step.KindListItem},
-		{"caption", step.KindUnsupported},
-		{"footnote", step.KindUnsupported},
+		{"caption", step.KindCaption},
+		{"footnote", step.KindFootnote},
 		{"page_header", step.KindUnsupported},
 		{"page_footer", step.KindUnsupported},
 		{"code", step.KindCode},
@@ -66,11 +66,10 @@ func TestTextNodeLabelCoverage(t *testing.T) {
 		{"grading_scale", step.KindUnsupported},
 		{"handwritten_text", step.KindUnsupported},
 		{"empty_value", step.KindUnsupported},
-		// NOTE: "paragraph" is a distinct DocItemLabel from "text" in
-		// docling-core's own enum. Mapped Unsupported here on the assumption
-		// they're not interchangeable in practice -- flip this to
-		// step.KindParagraph if a live doc ever proves otherwise.
-		{"paragraph", step.KindUnsupported},
+		// "paragraph" is a distinct DocItemLabel from "text" in docling-core's
+		// enum, but live corpus logs (844 items, 2026-09-07) showed it is
+		// plain body prose in practice, so it folds into the paragraph node.
+		{"paragraph", step.KindParagraph},
 		{"reference", step.KindUnsupported},
 		{"field_region", step.KindUnsupported},
 		{"field_heading", step.KindUnsupported},
