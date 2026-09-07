@@ -61,15 +61,13 @@ func (c ClientKreuzberg) runEmbedding(ctx context.Context, texts []string) (embe
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error received for embedding request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error reading response body: %w", err)
 	}
-	err = httpResp.Body.Close()
-	if err != nil {
-		return embedResp{}, fmt.Errorf("error closing response body: %w", err)
-	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s", string(body))
 	}
