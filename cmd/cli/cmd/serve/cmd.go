@@ -31,7 +31,7 @@ func NewServeCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
-			logger.With(logging.KeyStep, "serve-mcp")
+			logger = logger.With(logging.KeyStep, "serve-mcp")
 			defer func() {
 				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
