@@ -106,6 +106,8 @@ to quickly create a Cobra application.`,
 				} else {
 					return err
 				}
+			} else {
+				return fmt.Errorf("missing embedding provider url flag")
 			}
 
 			err = step.Embed(ctx, sink, source, embedClient, logger)

@@ -102,6 +102,8 @@ to quickly create a Cobra application.`,
 				} else {
 					return err
 				}
+			} else {
+				return fmt.Errorf("missing embedding provider url")
 			}
 
 			retrievalTypeFlag := cmd.Flag("retrieval-type")
