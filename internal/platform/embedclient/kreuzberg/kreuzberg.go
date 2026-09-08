@@ -59,7 +59,7 @@ func (c ClientKreuzberg) runEmbedding(ctx context.Context, texts []string) (embe
 	}
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error received for embedding request: %w", err)
+		return embedResp{}, fmt.Errorf("%w: %w", step.ErrProviderUnreachable, err)
 	}
 	defer httpResp.Body.Close()
 

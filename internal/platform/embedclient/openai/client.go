@@ -131,7 +131,7 @@ func (c ClientOpenAI) runEmbedding(ctx context.Context, texts []string) (embeddi
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return embeddingResponse{}, err
+		return embeddingResponse{}, fmt.Errorf("%w: %w", step.ErrProviderUnreachable, err)
 	}
 	defer resp.Body.Close()
 

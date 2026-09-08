@@ -92,6 +92,8 @@ func embedWithFallback(ctx context.Context, client EmbedClient, chunks []ChunkTo
 	result, err := client.EmbedChunks(ctx, chunks)
 	if err == nil {
 		return result, nil
+	} else if errors.Is(err, ErrProviderUnreachable) {
+		return EmbeddingsToSave{}, err
 	}
 
 	if len(chunks) == 1 {

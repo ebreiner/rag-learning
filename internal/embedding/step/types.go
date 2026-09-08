@@ -1,5 +1,9 @@
 package step
 
+import "errors"
+
+var ErrProviderUnreachable = errors.New("embedding provider unreachable")
+
 type EmbeddingsToSave struct {
 	Embeddings []Embedding
 	Model      string

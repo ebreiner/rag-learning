@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -238,6 +239,32 @@ func TestEmbedChunks(t *testing.T) {
 		_, err := client.EmbedChunks(testCtx, chunks)
 		if err == nil {
 			t.Fatalf("expected an error for index 7 on 2 chunks, got nil")
+		}
+	})
+
+	t.Run("a connection failure is reported as ErrProviderUnreachable", func(t *testing.T) {
+		server := &fakeEmbedServer{vectorLen: 4}
+		client, ts := newTestClient(t, server, 4)
+		ts.Close() // nothing listens on the URL any more
+
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
+		if !errors.Is(err, step.ErrProviderUnreachable) {
+			t.Fatalf("error = %v, want one wrapping step.ErrProviderUnreachable", err)
+		}
+	})
+
+	t.Run("a non-200 response is NOT ErrProviderUnreachable, it stays on the model-failure path", func(t *testing.T) {
+		// A 500 from Ollama can be a genuine per-batch model failure, which
+		// is exactly what embedWithFallback's bisect is for.
+		server := &fakeEmbedServer{vectorLen: 4, statusCode: http.StatusInternalServerError, rawBody: "model choked"}
+		client, _ := newTestClient(t, server, 4)
+
+		_, err := client.EmbedChunks(testCtx, []step.ChunkToEmbed{{ChunkID: 1, Text: "hello"}})
+		if err == nil {
+			t.Fatalf("expected an error for a 500 response")
+		}
+		if errors.Is(err, step.ErrProviderUnreachable) {
+			t.Errorf("a 500 response must not be classified as unreachable: %v", err)
 		}
 	})
 }
