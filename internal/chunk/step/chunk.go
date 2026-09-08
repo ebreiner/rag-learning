@@ -172,12 +172,23 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			candidate := chunkCandidate{}
 			candidate.MemberIDs = make([]int64, 0)
 			for _, child := range node.Children {
-				if child.List == nil || child.List.Text == "" {
+				if child.List == nil {
 					logger.WarnContext(ctx, "walk-nodes", "warn", "warning: list_item missing content, skipping")
 					continue
 				}
-				candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
-				parts = append(parts, child.List.Marker+" "+child.List.Text)
+				text := child.List.Text
+				ids := []int64{child.ExtractionNodeID}
+				if text == "" {
+					var fragIDs []int64
+					text, fragIDs = inlineText(child)
+					ids = append(ids, fragIDs...)
+				}
+				if text == "" {
+					logger.WarnContext(ctx, "walk-nodes", "warn", "warning: list_item missing content, skipping")
+					continue
+				}
+				candidate.MemberIDs = append(candidate.MemberIDs, ids...)
+				parts = append(parts, child.List.Marker+" "+text)
 			}
 			if len(parts) > 0 {
 				text := ""
@@ -523,4 +534,30 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 
 func tokenCount(text string) int {
 	return len(text)
+}
+
+// Docling emits `- **Bold:** rest` as list_item(text="") + group[text, text], helps joining
+func inlineText(node *ExtractionNode) (string, []int64) {
+	var parts []string
+	var ids []int64
+	for _, g := range node.Children {
+		if g.Kind != KindGroup {
+			continue
+		}
+		for _, p := range g.Children {
+			if p.Kind != KindParagraph || p.Paragraph == nil || p.Paragraph.Text == "" {
+				continue
+			}
+			parts = append(parts, p.Paragraph.Text)
+			ids = append(ids, p.ExtractionNodeID)
+		}
+	}
+	text := ""
+	for _, s := range parts {
+		if text != "" && !unicode.IsSpace([]rune(text)[len([]rune(text))-1]) && !unicode.IsSpace([]rune(s)[0]) {
+			text += " "
+		}
+		text += s
+	}
+	return text, ids
 }

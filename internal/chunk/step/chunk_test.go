@@ -385,6 +385,45 @@ func TestWalkList(t *testing.T) {
 			},
 		},
 		{
+			// Docling emits a markdown item with inline formatting, e.g.
+			// `- **TCP verschlüsselt:** Die TCP Verbindung ...`, as a list_item
+			// with EMPTY text plus an inline group child holding the fragments.
+			// 926 of 1557 corpus list items had this shape and were dropped
+			// (2026-09-08, 135k chars). The item text must be assembled from
+			// the fragments, and their node ids recorded alongside the item's.
+			name: "list item with empty text takes its text from an inline group child",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(1, "-", "plain"),
+					withChildren(mkListItemNode(2, "-", ""),
+						withChildren(&ExtractionNode{Kind: KindGroup, ExtractionNodeID: 20},
+							&ExtractionNode{Kind: KindParagraph, ExtractionNodeID: 21, Paragraph: &ParagraphContent{Text: "TCP verschlüsselt:"}},
+							&ExtractionNode{Kind: KindParagraph, ExtractionNodeID: 22, Paragraph: &ParagraphContent{Text: "Der Standardport ist 8883."}},
+						),
+					),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "- plain\n- TCP verschlüsselt: Der Standardport ist 8883.\n", memberIDs: []int64{1, 2, 21, 22}},
+			},
+		},
+		{
+			name: "list item with empty text and only empty fragments is still skipped",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(1, "-", "keep"),
+					withChildren(mkListItemNode(2, "-", ""),
+						withChildren(&ExtractionNode{Kind: KindGroup, ExtractionNodeID: 20},
+							&ExtractionNode{Kind: KindParagraph, ExtractionNodeID: 21, Paragraph: &ParagraphContent{Text: ""}},
+						),
+					),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "- keep\n", memberIDs: []int64{1}},
+			},
+		},
+		{
 			// mirrors group's "if len(parts) > 0" guard: a list with nothing
 			// usable inside it must not emit a stray empty-text candidate,
 			// and walk() must still continue on to process later siblings.
