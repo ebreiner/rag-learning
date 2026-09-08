@@ -140,21 +140,14 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 	}
 
 	ctx := context.Background()
-	hydrator, err := retrieval.NewChunkHydrator(ctx, db, logger)
-	if err != nil {
-		return err
-
-	}
+	hydrator := retrieval.NewChunkHydrator(db, logger)
 
 	retriever, err := retrieval.NewSQLiteRetriever(db, logger)
 	if err != nil {
 		return err
 	}
 
-	collWeigher, err := retrieval.NewCollectionWeigher(ctx, db, logger)
-	if err != nil {
-		return err
-	}
+	collWeigher := retrieval.NewCollectionWeigher(db, logger)
 
 	renderer, err := retrieval.NewChunkRenderer(ctx, db, logger)
 	if err != nil {

@@ -398,10 +398,19 @@ func (q *Queries) InsertChunkNodes(ctx context.Context, arg InsertChunkNodesPara
 }
 
 const retrievalChunksByIDs = `-- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, d.collection_name, c.position, c.breadcrumb, c.text
+SELECT
+	c.id,
+	d.name,
+	d.collection_name,
+	w.weight,
+	c.position,
+	c.breadcrumb,
+	c.text
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
+JOIN collections AS w
+	ON d.collection_name = w.name
 WHERE c.id IN (/*SLICE:chunk_ids*/?)
 `
 
@@ -409,6 +418,7 @@ type RetrievalChunksByIDsRow struct {
 	ID             int64
 	Name           string
 	CollectionName string
+	Weight         float64
 	Position       int64
 	Breadcrumb     string
 	Text           string
@@ -437,6 +447,7 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 			&i.ID,
 			&i.Name,
 			&i.CollectionName,
+			&i.Weight,
 			&i.Position,
 			&i.Breadcrumb,
 			&i.Text,

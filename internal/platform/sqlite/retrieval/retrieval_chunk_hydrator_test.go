@@ -54,28 +54,6 @@ func insertChunkInCollection(t *testing.T, db *sql.DB, text, collectionName stri
 	return chunkID
 }
 
-func TestNewChunkHydrator(t *testing.T) {
-	t.Run("errors when the collections table is empty", func(t *testing.T) {
-		db := sqlitetest.New(t)
-		ctx := context.Background()
-
-		_, err := NewChunkHydrator(ctx, db, testLogger)
-		if err == nil {
-			t.Fatalf("NewChunkHydrator() error = nil, want an error for an empty collections table")
-		}
-	})
-
-	t.Run("succeeds once at least one collection exists", func(t *testing.T) {
-		db := sqlitetest.New(t)
-		ctx := context.Background()
-		insertChunkInCollection(t, db, "seed chunk", "manual", 1.0)
-
-		if _, err := NewChunkHydrator(ctx, db, testLogger); err != nil {
-			t.Fatalf("NewChunkHydrator() error = %v", err)
-		}
-	})
-}
-
 func TestHydrateChunks(t *testing.T) {
 	t.Run("populates collection name and weight via the documents join", func(t *testing.T) {
 		db := sqlitetest.New(t)
@@ -83,10 +61,7 @@ func TestHydrateChunks(t *testing.T) {
 		manualID := insertChunkInCollection(t, db, "manual chunk", "manual", 0.8)
 		changelogID := insertChunkInCollection(t, db, "changelog chunk", "changelog", 0.3)
 
-		hydrator, err := NewChunkHydrator(ctx, db, testLogger)
-		if err != nil {
-			t.Fatalf("NewChunkHydrator() error = %v", err)
-		}
+		hydrator := NewChunkHydrator(db, testLogger)
 
 		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: manualID}, {ID: changelogID}})
 		if err != nil {
@@ -109,23 +84,28 @@ func TestHydrateChunks(t *testing.T) {
 		}
 	})
 
-	t.Run("errors when a chunk's collection was created after the hydrator snapshot was taken", func(t *testing.T) {
+	t.Run("hydrates a chunk whose collection was created after the hydrator was constructed", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
 		insertChunkInCollection(t, db, "early chunk", "early-collection", 1.0)
 
-		hydrator, err := NewChunkHydrator(ctx, db, testLogger)
-		if err != nil {
-			t.Fatalf("NewChunkHydrator() error = %v", err)
-		}
+		hydrator := NewChunkHydrator(db, testLogger)
 
-		// Simulates a serve-time extract happening after the server (and its
-		// hydrator's collection-weight snapshot) already started.
+		// Simulates an extract run adding a new collection while `serve mcp`
+		// is already up. The old startup snapshot made every query touching
+		// the new collection fail until restart; the weight now comes from
+		// the hydration query's join, so there is no snapshot to go stale.
 		lateID := insertChunkInCollection(t, db, "late chunk", "late-collection", 0.5)
 
 		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: lateID}})
-		if err == nil {
-			t.Fatalf("HydrateChunks() error = nil, want an error for a collection unknown to the snapshot, got chunks %+v", chunks)
+		if err != nil {
+			t.Fatalf("HydrateChunks() error = %v, want nil for a collection created after construction", err)
+		}
+		if len(chunks) != 1 {
+			t.Fatalf("got %d chunks, want 1", len(chunks))
+		}
+		if got := chunks[0]; got.CollectionName != "late-collection" || got.CollectionWeight != 0.5 {
+			t.Errorf("late chunk collection = (%q, %v), want (%q, %v)", got.CollectionName, got.CollectionWeight, "late-collection", 0.5)
 		}
 	})
 
@@ -134,10 +114,7 @@ func TestHydrateChunks(t *testing.T) {
 		ctx := context.Background()
 		insertChunkInCollection(t, db, "real chunk", "manual", 1.0)
 
-		hydrator, err := NewChunkHydrator(ctx, db, testLogger)
-		if err != nil {
-			t.Fatalf("NewChunkHydrator() error = %v", err)
-		}
+		hydrator := NewChunkHydrator(db, testLogger)
 
 		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: 999999}})
 		if err != nil {
@@ -154,10 +131,7 @@ func TestHydrateChunks(t *testing.T) {
 		idA := insertChunkInCollection(t, db, "chunk A", "manual", 1.0)
 		idB := insertChunkInCollection(t, db, "chunk B", "manual", 1.0)
 
-		hydrator, err := NewChunkHydrator(ctx, db, testLogger)
-		if err != nil {
-			t.Fatalf("NewChunkHydrator() error = %v", err)
-		}
+		hydrator := NewChunkHydrator(db, testLogger)
 
 		// Rank/Score are set here because HydrateChunks no longer derives
 		// Rank from position -- it's the caller's job (rrfMerge/runFTS/

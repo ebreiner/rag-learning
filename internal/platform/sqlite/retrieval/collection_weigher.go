@@ -3,39 +3,24 @@ package retrieval
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"rag/internal/platform/sqlite/querries"
 	"rag/internal/retrieval/step"
 )
 
 type CollectionWeigher struct {
-	db          *sql.DB
-	q           *querries.Queries
-	Logger      *slog.Logger
-	collections map[string]float64
+	db     *sql.DB
+	q      *querries.Queries
+	Logger *slog.Logger
 }
 
-func NewCollectionWeigher(ctx context.Context, db *sql.DB, logger *slog.Logger) (CollectionWeigher, error) {
-	rows, err := querries.New(db).GetAllCollectionWeights(ctx)
-	if err != nil {
-		return CollectionWeigher{}, err
-	}
-	if len(rows) == 0 {
-		return CollectionWeigher{}, fmt.Errorf("empty collection table")
-	}
-
-	collMap := make(map[string]float64)
-	for _, row := range rows {
-		collMap[row.Name] = row.Weight
-	}
-
-	weigher := CollectionWeigher{collections: collMap}
+func NewCollectionWeigher(db *sql.DB, logger *slog.Logger) CollectionWeigher {
+	weigher := CollectionWeigher{}
 	weigher.db = db
 	weigher.q = querries.New(db)
 	weigher.Logger = logger
 
-	return weigher, nil
+	return weigher
 }
 
 func (c *CollectionWeigher) WeighChunks(ctx context.Context, chunkIDs []step.ScoredChunkID) (map[int64]float64, error) {
