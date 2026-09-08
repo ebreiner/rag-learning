@@ -113,6 +113,21 @@ func TestWalk(t *testing.T) {
 			want: []string{"|A"},
 		},
 		{
+			// Real trigger path: a docling "ordered_list" group is mapped to
+			// unsupported, whose list_item children then surface at the top
+			// level of the walk with no list parent to consume them. They must
+			// be dropped, not abort the whole run, and siblings still walk.
+			name: "orphan list_items under an unsupported parent are dropped, siblings still walk",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "unsupported"},
+					mkListItemNode(1, "1.", "first"),
+					mkListItemNode(2, "2.", "second"),
+				),
+				mkParagraphNode("after"),
+			),
+			want: []string{"|after"},
+		},
+		{
 			name: "unknown kind returns an error",
 			root: withChildren(&ExtractionNode{Kind: "unsupported"},
 				&ExtractionNode{Kind: "bogus"},
@@ -195,6 +210,42 @@ func TestWalkTable(t *testing.T) {
 			want: []string{"|Group | Group\nA | B\n"},
 		},
 		{
+			// Docling has no "number of header rows" field; header-ness is a
+			// per-cell flag. A table with no header cells at all is a plain
+			// grid where row 0 is data. Starting the data loop at a hardcoded
+			// row 1 silently dropped that first row.
+			name: "table without header cells emits row 0 as data",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(2, 2,
+					TableCell{Text: "A", RowStart: 0, RowEnd: 0, ColStart: 0, ColEnd: 0},
+					TableCell{Text: "B", RowStart: 0, RowEnd: 0, ColStart: 1, ColEnd: 1},
+					TableCell{Text: "C", RowStart: 1, RowEnd: 1, ColStart: 0, ColEnd: 0},
+					TableCell{Text: "D", RowStart: 1, RowEnd: 1, ColStart: 1, ColEnd: 1},
+				),
+			),
+			want: []string{"|\nA | B\nC | D\n"},
+		},
+		{
+			// A grouped header occupies rows 0 and 1; data starts at row 2.
+			// With the hardcoded row-1 start, row 1 rendered as an all-empty
+			// data line. Known and accepted wart, documented here rather than
+			// fixed: the per-column header map keeps only the last header cell
+			// seen per column, so the "Register" group label is lost.
+			name: "two-row header starts data at row 2 without a blank line",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(3, 3,
+					TableCell{Text: "Register", RowStart: 0, RowEnd: 0, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "Bits", RowStart: 0, RowEnd: 1, ColStart: 2, ColEnd: 2, IsColumnHeader: true},
+					TableCell{Text: "Lo", RowStart: 1, RowEnd: 1, ColStart: 0, ColEnd: 0, IsColumnHeader: true},
+					TableCell{Text: "Hi", RowStart: 1, RowEnd: 1, ColStart: 1, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "0x01", RowStart: 2, RowEnd: 2, ColStart: 0, ColEnd: 0},
+					TableCell{Text: "0x02", RowStart: 2, RowEnd: 2, ColStart: 1, ColEnd: 1},
+					TableCell{Text: "16", RowStart: 2, RowEnd: 2, ColStart: 2, ColEnd: 2},
+				),
+			),
+			want: []string{"|Lo | Hi | Bits\n0x01 | 0x02 | 16\n"},
+		},
+		{
 			name: "nil table content is skipped without panicking",
 			root: withChildren(&ExtractionNode{Kind: "unsupported"},
 				&ExtractionNode{Kind: "table", Table: nil},
@@ -261,6 +312,41 @@ func TestWalkTable(t *testing.T) {
 // the per-child node id list that lets mergeCandidates reference each
 // list-item individually in chunk_nodes, instead of the container's own
 // (content-less) node id.
+// The table case must inline-consume its caption/footnote children into its
+// own candidate (text appended, ids recorded after the table's own id) and
+// must not let them fall through to the generic child push, where the
+// walk's "not consumed by its parent" guard would drop them.
+func TestWalkTableConsumesCaptionAndFootnote(t *testing.T) {
+	table := mkTableNode(2, 1,
+		TableCell{Text: "Name", RowStart: 0, RowEnd: 0, ColStart: 0, ColEnd: 0, IsColumnHeader: true},
+		TableCell{Text: "Widget", RowStart: 1, RowEnd: 1, ColStart: 0, ColEnd: 0},
+	)
+	table.ExtractionNodeID = 200
+	caption := &ExtractionNode{Kind: KindCaption, ExtractionNodeID: 300, Caption: &CaptionContent{Text: "Table 1: widgets"}}
+	footnote := &ExtractionNode{Kind: KindFootnote, ExtractionNodeID: 400, Footnote: &FootnoteContent{Text: "1. prices excl. VAT"}}
+	emptyCaption := &ExtractionNode{Kind: KindCaption, ExtractionNodeID: 500, Caption: &CaptionContent{Text: ""}}
+	root := withChildren(&ExtractionNode{Kind: "unsupported"},
+		withChildren(table, caption, footnote, emptyCaption),
+	)
+
+	got, err := walk(testCtx, []*ExtractionNode{root}, testLogger)
+	if err != nil {
+		t.Fatalf("walk() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want exactly 1 (the table): %+v", len(got), got)
+	}
+
+	wantText := "Name\nWidget\n\nTable 1: widgets\n1. prices excl. VAT"
+	if diff := cmp.Diff(wantText, got[0].Text); diff != "" {
+		t.Errorf("table text mismatch (-want +got):\n%s", diff)
+	}
+	wantIDs := []int64{200, 300, 400}
+	if diff := cmp.Diff(wantIDs, got[0].MemberIDs); diff != "" {
+		t.Errorf("MemberIDs mismatch, empty caption must not be recorded (-want +got):\n%s", diff)
+	}
+}
+
 func TestWalkList(t *testing.T) {
 	type wantCandidate struct {
 		breadcrumb string
@@ -296,6 +382,45 @@ func TestWalkList(t *testing.T) {
 			),
 			want: []wantCandidate{
 				{breadcrumb: "", text: "- keep\n- also keep\n", memberIDs: []int64{1, 3}},
+			},
+		},
+		{
+			// Docling emits a markdown item with inline formatting, e.g.
+			// `- **TCP verschlüsselt:** Die TCP Verbindung ...`, as a list_item
+			// with EMPTY text plus an inline group child holding the fragments.
+			// 926 of 1557 corpus list items had this shape and were dropped
+			// (2026-09-08, 135k chars). The item text must be assembled from
+			// the fragments, and their node ids recorded alongside the item's.
+			name: "list item with empty text takes its text from an inline group child",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(1, "-", "plain"),
+					withChildren(mkListItemNode(2, "-", ""),
+						withChildren(&ExtractionNode{Kind: KindGroup, ExtractionNodeID: 20},
+							&ExtractionNode{Kind: KindParagraph, ExtractionNodeID: 21, Paragraph: &ParagraphContent{Text: "TCP verschlüsselt:"}},
+							&ExtractionNode{Kind: KindParagraph, ExtractionNodeID: 22, Paragraph: &ParagraphContent{Text: "Der Standardport ist 8883."}},
+						),
+					),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "- plain\n- TCP verschlüsselt: Der Standardport ist 8883.\n", memberIDs: []int64{1, 2, 21, 22}},
+			},
+		},
+		{
+			name: "list item with empty text and only empty fragments is still skipped",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				withChildren(&ExtractionNode{Kind: "list"},
+					mkListItemNode(1, "-", "keep"),
+					withChildren(mkListItemNode(2, "-", ""),
+						withChildren(&ExtractionNode{Kind: KindGroup, ExtractionNodeID: 20},
+							&ExtractionNode{Kind: KindParagraph, ExtractionNodeID: 21, Paragraph: &ParagraphContent{Text: ""}},
+						),
+					),
+				),
+			),
+			want: []wantCandidate{
+				{breadcrumb: "", text: "- keep\n", memberIDs: []int64{1}},
 			},
 		},
 		{

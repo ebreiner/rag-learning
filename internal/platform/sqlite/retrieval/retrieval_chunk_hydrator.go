@@ -10,33 +10,18 @@ import (
 )
 
 type ChunkHydrator struct {
-	db          *sql.DB
-	q           *querries.Queries
-	Logger      *slog.Logger
-	collections map[string]float64
+	db     *sql.DB
+	q      *querries.Queries
+	Logger *slog.Logger
 }
 
-func NewChunkHydrator(ctx context.Context, db *sql.DB, logger *slog.Logger) (ChunkHydrator, error) {
-	rows, err := querries.New(db).GetAllCollectionWeights(ctx)
-	if err != nil {
-		return ChunkHydrator{}, err
-	}
-	if len(rows) == 0 {
-		return ChunkHydrator{}, fmt.Errorf("empty collection table")
-	}
-
-	collMap := make(map[string]float64)
-	for _, row := range rows {
-		collMap[row.Name] = row.Weight
-	}
-
+func NewChunkHydrator(db *sql.DB, logger *slog.Logger) ChunkHydrator {
 	hydrator := ChunkHydrator{}
-	hydrator.collections = collMap
 	hydrator.db = db
 	hydrator.q = querries.New(hydrator.db)
 	hydrator.Logger = logger
 
-	return hydrator, nil
+	return hydrator
 }
 
 func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs []step.ScoredChunkID) ([]step.RetrievedChunk, error) {
@@ -76,13 +61,8 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs []step.Score
 			Score:      chunkIDs[idx].Score,
 		}
 
-		collName := rowByID[id].CollectionName
-		if weight, ok := h.collections[collName]; !ok {
-			return chunks, fmt.Errorf("docs collection not found in collection cache")
-		} else {
-			chunk.CollectionWeight = weight
-			chunk.CollectionName = collName
-		}
+		chunk.CollectionWeight = row.Weight
+		chunk.CollectionName = row.CollectionName
 
 		chunks = append(chunks, chunk)
 	}

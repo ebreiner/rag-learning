@@ -105,7 +105,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 		stack = stack[:len(stack)-1]
 
 		switch node.Kind {
-		case KindCaption, KindFootnote:
+		case KindCaption, KindFootnote, KindListItem:
 			parentKind, parentID := "none", "none"
 			if node.Parent != nil {
 				parentKind, parentID = string(node.Parent.Kind), node.Parent.ID
@@ -172,12 +172,23 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			candidate := chunkCandidate{}
 			candidate.MemberIDs = make([]int64, 0)
 			for _, child := range node.Children {
-				if child.List == nil || child.List.Text == "" {
+				if child.List == nil {
 					logger.WarnContext(ctx, "walk-nodes", "warn", "warning: list_item missing content, skipping")
 					continue
 				}
-				candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
-				parts = append(parts, child.List.Marker+" "+child.List.Text)
+				text := child.List.Text
+				ids := []int64{child.ExtractionNodeID}
+				if text == "" {
+					var fragIDs []int64
+					text, fragIDs = inlineText(child)
+					ids = append(ids, fragIDs...)
+				}
+				if text == "" {
+					logger.WarnContext(ctx, "walk-nodes", "warn", "warning: list_item missing content, skipping")
+					continue
+				}
+				candidate.MemberIDs = append(candidate.MemberIDs, ids...)
+				parts = append(parts, child.List.Marker+" "+text)
 			}
 			if len(parts) > 0 {
 				text := ""
@@ -280,8 +291,15 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			headersRow = headersRow + "\n"
 
+			// tables can have no headers, calculate first data row
+			dataRowStart := 0
+			for _, cell := range node.Table.Cells {
+				if cell.IsColumnHeader && int(cell.RowEnd)+1 > dataRowStart {
+					dataRowStart = int(cell.RowEnd) + 1
+				}
+			}
 			rows := ""
-			for r := 1; r < int(node.Table.Rows); r++ {
+			for r := dataRowStart; r < int(node.Table.Rows); r++ {
 				for c := 0; c < int(node.Table.Cols); c++ {
 					if c > 0 {
 						rows = rows + " | "
@@ -299,13 +317,21 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			candidate.MemberIDs = []int64{node.ExtractionNodeID}
 			for _, child := range node.Children {
 				switch child.Kind {
-				case KindCaption, KindFootnote:
-					if child.Paragraph != nil && len(child.Paragraph.Text) > 0 {
-						candidate.Text = candidate.Text + "\n" + child.Paragraph.Text
+				case KindCaption:
+					if child.Caption != nil && len(child.Caption.Text) > 0 {
+						candidate.Text = candidate.Text + "\n" + child.Caption.Text
 						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
 					} else {
-						logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("empty '%s'", child.Kind))
+						logger.WarnContext(ctx, "walk-nodes", "warn", "empty caption")
 					}
+				case KindFootnote:
+					if child.Footnote != nil && len(child.Footnote.Text) > 0 {
+						candidate.Text = candidate.Text + "\n" + child.Footnote.Text
+						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
+					} else {
+						logger.WarnContext(ctx, "walk-nodes", "warn", "empty footnote")
+					}
+
 				default:
 					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("table children of unsupported type: '%s'", child.Kind))
 				}
@@ -508,4 +534,30 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 
 func tokenCount(text string) int {
 	return len(text)
+}
+
+// Docling emits `- **Bold:** rest` as list_item(text="") + group[text, text], helps joining
+func inlineText(node *ExtractionNode) (string, []int64) {
+	var parts []string
+	var ids []int64
+	for _, g := range node.Children {
+		if g.Kind != KindGroup {
+			continue
+		}
+		for _, p := range g.Children {
+			if p.Kind != KindParagraph || p.Paragraph == nil || p.Paragraph.Text == "" {
+				continue
+			}
+			parts = append(parts, p.Paragraph.Text)
+			ids = append(ids, p.ExtractionNodeID)
+		}
+	}
+	text := ""
+	for _, s := range parts {
+		if text != "" && !unicode.IsSpace([]rune(text)[len([]rune(text))-1]) && !unicode.IsSpace([]rune(s)[0]) {
+			text += " "
+		}
+		text += s
+	}
+	return text, ids
 }

@@ -59,17 +59,15 @@ func (c ClientKreuzberg) runEmbedding(ctx context.Context, texts []string) (embe
 	}
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return embedResp{}, fmt.Errorf("error received for embedding request: %w", err)
+		return embedResp{}, fmt.Errorf("%w: %w", step.ErrProviderUnreachable, err)
 	}
+	defer httpResp.Body.Close()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return embedResp{}, fmt.Errorf("error reading response body: %w", err)
 	}
-	err = httpResp.Body.Close()
-	if err != nil {
-		return embedResp{}, fmt.Errorf("error closing response body: %w", err)
-	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		return embedResp{}, fmt.Errorf("error status code of embedding not 200: %s", string(body))
 	}
@@ -113,6 +111,9 @@ func (c ClientKreuzberg) EmbedChunks(ctx context.Context, chunks []step.ChunkToE
 	}
 
 	embeddings := []step.Embedding{}
+	if len(resp.Embeddings) != len(chunks) {
+		return toSave, fmt.Errorf("embedding response mismatch: %d embeddings for %d chunks", len(resp.Embeddings), len(chunks))
+	}
 	for i, e := range resp.Embeddings {
 		embedding := step.Embedding{
 			ChunkID: chunks[i].ChunkID,

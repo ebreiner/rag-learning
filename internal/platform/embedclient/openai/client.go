@@ -91,15 +91,17 @@ func (c ClientOpenAI) EmbedChunks(ctx context.Context, chunks []step.ChunkToEmbe
 
 	embeddings := []step.Embedding{}
 
-	for index, embed := range resp.Data {
+	if len(resp.Data) != len(chunks) {
+		return toSave, fmt.Errorf("embedding response mismatch: %d embeddings for %d chunks", len(resp.Data), len(chunks))
+	}
+	for _, embed := range resp.Data {
+		if embed.Index < 0 || embed.Index >= len(chunks) {
+			return toSave, fmt.Errorf("embedding index %d out of range for %d chunks", embed.Index, len(chunks))
+		}
 		if len(embed.Embedding) != int(c.Dim) {
 			return toSave, fmt.Errorf("mismatch of configured dim and dim of embedded string")
 		}
-		embedding := step.Embedding{
-			Vector:  embed.Embedding,
-			ChunkID: chunks[index].ChunkID,
-		}
-		embeddings = append(embeddings, embedding)
+		embeddings = append(embeddings, step.Embedding{Vector: embed.Embedding, ChunkID: chunks[embed.Index].ChunkID})
 	}
 
 	toSave.Dim = c.Dim
@@ -129,7 +131,7 @@ func (c ClientOpenAI) runEmbedding(ctx context.Context, texts []string) (embeddi
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return embeddingResponse{}, err
+		return embeddingResponse{}, fmt.Errorf("%w: %w", step.ErrProviderUnreachable, err)
 	}
 	defer resp.Body.Close()
 

@@ -52,6 +52,9 @@ FROM chunks
 WHERE document_id = ?
 LIMIT 1;
 
+-- name: FlushChunkNodes :exec
+DELETE FROM chunk_nodes;
+
 -- name: FlushChunks :exec
 DELETE FROM chunks;
 
@@ -111,10 +114,19 @@ ORDER BY en.id;
 SELECT name, weight FROM collections;
 
 -- name: RetrievalChunksByIDs :many
-SELECT c.id, d.name, d.collection_name, c.position, c.breadcrumb, c.text
+SELECT
+	c.id,
+	d.name,
+	d.collection_name,
+	w.weight,
+	c.position,
+	c.breadcrumb,
+	c.text
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
+JOIN collections AS w
+	ON d.collection_name = w.name
 WHERE c.id IN (sqlc.slice('chunk_ids'));
 
 -- name: CollectionWeightForChunkIDs :many

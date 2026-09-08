@@ -182,13 +182,13 @@ func TestBuildMap(t *testing.T) {
 			},
 		},
 		{
-			name: "caption maps to KindCaption, content unmarshals into Paragraph (shared shape)",
+			name: "caption maps to KindCaption, content unmarshals into Caption",
 			rows: []querries.GetLatestExtractionOfDocRow{
 				mkRow("#/texts/0", "", "caption", "body", `{"text":"Figure 1: a caption"}`),
 			},
 			want: map[string]*step.ExtractionNode{
 				"#/texts/0": {ID: "#/texts/0", Kind: step.KindCaption, Layer: step.LayerBody,
-					Paragraph: &step.ParagraphContent{Text: "Figure 1: a caption"}},
+					Caption: &step.CaptionContent{Text: "Figure 1: a caption"}},
 			},
 		},
 		{
@@ -201,13 +201,13 @@ func TestBuildMap(t *testing.T) {
 			},
 		},
 		{
-			name: "footnote maps to KindFootnote, content unmarshals into Paragraph (shared shape)",
+			name: "footnote maps to KindFootnote, content unmarshals into Footnote",
 			rows: []querries.GetLatestExtractionOfDocRow{
 				mkRow("#/texts/0", "", "footnote", "body", `{"text":"1. see appendix"}`),
 			},
 			want: map[string]*step.ExtractionNode{
 				"#/texts/0": {ID: "#/texts/0", Kind: step.KindFootnote, Layer: step.LayerBody,
-					Paragraph: &step.ParagraphContent{Text: "1. see appendix"}},
+					Footnote: &step.FootnoteContent{Text: "1. see appendix"}},
 			},
 		},
 		{

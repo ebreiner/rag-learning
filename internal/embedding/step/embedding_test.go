@@ -3,6 +3,7 @@ package step
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -73,11 +74,16 @@ func (f *fakeSink) SaveEmbeddings(ctx context.Context, toSave EmbeddingsToSave) 
 type flakyClient struct {
 	failIfBatchLargerThan int
 	permanentlyBadChunkID int64
+	unreachable           bool // every call fails the way a down server does
 	calls                 [][]ChunkToEmbed
 }
 
 func (f *flakyClient) EmbedChunks(ctx context.Context, chunks []ChunkToEmbed) (EmbeddingsToSave, error) {
 	f.calls = append(f.calls, chunks)
+
+	if f.unreachable {
+		return EmbeddingsToSave{}, fmt.Errorf("%w: dial tcp 127.0.0.1:11434: connection refused", ErrProviderUnreachable)
+	}
 
 	for _, c := range chunks {
 		if c.ChunkID == f.permanentlyBadChunkID {
@@ -125,6 +131,28 @@ func TestEmbedWithFallback(t *testing.T) {
 		}
 		if len(got.Embeddings) != 4 {
 			t.Fatalf("got %d embeddings, want 4 -- all chunks should eventually succeed once split small enough", len(got.Embeddings))
+		}
+	})
+
+	t.Run("a transport failure aborts at once instead of bisecting and skipping every chunk", func(t *testing.T) {
+		// Seen live 2026-09-08: Ollama down, the fallback bisected every batch
+		// down to singles, warned per chunk, and the run exited 0 with nothing
+		// embedded. Unreachable is not a per-chunk problem; it must surface.
+		client := &flakyClient{unreachable: true}
+		chunks := []ChunkToEmbed{
+			{ChunkID: 1, Text: "a"}, {ChunkID: 2, Text: "b"},
+			{ChunkID: 3, Text: "c"}, {ChunkID: 4, Text: "d"},
+		}
+
+		got, err := embedWithFallback(testCtx, client, chunks, testLogger)
+		if !errors.Is(err, ErrProviderUnreachable) {
+			t.Fatalf("embedWithFallback() error = %v, want one wrapping ErrProviderUnreachable", err)
+		}
+		if len(client.calls) != 1 {
+			t.Errorf("client called %d times, want exactly 1 (no bisect on a transport failure)", len(client.calls))
+		}
+		if len(got.Embeddings) != 0 {
+			t.Errorf("got %d embeddings, want 0", len(got.Embeddings))
 		}
 	})
 

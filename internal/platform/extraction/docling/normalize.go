@@ -76,7 +76,7 @@ func textNode(ctx context.Context, node *step.Node, text rawTextItem, logger *sl
 	}
 
 	switch text.Label {
-	case "text":
+	case "text", "paragraph":
 		node.Paragraph = &step.ParagraphContent{Text: text.Text}
 		node.Kind = step.KindParagraph
 	case "section_header", "title":
@@ -122,7 +122,13 @@ func textNode(ctx context.Context, node *step.Node, text rawTextItem, logger *sl
 	case "code":
 		node.Code = &step.CodeContent{Text: text.Text}
 		node.Kind = step.KindCode
-	case "caption", "footnote", "form", "key_value_region", "page_header", "page_footer", "checkbox_selected", "checkbox_unselected", "chart", "document_index", "grading_scale", "handwritten_text", "empty_value", "reference", "field_region", "field_heading", "field_item", "field_key", "field_value", "field_hint", "marker", "paragraph":
+	case "caption":
+		node.Caption = &step.CaptionContent{Text: text.Text}
+		node.Kind = step.KindCaption
+	case "footnote":
+		node.Footnote = &step.FootnoteContent{Text: text.Text}
+		node.Kind = step.KindFootnote
+	case "form", "key_value_region", "page_header", "page_footer", "checkbox_selected", "checkbox_unselected", "chart", "document_index", "grading_scale", "handwritten_text", "empty_value", "reference", "field_region", "field_heading", "field_item", "field_key", "field_value", "field_hint", "marker":
 		logger.WarnContext(ctx, "build-nodes", logging.KeyNodeType, text.Label, "warn", fmt.Sprintf("unknown content type label '%s'", text.Label))
 		node.Kind = step.KindUnsupported
 	default:

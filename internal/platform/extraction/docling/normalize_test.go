@@ -180,6 +180,14 @@ func TestTextNodeBuild(t *testing.T) {
 		headingCase("section node guard invalid upper level", &upperLimit, "i am a heading", 6, "", step.LayerBody, true),
 		paragraphCase("paragraph becomes paragraph node", "i am representing a full paragraph, hello.", "i am representing a full paragraph, hello.", step.LayerBody, false),
 		paragraphCase("paragraph empty content layer", "i am representing a full paragraph, hello.", "i am representing a full paragraph, hello.", "", true),
+		// docling emits both "text" and "paragraph" for body prose (844
+		// "paragraph" items in a real corpus run, 2026-09-07); both fold
+		// into the same paragraph node.
+		paragraphCaseWithLabel("paragraph label folds into paragraph node", "paragraph", "labelled paragraph, hello.", "labelled paragraph, hello.", step.LayerBody, false),
+		captionCase("caption becomes caption node", "Figure 1: a caption", "Figure 1: a caption", step.LayerBody, false),
+		captionCase("caption empty content layer", "Figure 1: a caption", "Figure 1: a caption", "", true),
+		footnoteCase("footnote becomes footnote node", "1. see appendix", "1. see appendix", step.LayerBody, false),
+		footnoteCase("footnote empty content layer", "1. see appendix", "1. see appendix", "", true),
 		codeCase("code becomes code node", "func main() {}", "func main() {}", step.LayerBody, false),
 		codeCase("code empty content layer", "func main() {}", "func main() {}", "", true),
 		formulaCase("formula becomes formula node", "E = mc^2", "E = mc^2", step.LayerBody, false),
@@ -200,8 +208,6 @@ func TestTextNodeBuild(t *testing.T) {
 	runTextNodeCases(t, listItemCases)
 
 	unsupportedCases := []textNodeCase{
-		unsupportedTextCase("caption is unsupported", "caption", step.LayerBody),
-		unsupportedTextCase("footnote is unsupported", "footnote", step.LayerBody),
 		unsupportedTextCase("page_header is unsupported", "page_header", step.LayerFurniture),
 		unsupportedTextCase("page_footer is unsupported", "page_footer", step.LayerFurniture),
 	}
@@ -503,11 +509,17 @@ func headingCase(name string, level *int64, text string, wantLevel int64, wantTe
 }
 
 func paragraphCase(name string, text string, wantText string, layer step.ContentLayer, wantErr bool) textNodeCase {
+	return paragraphCaseWithLabel(name, "text", text, wantText, layer, wantErr)
+}
+
+// paragraphCaseWithLabel is paragraphCase with the raw docling label made
+// explicit, for the labels that all fold into a paragraph node.
+func paragraphCaseWithLabel(name string, label string, text string, wantText string, layer step.ContentLayer, wantErr bool) textNodeCase {
 	provs := []rawProv{provOnPage(1)}
 	return textNodeCase{
 		name: name,
 		input: rawTextItem{
-			SelfRef: "#/text/1", Label: "text",
+			SelfRef: "#/text/1", Label: label,
 			Text: text, Prov: provs,
 			ContentLayer: string(layer),
 		},
@@ -553,6 +565,44 @@ func formulaCase(name string, text string, wantText string, layer step.ContentLa
 			ID: "#/text/1", Kind: step.KindFormula,
 			Provenance: []step.Provenance{wantProvOnPage(1)},
 			Formula:    &step.FormulaContent{Text: wantText},
+			Layer:      layer,
+		},
+		wantErr: wantErr,
+	}
+}
+
+func captionCase(name string, text string, wantText string, layer step.ContentLayer, wantErr bool) textNodeCase {
+	provs := []rawProv{provOnPage(1)}
+	return textNodeCase{
+		name: name,
+		input: rawTextItem{
+			SelfRef: "#/text/1", Label: "caption",
+			Text: text, Prov: provs,
+			ContentLayer: string(layer),
+		},
+		want: &step.Node{
+			ID: "#/text/1", Kind: step.KindCaption,
+			Provenance: []step.Provenance{wantProvOnPage(1)},
+			Caption:    &step.CaptionContent{Text: wantText},
+			Layer:      layer,
+		},
+		wantErr: wantErr,
+	}
+}
+
+func footnoteCase(name string, text string, wantText string, layer step.ContentLayer, wantErr bool) textNodeCase {
+	provs := []rawProv{provOnPage(1)}
+	return textNodeCase{
+		name: name,
+		input: rawTextItem{
+			SelfRef: "#/text/1", Label: "footnote",
+			Text: text, Prov: provs,
+			ContentLayer: string(layer),
+		},
+		want: &step.Node{
+			ID: "#/text/1", Kind: step.KindFootnote,
+			Provenance: []step.Provenance{wantProvOnPage(1)},
+			Footnote:   &step.FootnoteContent{Text: wantText},
 			Layer:      layer,
 		},
 		wantErr: wantErr,

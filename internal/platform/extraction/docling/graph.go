@@ -7,18 +7,6 @@ import (
 
 func wireGraph(flatNodes map[string]*step.Node, rawDoc *rawDoclingDocument) (step.ExtractedDoc, error) {
 	extractedDoc := step.ExtractedDoc{}
-	roots := make([]*step.Node, 0)
-	rootRefs := make([]rawRef, 0, len(rawDoc.Body.Children)+len(rawDoc.Furniture.Children))
-	rootRefs = append(rootRefs, rawDoc.Body.Children...)
-	rootRefs = append(rootRefs, rawDoc.Furniture.Children...)
-	for _, ref := range rootRefs {
-		node, ok := flatNodes[ref.Ref]
-		if !ok {
-			return extractedDoc, fmt.Errorf("dangling root ref: %s", ref.Ref)
-		}
-		roots = append(roots, node)
-	}
-	extractedDoc.RootNodes = roots
 
 	for _, group := range rawDoc.Groups {
 		node, ok := flatNodes[group.SelfRef]
@@ -63,6 +51,64 @@ func wireGraph(flatNodes map[string]*step.Node, rawDoc *rawDoclingDocument) (ste
 			return extractedDoc, err
 		}
 	}
+
+	claimed := map[string]bool{}
+	attach := func(host *step.Node, refs []rawRef) error {
+		for _, ref := range refs {
+			n, ok := flatNodes[ref.Ref]
+			if !ok {
+				return fmt.Errorf("dangling caption/footnote ref: %s", ref.Ref)
+			}
+			claimed[ref.Ref] = true
+			if n.Parent == host {
+				continue // already wired as a child
+			}
+			n.Parent = host
+			host.Children = append(host.Children, n)
+		}
+		return nil
+	}
+	for _, table := range rawDoc.Tables {
+		node, ok := flatNodes[table.SelfRef]
+		if !ok {
+			return extractedDoc, fmt.Errorf("no node found in node map with node id: %s", table.SelfRef)
+		}
+		if err := attach(node, table.Captions); err != nil {
+			return extractedDoc, err
+		}
+		if err := attach(node, table.Footnotes); err != nil {
+			return extractedDoc, err
+		}
+	}
+
+	for _, picture := range rawDoc.Pictures {
+		node, ok := flatNodes[picture.SelfRef]
+		if !ok {
+			return extractedDoc, fmt.Errorf("no node found in node map with node id: %s", picture.SelfRef)
+		}
+		if err := attach(node, picture.Captions); err != nil {
+			return extractedDoc, err
+		}
+		if err := attach(node, picture.Footnotes); err != nil {
+			return extractedDoc, err
+		}
+	}
+
+	roots := make([]*step.Node, 0)
+	rootRefs := make([]rawRef, 0, len(rawDoc.Body.Children)+len(rawDoc.Furniture.Children))
+	rootRefs = append(rootRefs, rawDoc.Body.Children...)
+	rootRefs = append(rootRefs, rawDoc.Furniture.Children...)
+	for _, ref := range rootRefs {
+		if _, ok := claimed[ref.Ref]; ok {
+			continue // caption / footnote are linked via ref and not children[] in host
+		}
+		node, ok := flatNodes[ref.Ref]
+		if !ok {
+			return extractedDoc, fmt.Errorf("dangling root ref: %s", ref.Ref)
+		}
+		roots = append(roots, node)
+	}
+	extractedDoc.RootNodes = roots
 
 	return extractedDoc, nil
 }

@@ -73,10 +73,10 @@ type rawGroupItem struct {
 // texts[] covers section_header / text / list_item / caption / footnote /
 // page_header / page_footer — Docling puts all of these in one array,
 // differentiated by Label. Captions/footnotes reached via a picture's or
-// table's own Children/Captions refs are still just entries in this array,
-// with Parent pointing back at the picture/table (confirmed live: a table's
-// `children` and `captions` refs are literally identical) — no special
-// unmarshaling needed for them.
+
+// Captions/footnotes are entries in this array with Parent "#/body"; the
+// host picture/table references them through its own captions/footnotes
+// refs, wireGraph re-parents them under the host
 type rawTextItem struct {
 	SelfRef      string         `json:"self_ref"`
 	Parent       *rawRef        `json:"parent"`
@@ -119,7 +119,7 @@ type rawSize struct {
 	Width, Height float64
 }
 
-// Confirmed live against a doc with 5 real tables (2026-08-02).
+// Confirmed live against a doc with 5 real tables
 type rawTableItem struct {
 	SelfRef      string       `json:"self_ref"`
 	Parent       *rawRef      `json:"parent"`
@@ -128,6 +128,8 @@ type rawTableItem struct {
 	Label        string       `json:"label"`
 	Prov         []rawProv    `json:"prov"`
 	Data         rawTableData `json:"data"`
+	Captions     []rawRef     `json:"captions"`
+	Footnotes    []rawRef     `json:"footnotes"`
 }
 
 type rawTableData struct {

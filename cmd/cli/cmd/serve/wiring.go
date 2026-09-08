@@ -53,10 +53,7 @@ func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, 
 
 	deps.Logger = logger
 
-	hydrator, err := retrieval.NewChunkHydrator(ctx, db, logger)
-	if err != nil {
-		return deps, closeDB, err
-	}
+	hydrator := retrieval.NewChunkHydrator(db, logger)
 	deps.Hydrator = &hydrator
 
 	retriever, err := retrieval.NewSQLiteRetriever(db, logger)
@@ -77,10 +74,7 @@ func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, 
 	}
 	deps.Renderer = &renderer
 
-	collWeigher, err := retrieval.NewCollectionWeigher(ctx, db, logger)
-	if err != nil {
-		return deps, closeDB, err
-	}
+	collWeigher := retrieval.NewCollectionWeigher(db, logger)
 	deps.CollWeigher = &collWeigher
 
 	return deps, closeDB, nil

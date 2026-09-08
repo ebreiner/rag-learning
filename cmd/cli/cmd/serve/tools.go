@@ -49,23 +49,23 @@ func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogge
 
 		query, err := request.RequireString("retrieval_query")
 		if err != nil {
-			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("missing or malformed retrieval_query in request: %w", err))
+			deps.Logger.ErrorContext(handlerCtx, "mcp", "err", fmt.Errorf("missing or malformed retrieval_query in request: %w", err))
 			return mcp.NewToolResultError("retrieval query not found in request"), nil
 		}
 
 		if len(query) == 0 {
-			deps.Logger.ErrorContext(ctx, "mcp", "err", "empty string received as retrieval query")
+			deps.Logger.ErrorContext(handlerCtx, "mcp", "err", "empty string received as retrieval query")
 			return mcp.NewToolResultError("empty retrieval_query received"), nil
 		}
 
 		k, err := request.RequireInt("k")
 		if err != nil {
-			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("missing or malformed k in request: %w", err))
+			deps.Logger.ErrorContext(handlerCtx, "mcp", "err", fmt.Errorf("missing or malformed k in request: %w", err))
 			return mcp.NewToolResultError("k not found in request"), nil
 		}
 
 		if k > 10 || k <= 0 {
-			deps.Logger.ErrorContext(ctx, "mcp", "err", "k is outside 1 and 10")
+			deps.Logger.ErrorContext(handlerCtx, "mcp", "err", "k is outside 1 and 10")
 			return mcp.NewToolResultError("value for 'k' is outside 1 and 10"), nil
 		}
 

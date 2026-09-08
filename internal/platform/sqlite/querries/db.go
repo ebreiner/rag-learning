@@ -45,6 +45,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.existsDocumentStmt, err = db.PrepareContext(ctx, existsDocument); err != nil {
 		return nil, fmt.Errorf("error preparing query ExistsDocument: %w", err)
 	}
+	if q.flushChunkNodesStmt, err = db.PrepareContext(ctx, flushChunkNodes); err != nil {
+		return nil, fmt.Errorf("error preparing query FlushChunkNodes: %w", err)
+	}
 	if q.flushChunksStmt, err = db.PrepareContext(ctx, flushChunks); err != nil {
 		return nil, fmt.Errorf("error preparing query FlushChunks: %w", err)
 	}
@@ -104,6 +107,11 @@ func (q *Queries) Close() error {
 	if q.existsDocumentStmt != nil {
 		if cerr := q.existsDocumentStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing existsDocumentStmt: %w", cerr)
+		}
+	}
+	if q.flushChunkNodesStmt != nil {
+		if cerr := q.flushChunkNodesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing flushChunkNodesStmt: %w", cerr)
 		}
 	}
 	if q.flushChunksStmt != nil {
@@ -187,6 +195,7 @@ type Queries struct {
 	createExtractionNodeStmt           *sql.Stmt
 	docAlreadyChunkedStmt              *sql.Stmt
 	existsDocumentStmt                 *sql.Stmt
+	flushChunkNodesStmt                *sql.Stmt
 	flushChunksStmt                    *sql.Stmt
 	getAllCollectionWeightsStmt        *sql.Stmt
 	getDocumentIDsAfterIDStmt          *sql.Stmt
@@ -207,6 +216,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createExtractionNodeStmt:           q.createExtractionNodeStmt,
 		docAlreadyChunkedStmt:              q.docAlreadyChunkedStmt,
 		existsDocumentStmt:                 q.existsDocumentStmt,
+		flushChunkNodesStmt:                q.flushChunkNodesStmt,
 		flushChunksStmt:                    q.flushChunksStmt,
 		getAllCollectionWeightsStmt:        q.getAllCollectionWeightsStmt,
 		getDocumentIDsAfterIDStmt:          q.getDocumentIDsAfterIDStmt,
