@@ -280,8 +280,15 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			}
 			headersRow = headersRow + "\n"
 
+			// tables can have no headers, calculate first data row
+			dataRowStart := 0
+			for _, cell := range node.Table.Cells {
+				if cell.IsColumnHeader && int(cell.RowEnd)+1 > dataRowStart {
+					dataRowStart = int(cell.RowEnd) + 1
+				}
+			}
 			rows := ""
-			for r := 1; r < int(node.Table.Rows); r++ {
+			for r := dataRowStart; r < int(node.Table.Rows); r++ {
 				for c := 0; c < int(node.Table.Cols); c++ {
 					if c > 0 {
 						rows = rows + " | "

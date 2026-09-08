@@ -210,6 +210,42 @@ func TestWalkTable(t *testing.T) {
 			want: []string{"|Group | Group\nA | B\n"},
 		},
 		{
+			// Docling has no "number of header rows" field; header-ness is a
+			// per-cell flag. A table with no header cells at all is a plain
+			// grid where row 0 is data. Starting the data loop at a hardcoded
+			// row 1 silently dropped that first row.
+			name: "table without header cells emits row 0 as data",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(2, 2,
+					TableCell{Text: "A", RowStart: 0, RowEnd: 0, ColStart: 0, ColEnd: 0},
+					TableCell{Text: "B", RowStart: 0, RowEnd: 0, ColStart: 1, ColEnd: 1},
+					TableCell{Text: "C", RowStart: 1, RowEnd: 1, ColStart: 0, ColEnd: 0},
+					TableCell{Text: "D", RowStart: 1, RowEnd: 1, ColStart: 1, ColEnd: 1},
+				),
+			),
+			want: []string{"|\nA | B\nC | D\n"},
+		},
+		{
+			// A grouped header occupies rows 0 and 1; data starts at row 2.
+			// With the hardcoded row-1 start, row 1 rendered as an all-empty
+			// data line. Known and accepted wart, documented here rather than
+			// fixed: the per-column header map keeps only the last header cell
+			// seen per column, so the "Register" group label is lost.
+			name: "two-row header starts data at row 2 without a blank line",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(3, 3,
+					TableCell{Text: "Register", RowStart: 0, RowEnd: 0, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "Bits", RowStart: 0, RowEnd: 1, ColStart: 2, ColEnd: 2, IsColumnHeader: true},
+					TableCell{Text: "Lo", RowStart: 1, RowEnd: 1, ColStart: 0, ColEnd: 0, IsColumnHeader: true},
+					TableCell{Text: "Hi", RowStart: 1, RowEnd: 1, ColStart: 1, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "0x01", RowStart: 2, RowEnd: 2, ColStart: 0, ColEnd: 0},
+					TableCell{Text: "0x02", RowStart: 2, RowEnd: 2, ColStart: 1, ColEnd: 1},
+					TableCell{Text: "16", RowStart: 2, RowEnd: 2, ColStart: 2, ColEnd: 2},
+				),
+			),
+			want: []string{"|Lo | Hi | Bits\n0x01 | 0x02 | 16\n"},
+		},
+		{
 			name: "nil table content is skipped without panicking",
 			root: withChildren(&ExtractionNode{Kind: "unsupported"},
 				&ExtractionNode{Kind: "table", Table: nil},
