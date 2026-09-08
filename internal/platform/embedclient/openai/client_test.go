@@ -175,6 +175,71 @@ func TestEmbedChunks(t *testing.T) {
 			t.Fatalf("expected an error for an empty data array")
 		}
 	})
+
+	t.Run("fewer embeddings than chunks is a hard error, not a silent misalignment", func(t *testing.T) {
+		// Before the length guard, a short response mapped by array position
+		// and the trailing chunks simply never got an embedding.
+		server := &fakeEmbedServer{rawBody: `{"data":[{"embedding":[0.1,0.2],"index":0}]}`}
+		client, _ := newTestClient(t, server, 2)
+
+		chunks := []step.ChunkToEmbed{{ChunkID: 101, Text: "a"}, {ChunkID: 202, Text: "b"}}
+		_, err := client.EmbedChunks(testCtx, chunks)
+		if err == nil {
+			t.Fatalf("expected an error for 1 embedding on 2 chunks, got nil")
+		}
+	})
+
+	t.Run("more embeddings than chunks is a hard error, not a panic", func(t *testing.T) {
+		// Before the length guard this indexed chunks[2] on a 2-element slice.
+		server := &fakeEmbedServer{rawBody: `{"data":[` +
+			`{"embedding":[0.1,0.2],"index":0},` +
+			`{"embedding":[0.3,0.4],"index":1},` +
+			`{"embedding":[0.5,0.6],"index":2}]}`}
+		client, _ := newTestClient(t, server, 2)
+
+		chunks := []step.ChunkToEmbed{{ChunkID: 101, Text: "a"}, {ChunkID: 202, Text: "b"}}
+		_, err := client.EmbedChunks(testCtx, chunks)
+		if err == nil {
+			t.Fatalf("expected an error for 3 embeddings on 2 chunks, got nil")
+		}
+	})
+
+	t.Run("embeddings are mapped by their index field, not by array position", func(t *testing.T) {
+		// Server returns index 1 first. The vectors are distinguishable so a
+		// position-based mapping would visibly swap them.
+		server := &fakeEmbedServer{rawBody: `{"data":[` +
+			`{"embedding":[1.0,1.0],"index":1},` +
+			`{"embedding":[0.0,0.0],"index":0}]}`}
+		client, _ := newTestClient(t, server, 2)
+
+		chunks := []step.ChunkToEmbed{{ChunkID: 101, Text: "a"}, {ChunkID: 202, Text: "b"}}
+		got, err := client.EmbedChunks(testCtx, chunks)
+		if err != nil {
+			t.Fatalf("EmbedChunks() error = %v", err)
+		}
+
+		byChunk := map[int64][]float64{}
+		for _, e := range got.Embeddings {
+			byChunk[e.ChunkID] = e.Vector
+		}
+		want := map[int64][]float64{101: {0.0, 0.0}, 202: {1.0, 1.0}}
+		if diff := cmp.Diff(want, byChunk); diff != "" {
+			t.Errorf("vector-to-chunk mapping mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("an index outside the request range is a hard error", func(t *testing.T) {
+		server := &fakeEmbedServer{rawBody: `{"data":[` +
+			`{"embedding":[0.1,0.2],"index":0},` +
+			`{"embedding":[0.3,0.4],"index":7}]}`}
+		client, _ := newTestClient(t, server, 2)
+
+		chunks := []step.ChunkToEmbed{{ChunkID: 101, Text: "a"}, {ChunkID: 202, Text: "b"}}
+		_, err := client.EmbedChunks(testCtx, chunks)
+		if err == nil {
+			t.Fatalf("expected an error for index 7 on 2 chunks, got nil")
+		}
+	})
 }
 
 func TestEmbedQuery(t *testing.T) {

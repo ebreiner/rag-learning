@@ -111,6 +111,9 @@ func (c ClientKreuzberg) EmbedChunks(ctx context.Context, chunks []step.ChunkToE
 	}
 
 	embeddings := []step.Embedding{}
+	if len(resp.Embeddings) != len(chunks) {
+		return toSave, fmt.Errorf("embedding response mismatch: %d embeddings for %d chunks", len(resp.Embeddings), len(chunks))
+	}
 	for i, e := range resp.Embeddings {
 		embedding := step.Embedding{
 			ChunkID: chunks[i].ChunkID,
