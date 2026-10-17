@@ -1,0 +1,39 @@
+{
+  "_comment": "Example golden set. Copy it to eval/golden.json (ignored by git) and write queries for your own corpus. An expectation references content (document name + breadcrumb or text substring), never chunk IDs. One matching expectation makes a hit. A query with no_answer=true has no expectation; the run records its top 1.",
+  "queries": [
+    {
+      "id": "g01",
+      "query": "Wie installiere ich die Software unter Linux?",
+      "expect": [
+        {
+          "doc": "installation.md",
+          "breadcrumb_contains": "Installation > Linux"
+        }
+      ],
+      "note": "Breadcrumb anchor: the answer is the full section."
+    },
+    {
+      "id": "g02",
+      "query": "Welcher Port ist der Standardport für verschlüsselte Verbindungen?",
+      "expect": [
+        {
+          "doc": "network.md",
+          "text_contains": "Der Standardport ist 8443"
+        },
+        {
+          "doc": "faq.md",
+          "breadcrumb_contains": "Netzwerk",
+          "text_contains": "8443"
+        }
+      ],
+      "note": "Two correct sources. Inside one expectation all set conditions must match."
+    },
+    {
+      "id": "g03",
+      "query": "Wie ist das Wetter morgen?",
+      "expect": [],
+      "note": "Not in the corpus.",
+      "no_answer": true
+    }
+  ]
+}

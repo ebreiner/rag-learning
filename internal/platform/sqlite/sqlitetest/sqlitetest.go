@@ -93,6 +93,13 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 // individual test that only needs a document to hang something else off of.
 func InsertDocument(t *testing.T, db *sql.DB) int64 {
 	t.Helper()
+	return InsertDocumentNamed(t, db, "test-doc")
+}
+
+// InsertDocumentNamed is InsertDocument with an explicit document name, for
+// tests that look documents up by name.
+func InsertDocumentNamed(t *testing.T, db *sql.DB, name string) int64 {
+	t.Helper()
 	ctx := context.Background()
 	now := time.Now()
 
@@ -106,7 +113,7 @@ func InsertDocument(t *testing.T, db *sql.DB) int64 {
 
 	docRes, err := db.ExecContext(ctx,
 		`INSERT INTO documents (created_at, name, sha256, collection_name) VALUES (?, ?, ?, ?)`,
-		now, "test-doc", "deadbeef", "test-collection",
+		now, name, "deadbeef", "test-collection",
 	)
 	if err != nil {
 		t.Fatalf("sqlitetest.InsertDocument: inserting document: %v", err)

@@ -42,6 +42,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.docAlreadyChunkedStmt, err = db.PrepareContext(ctx, docAlreadyChunked); err != nil {
 		return nil, fmt.Errorf("error preparing query DocAlreadyChunked: %w", err)
 	}
+	if q.evalChunkStatsStmt, err = db.PrepareContext(ctx, evalChunkStats); err != nil {
+		return nil, fmt.Errorf("error preparing query EvalChunkStats: %w", err)
+	}
+	if q.evalChunksOfDocStmt, err = db.PrepareContext(ctx, evalChunksOfDoc); err != nil {
+		return nil, fmt.Errorf("error preparing query EvalChunksOfDoc: %w", err)
+	}
+	if q.evalDocExistsStmt, err = db.PrepareContext(ctx, evalDocExists); err != nil {
+		return nil, fmt.Errorf("error preparing query EvalDocExists: %w", err)
+	}
 	if q.existsDocumentStmt, err = db.PrepareContext(ctx, existsDocument); err != nil {
 		return nil, fmt.Errorf("error preparing query ExistsDocument: %w", err)
 	}
@@ -102,6 +111,21 @@ func (q *Queries) Close() error {
 	if q.docAlreadyChunkedStmt != nil {
 		if cerr := q.docAlreadyChunkedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing docAlreadyChunkedStmt: %w", cerr)
+		}
+	}
+	if q.evalChunkStatsStmt != nil {
+		if cerr := q.evalChunkStatsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evalChunkStatsStmt: %w", cerr)
+		}
+	}
+	if q.evalChunksOfDocStmt != nil {
+		if cerr := q.evalChunksOfDocStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evalChunksOfDocStmt: %w", cerr)
+		}
+	}
+	if q.evalDocExistsStmt != nil {
+		if cerr := q.evalDocExistsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evalDocExistsStmt: %w", cerr)
 		}
 	}
 	if q.existsDocumentStmt != nil {
@@ -194,6 +218,9 @@ type Queries struct {
 	createExtractionStmt               *sql.Stmt
 	createExtractionNodeStmt           *sql.Stmt
 	docAlreadyChunkedStmt              *sql.Stmt
+	evalChunkStatsStmt                 *sql.Stmt
+	evalChunksOfDocStmt                *sql.Stmt
+	evalDocExistsStmt                  *sql.Stmt
 	existsDocumentStmt                 *sql.Stmt
 	flushChunkNodesStmt                *sql.Stmt
 	flushChunksStmt                    *sql.Stmt
@@ -215,6 +242,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createExtractionStmt:               q.createExtractionStmt,
 		createExtractionNodeStmt:           q.createExtractionNodeStmt,
 		docAlreadyChunkedStmt:              q.docAlreadyChunkedStmt,
+		evalChunkStatsStmt:                 q.evalChunkStatsStmt,
+		evalChunksOfDocStmt:                q.evalChunksOfDocStmt,
+		evalDocExistsStmt:                  q.evalDocExistsStmt,
 		existsDocumentStmt:                 q.existsDocumentStmt,
 		flushChunkNodesStmt:                q.flushChunkNodesStmt,
 		flushChunksStmt:                    q.flushChunksStmt,

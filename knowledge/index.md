@@ -22,6 +22,15 @@ Start here:
 - [0004-mcp-tool-surface](decisions/0004-mcp-tool-surface.md): search, read and catalog tools, dynamic state only through tools.
 - [0005-oauth-resource-server](decisions/0005-oauth-resource-server.md): JWT check, RFC 9728 metadata, static token for development.
 - [0006-ingest-command](decisions/0006-ingest-command.md): one `ingest` command with add, replace and delete.
+- [0007-eval-harness-implementation](decisions/0007-eval-harness-implementation.md): the eval implementation is the target where it differs from the locked eval design.
+
+## Designs
+
+- [eval-harness](designs/eval-harness.md): RC1 eval command, golden format, status for each query, metrics, run files outside the DB. Locked, partly superseded by 0007.
+
+## Experiments
+
+- [0001-eval-baseline](experiments/0001-eval-baseline.md): first valid eval baseline (1806 chunks), findings: `generic` chunks without section signal, hybrid vs. ANN at rank 1, golden-set candidates.
 
 ## Requirements
 

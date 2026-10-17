@@ -14,3 +14,5 @@ rag-cli.log
 ./data.*
 
 eval/golden*.json
+!eval/golden.example.json
+eval/runs/

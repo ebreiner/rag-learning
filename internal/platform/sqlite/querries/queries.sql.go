@@ -191,6 +191,78 @@ func (q *Queries) DocAlreadyChunked(ctx context.Context, documentID int64) (int6
 	return id, err
 }
 
+const evalChunkStats = `-- name: EvalChunkStats :one
+SELECT
+	COUNT(*) AS chunk_count,
+	CAST(COALESCE(MAX(created_at), '') AS TEXT) AS latest_created_at
+FROM chunks
+`
+
+type EvalChunkStatsRow struct {
+	ChunkCount      int64
+	LatestCreatedAt string
+}
+
+func (q *Queries) EvalChunkStats(ctx context.Context) (EvalChunkStatsRow, error) {
+	row := q.queryRow(ctx, q.evalChunkStatsStmt, evalChunkStats)
+	var i EvalChunkStatsRow
+	err := row.Scan(&i.ChunkCount, &i.LatestCreatedAt)
+	return i, err
+}
+
+const evalChunksOfDoc = `-- name: EvalChunksOfDoc :many
+SELECT c.id, c.breadcrumb, c.text, d.name
+FROM chunks AS c
+JOIN documents AS d ON c.document_id = d.id
+WHERE d.name = ?
+`
+
+type EvalChunksOfDocRow struct {
+	ID         int64
+	Breadcrumb string
+	Text       string
+	Name       string
+}
+
+func (q *Queries) EvalChunksOfDoc(ctx context.Context, name string) ([]EvalChunksOfDocRow, error) {
+	rows, err := q.query(ctx, q.evalChunksOfDocStmt, evalChunksOfDoc, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EvalChunksOfDocRow
+	for rows.Next() {
+		var i EvalChunksOfDocRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Breadcrumb,
+			&i.Text,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const evalDocExists = `-- name: EvalDocExists :one
+SELECT EXISTS(SELECT 1 FROM documents WHERE name = ?)
+`
+
+func (q *Queries) EvalDocExists(ctx context.Context, name string) (int64, error) {
+	row := q.queryRow(ctx, q.evalDocExistsStmt, evalDocExists, name)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const existsDocument = `-- name: ExistsDocument :one
 SELECT  d.id, d.sha256, c.name AS collection_name
 FROM documents d

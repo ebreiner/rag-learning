@@ -25,6 +25,9 @@ embed: build
 retrieve user-query: build
 	./main retrieve -q '{{user-query}}' --dim 1024 --model bge-m3 --openai-url http://127.0.0.1:11434 --db-path ./data/data.db
 
+eval: build
+	./main --db-path ./data/data.db eval --openai-url http://127.0.0.1:11434 --model bge-m3 --dim 1024
+
 inspect: build
 	./main inspect
 
