@@ -138,3 +138,17 @@ JOIN collections
 ON documents.collection_name = collections.name
 WHERE chunks.id IN (sqlc.slice('chunk_ids'));
 
+-- name: EvalDocExists :one
+SELECT EXISTS(SELECT 1 FROM documents WHERE name = ?);
+
+-- name: EvalChunksOfDoc :many
+SELECT c.id, c.breadcrumb, c.text, d.name
+FROM chunks AS c
+JOIN documents AS d ON c.document_id = d.id
+WHERE d.name = ?;
+
+-- name: EvalChunkStats :one
+SELECT
+	COUNT(*) AS chunk_count,
+	CAST(COALESCE(MAX(created_at), '') AS TEXT) AS latest_created_at
+FROM chunks;

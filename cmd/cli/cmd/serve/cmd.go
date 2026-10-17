@@ -31,7 +31,7 @@ func NewServeCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
-			logger = logger.With(logging.KeyStep, "serve-mcp")
+			logger.With(logging.KeyStep, "serve-mcp")
 			defer func() {
 				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
@@ -74,12 +74,12 @@ func NewServeCmd() *cobra.Command {
 
 			queryLogPath := cmd.Flags().Lookup("query-log").Value.String()
 
-			var embedConfig embedBackendConfig
+			var embedConfig cmdpkg.EmbedBackendConfig
 			if cmd.Flags().Lookup("xberg-url").Changed {
-				embedConfig = xbergConfig{URL: xbergBaseURL}
+				embedConfig = cmdpkg.XbergConfig{URL: xbergBaseURL}
 
 			} else if cmd.Flags().Lookup("openai-url").Changed {
-				embedConfig = openAIConfig{
+				embedConfig = cmdpkg.OpenAIConfig{
 					URL:   openAIBaseURL,
 					Model: model,
 					Dim:   int64(dim),
@@ -97,7 +97,7 @@ func NewServeCmd() *cobra.Command {
 			}
 
 			// TODO: db mit defer schließen
-			deps, closeDB, err := wireUp(ctx, dbPath, embedConfig, logger)
+			deps, _, closeDB, err := cmdpkg.WireUpRetrieval(ctx, dbPath, embedConfig, logger)
 
 			if err != nil {
 				if closeDB == nil {

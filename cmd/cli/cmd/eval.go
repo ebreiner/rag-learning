@@ -1,0 +1,350 @@
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os/exec"
+	"rag/internal/platform/config"
+	"rag/internal/platform/evalstore"
+	sqliteeval "rag/internal/platform/sqlite/eval"
+	"rag/internal/platform/sqlite/querries"
+	"rag/internal/platform/telemetry/logging"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	evalstep "rag/internal/eval/step"
+	retrievalstep "rag/internal/retrieval/step"
+
+	"github.com/spf13/cobra"
+)
+
+func NewEvalCmd() *cobra.Command {
+	evalCmd := &cobra.Command{
+		Use:   "eval",
+		Short: "Run the golden set against the DB and compare with the previous run",
+		Long: `Run each golden query for each retrieval strategy, give recall, MRR and a status
+for each query (hit, ranked_out, content_lost, doc_missing), write a run file and
+show the difference to the previous run.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			logger, otelShutdownFunc, err := Setup(ctx, cmd)
+			if err != nil {
+				return fmt.Errorf("error setting up otel and logger: %w", err)
+			}
+			logger = logger.With(logging.KeyStep, "eval")
+			defer func() {
+				if err := otelShutdownFunc(ctx); err != nil {
+					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
+				}
+			}()
+
+			goldenPath := cmd.Flag("golden").Value.String()
+			runsDir := cmd.Flag("runs-dir").Value.String()
+			baselinePath := cmd.Flag("baseline").Value.String()
+
+			k, err := cmd.Flags().GetInt64("k")
+			if err != nil {
+				return err
+			}
+			if k < 1 {
+				return fmt.Errorf("--k must be 1 or more")
+			}
+
+			strategies, err := cmd.Flags().GetStringSlice("strategies")
+			if err != nil {
+				return err
+			}
+			for _, s := range strategies {
+				switch retrievalstep.RetrievalStrategy(s) {
+				case retrievalstep.StrategyFTS, retrievalstep.StrategyANN, retrievalstep.StrategyHybrid:
+				default:
+					return fmt.Errorf("unknown strategy %q, use fts, ann or hybrid", s)
+				}
+			}
+
+			model := cmd.Flag("model").Value.String()
+			if model == "" {
+				return fmt.Errorf("missing required flag --model")
+			}
+			dim, err := cmd.Flags().GetInt64("dim")
+			if err != nil {
+				return err
+			}
+			if dim < 1 {
+				return fmt.Errorf("missing required flag --dim")
+			}
+
+			globals := config.GlobalOptions
+			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			if err != nil {
+				return err
+			}
+			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
+			if err != nil {
+				return err
+			}
+			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
+			if err != nil {
+				return err
+			}
+
+			var embedConfig EmbedBackendConfig
+			if cmd.Flags().Lookup("xberg-url").Changed {
+				embedConfig = XbergConfig{URL: xbergBaseURL}
+			} else if cmd.Flags().Lookup("openai-url").Changed {
+				embedConfig = OpenAIConfig{URL: openAIBaseURL, Model: model, Dim: dim}
+			} else {
+				return fmt.Errorf("missing embedding provider url")
+			}
+
+			golden, goldenSHA, err := evalstore.LoadGolden(goldenPath)
+			if err != nil {
+				return err
+			}
+
+			// load the baseline before Save else Latest gives the new run
+			var baseline evalstep.Run
+			var baselineFound bool
+			if baselinePath != "" {
+				baseline, err = evalstore.Load(baselinePath)
+				if err != nil {
+					return err
+				}
+				baselineFound = true
+			} else {
+				baseline, baselinePath, baselineFound, err = evalstore.LoadLatest(runsDir)
+				if err != nil {
+					return err
+				}
+			}
+
+			deps, db, closeDB, err := WireUpRetrieval(ctx, dbPath, embedConfig, logger)
+			if closeDB != nil {
+				defer func() {
+					if err := closeDB(ctx); err != nil {
+						logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error closing db: %w", err))
+					}
+				}()
+			}
+			if err != nil {
+				return err
+			}
+
+			docs := sqliteeval.NewDocChunksProvider(db, logger)
+			results, err := evalstep.RunEval(ctx, golden, strategies, k, retrievalSearcher{deps: deps}, &docs)
+			if err != nil {
+				return fmt.Errorf("error running eval: %w", err)
+			}
+
+			chunkStats, err := querries.New(db).EvalChunkStats(ctx)
+			if err != nil {
+				return fmt.Errorf("error reading chunk stats: %w", err)
+			}
+
+			commit, dirty := gitState()
+			run := evalstep.Run{
+				Header: evalstep.RunHeader{
+					Timestamp:    time.Now().UTC(),
+					GitCommit:    commit,
+					GitDirty:     dirty,
+					GoldenPath:   goldenPath,
+					GoldenSHA256: goldenSHA,
+					DBPath:       dbPath,
+					ChunkCount:   chunkStats.ChunkCount,
+					ChunksBuilt:  chunkStats.LatestCreatedAt,
+					EmbedModel:   model,
+					EmbedDim:     dim,
+					K:            k,
+				},
+				Strategies: results,
+			}
+
+			runPath, err := evalstore.Save(runsDir, run)
+			if err != nil {
+				return err
+			}
+
+			r := newReport(cmd.OutOrStdout())
+			printReport(r, run, golden)
+			if baselineFound {
+				printDiff(r, baseline, baselinePath, run)
+			} else {
+				r.line("\nno previous run, this run is the baseline\n")
+			}
+			r.line("\nrun file: %s\n", runPath)
+			if err := r.flush(); err != nil {
+				return fmt.Errorf("error writing report: %w", err)
+			}
+
+			return nil
+		},
+	}
+
+	evalCmd.Flags().String("golden", "eval/golden.json", "--golden eval/golden.json")
+	evalCmd.Flags().String("runs-dir", "eval/runs", "--runs-dir eval/runs")
+	evalCmd.Flags().String("baseline", "", "--baseline eval/runs/<file>.json (default: newest file in --runs-dir)")
+	evalCmd.Flags().Int64("k", 10, "--k 10")
+	evalCmd.Flags().StringSlice("strategies", []string{"fts", "ann", "hybrid"}, "--strategies fts,ann,hybrid")
+	evalCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
+	evalCmd.Flags().Int64P("dim", "d", -1, "--dim | -d 1024")
+
+	return evalCmd
+}
+
+func gitState() (commit string, dirty bool) {
+	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", false
+	}
+	status, err := exec.Command("git", "status", "--porcelain").Output()
+	if err != nil {
+		return strings.TrimSpace(string(out)), false
+	}
+	return strings.TrimSpace(string(out)), len(strings.TrimSpace(string(status))) > 0
+}
+
+type report struct {
+	tw  *tabwriter.Writer
+	err error
+}
+
+func newReport(out io.Writer) *report {
+	return &report{tw: tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)}
+}
+
+func (r *report) line(format string, a ...any) {
+	if r.err != nil {
+		return
+	}
+	_, r.err = fmt.Fprintf(r.tw, format, a...)
+}
+
+func (r *report) flush() error {
+	if r.err != nil {
+		return r.err
+	}
+	return r.tw.Flush()
+}
+
+func printReport(r *report, run evalstep.Run, golden evalstep.GoldenSet) {
+	h := run.Header
+	r.line("golden: %s (%d queries)  db: %s (%d chunks, built %s)  model: %s/%d  k: %d\n\n",
+		h.GoldenPath, len(golden.Queries), h.DBPath, h.ChunkCount, h.ChunksBuilt, h.EmbedModel, h.EmbedDim, h.K)
+
+	r.line("strategy\tr@1\tr@3\tr@5\tr@10\tmrr\tsect@10\tranked_out\tlost\tmissing\n")
+	for _, s := range run.Strategies {
+		m := s.Metrics
+		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\t%.1f\t%d\t%d\t%d\n",
+			s.Strategy, recall(m, 1), recall(m, 3), recall(m, 5), recall(m, 10),
+			m.MRR, m.DistinctSect, m.RankedOut, m.ContentLost, m.DocMissing)
+	}
+
+	noAnswer := map[string]bool{}
+	for _, q := range golden.Queries {
+		noAnswer[q.ID] = q.NoAnswer
+	}
+
+	r.line("\nmisses:\n")
+	misses := 0
+	for _, s := range run.Strategies {
+		for _, q := range s.Queries {
+			if q.Status == "" || q.Status == evalstep.StatusHit {
+				continue
+			}
+			misses++
+			r.line("  %s\t%s\t%s\n", q.QueryID, s.Strategy, q.Status)
+		}
+	}
+	if misses == 0 {
+		r.line("  none\n")
+	}
+
+	r.line("\nno_answer top 1:\n")
+	for _, s := range run.Strategies {
+		for _, q := range s.Queries {
+			if !noAnswer[q.QueryID] {
+				continue
+			}
+			if len(q.TopK) == 0 {
+				r.line("  %s\t%s\t(no result)\n", q.QueryID, s.Strategy)
+				continue
+			}
+			top := q.TopK[0]
+			r.line("  %s\t%s\t%.4f\t%s > %s\n", q.QueryID, s.Strategy, top.Score, top.DocName, top.Breadcrumb)
+		}
+	}
+}
+
+func printDiff(r *report, prev evalstep.Run, prevPath string, cur evalstep.Run) {
+	deltas, changes, warnings := evalstep.Diff(prev, cur)
+
+	r.line("\ncompared with %s:\n", prevPath)
+	for _, w := range warnings {
+		r.line("  WARNING: %s\n", w)
+	}
+
+	r.line("strategy\tΔr@1\tΔr@3\tΔr@5\tΔr@10\tΔmrr\tΔranked_out\tΔlost\tΔmissing\n")
+	for _, s := range cur.Strategies {
+		d, ok := deltas[s.Strategy]
+		if !ok {
+			continue
+		}
+		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\t%+d\t%+d\t%+d\n",
+			s.Strategy, recallDelta(d, 1), recallDelta(d, 3), recallDelta(d, 5), recallDelta(d, 10),
+			d.MRR, d.RankedOut, d.ContentLost, d.DocMissing)
+	}
+
+	r.line("\nstatus changes:\n")
+	if len(changes) == 0 {
+		r.line("  none\n")
+		return
+	}
+	for _, c := range changes {
+		r.line("  %s\t%s\t%s → %s\n", c.QueryID, c.Strategy, c.From, c.To)
+	}
+}
+
+func recall(m evalstep.Metrics, at int) string {
+	v, ok := m.RecallAt[at]
+	if !ok {
+		return "-"
+	}
+	return fmt.Sprintf("%.2f", v)
+}
+
+func recallDelta(m evalstep.Metrics, at int) string {
+	v, ok := m.RecallAt[at]
+	if !ok {
+		return "-"
+	}
+	return fmt.Sprintf("%+.2f", v)
+}
+
+type retrievalSearcher struct {
+	deps retrievalstep.RetrievalDeps
+}
+
+func (s retrievalSearcher) Search(ctx context.Context, q string, k int64, strategy string) ([]evalstep.SearchHit, error) {
+	got, err := retrievalstep.RunRetrieval(ctx, q, k, retrievalstep.RetrievalStrategy(strategy), s.deps)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Text is the index text only while the renderer is a no-op
+	hits := make([]evalstep.SearchHit, 0, len(got))
+	for _, c := range got {
+		hits = append(hits, evalstep.SearchHit{
+			Chunk: evalstep.Chunk{
+				ID:         c.ID,
+				DocName:    c.DocTitle,
+				Breadcrumb: c.Breadcrumb,
+				Text:       c.Text,
+			},
+			Score: c.Score,
+		})
+	}
+	return hits, nil
+}

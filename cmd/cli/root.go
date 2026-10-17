@@ -32,6 +32,7 @@ func Execute() {
 		cmd.NewChunkCmd(),
 		cmd.NewEmbedCmd(),
 		cmd.NewRetrieveCmd(),
+		cmd.NewEvalCmd(),
 		serve.NewServeCmd(),
 	)
 

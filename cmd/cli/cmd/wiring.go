@@ -1,7 +1,8 @@
-package serve
+package cmd
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"rag/internal/platform/embedclient/kreuzberg"
@@ -13,27 +14,27 @@ import (
 	"time"
 )
 
-type embedBackendConfig interface{ isEmbedBackendConfig() }
+type EmbedBackendConfig interface{ isEmbedBackendConfig() }
 
-type xbergConfig struct {
+type XbergConfig struct {
 	URL string
 }
 
-func (xbergConfig) isEmbedBackendConfig() {}
+func (XbergConfig) isEmbedBackendConfig() {}
 
-type openAIConfig struct {
+type OpenAIConfig struct {
 	URL   string
 	Model string
 	Dim   int64
 }
 
-func (openAIConfig) isEmbedBackendConfig() {}
+func (OpenAIConfig) isEmbedBackendConfig() {}
 
-func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, logger *slog.Logger) (deps step.RetrievalDeps, closeDB func(context.Context) error, err error) {
-	db, err := sqlite.NewConn(dbPath, false)
+func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBackendConfig, logger *slog.Logger) (deps step.RetrievalDeps, db *sql.DB, closeDB func(context.Context) error, err error) {
+	db, err = sqlite.NewConn(dbPath, false)
 	deps = step.RetrievalDeps{}
 	if err != nil {
-		return deps, nil, err
+		return deps, db, nil, err
 	}
 
 	closeDB = func(ctx context.Context) error {
@@ -48,7 +49,7 @@ func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, 
 	}
 
 	if err != nil {
-		return deps, closeDB, err
+		return deps, db, closeDB, err
 	}
 
 	deps.Logger = logger
@@ -58,34 +59,34 @@ func wireUp(ctx context.Context, dbPath string, embedConfig embedBackendConfig, 
 
 	retriever, err := retrieval.NewSQLiteRetriever(db, logger)
 	if err != nil {
-		return deps, closeDB, err
+		return deps, db, closeDB, err
 	}
 	deps.Retriever = retriever
 
 	embedClient, err := newEmbedClient(embedConfig, logger)
 	if err != nil {
-		return deps, closeDB, err
+		return deps, db, closeDB, err
 	}
 	deps.EmbeddingsClient = embedClient
 
 	renderer, err := retrieval.NewChunkRenderer(ctx, db, logger)
 	if err != nil {
-		return deps, closeDB, err
+		return deps, db, closeDB, err
 	}
 	deps.Renderer = &renderer
 
 	collWeigher := retrieval.NewCollectionWeigher(db, logger)
 	deps.CollWeigher = &collWeigher
 
-	return deps, closeDB, nil
+	return deps, db, closeDB, nil
 }
 
-func newEmbedClient(cnf embedBackendConfig, logger *slog.Logger) (step.EmbedClient, error) {
+func newEmbedClient(cnf EmbedBackendConfig, logger *slog.Logger) (step.EmbedClient, error) {
 	switch c := cnf.(type) {
-	case xbergConfig:
+	case XbergConfig:
 		httpClient := httpclient.New(60 * time.Second)
 		return kreuzberg.NewKreuzbergClient(c.URL, logger, httpClient)
-	case openAIConfig:
+	case OpenAIConfig:
 		httpClient := httpclient.New(60 * time.Second)
 		return openai.NewOpenAIClient(c.Model, c.URL, c.Dim, httpClient, logger)
 	default:
