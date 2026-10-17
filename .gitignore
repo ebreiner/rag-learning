@@ -13,3 +13,4 @@ venv
 rag-cli.log
 ./data.*
 
+eval/golden*.json
