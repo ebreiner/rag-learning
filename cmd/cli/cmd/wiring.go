@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
 	"rag/internal/platform/embedclient/kreuzberg"
 	"rag/internal/platform/embedclient/openai"
 	"rag/internal/platform/httpclient"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/retrieval/step"
+	"strconv"
 	"time"
 )
 
@@ -78,6 +80,13 @@ func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBacken
 	collWeigher := retrieval.NewCollectionWeigher(db, logger)
 	deps.CollWeigher = &collWeigher
 
+	fusion, err := fusionFromEnv()
+	if err != nil {
+		return deps, db, closeDB, err
+	}
+	deps.Fusion = fusion
+	logger.InfoContext(ctx, "wiring", "info", fmt.Sprintf("hybrid fusion: rrf k %d, weight fts %g, weight ann %g (0 = default)", fusion.RRFK, fusion.WeightFTS, fusion.WeightANN))
+
 	return deps, db, closeDB, nil
 }
 
@@ -92,4 +101,30 @@ func newEmbedClient(cnf EmbedBackendConfig, logger *slog.Logger) (step.EmbedClie
 	default:
 		return openai.ClientOpenAI{}, fmt.Errorf("unknown embed backend")
 	}
+}
+
+func fusionFromEnv() (step.FusionConfig, error) {
+	var c step.FusionConfig
+	if v, ok := os.LookupEnv("RAG_FUSION_RRF_K"); ok {
+		k, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return c, fmt.Errorf("parsing RAG_FUSION_RRF_K: %w", err)
+		}
+		c.RRFK = k
+	}
+	for name, dst := range map[string]*float64{
+		"RAG_FUSION_WEIGHT_FTS": &c.WeightFTS,
+		"RAG_FUSION_WEIGHT_ANN": &c.WeightANN,
+	} {
+		v, ok := os.LookupEnv(name)
+		if !ok {
+			continue
+		}
+		w, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return c, fmt.Errorf("parsing %s: %w", name, err)
+		}
+		*dst = w
+	}
+	return c, nil
 }

@@ -26,7 +26,6 @@ type ExtractionToChunk struct {
 type ChunkType string
 
 const (
-	TypeGeneric ChunkType = "generic"
 	TypeContent ChunkType = "content"
 	TypeCode    ChunkType = "code"
 	TypeFormula ChunkType = "formula"

@@ -9,6 +9,26 @@ type RetrievalDeps struct {
 	EmbeddingsClient EmbedClient
 	CollWeigher      CollectionWeigher
 	Renderer         ChunkRenderer
+	Fusion           FusionConfig
+}
+
+type FusionConfig struct {
+	RRFK      int64
+	WeightFTS float64
+	WeightANN float64
+}
+
+func (c FusionConfig) withDefaults() FusionConfig {
+	if c.RRFK <= 0 {
+		c.RRFK = rrfK
+	}
+	if c.WeightFTS <= 0 {
+		c.WeightFTS = 1
+	}
+	if c.WeightANN <= 0 {
+		c.WeightANN = 1
+	}
+	return c
 }
 
 type RetrievedChunk struct {

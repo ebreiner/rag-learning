@@ -37,6 +37,7 @@ func classify(ctx context.Context, gq GoldenQuery, topK []SearchHit, docs DocChu
 	if gq.NoAnswer {
 		return res, nil
 	}
+	res.DocRank = docRank(gq, topK)
 
 	for i, h := range topK {
 		for _, e := range gq.Expect {
@@ -67,4 +68,17 @@ func classify(ctx context.Context, gq GoldenQuery, topK []SearchHit, docs DocChu
 
 	res.Status = best
 	return res, nil
+}
+
+func docRank(gq GoldenQuery, topK []SearchHit) int {
+	expected := map[string]bool{}
+	for _, e := range gq.Expect {
+		expected[e.Doc] = true
+	}
+	for i, h := range topK {
+		if expected[h.DocName] {
+			return i + 1
+		}
+	}
+	return 0
 }

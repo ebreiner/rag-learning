@@ -238,8 +238,15 @@ func printReport(r *report, run evalstep.Run, golden evalstep.GoldenSet) {
 	for _, s := range run.Strategies {
 		m := s.Metrics
 		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\t%.1f\t%d\t%d\t%d\n",
-			s.Strategy, recall(m, 1), recall(m, 3), recall(m, 5), recall(m, 10),
+			s.Strategy, recall(m.RecallAt, 1), recall(m.RecallAt, 3), recall(m.RecallAt, 5), recall(m.RecallAt, 10),
 			m.MRR, m.DistinctSect, m.RankedOut, m.ContentLost, m.DocMissing)
+	}
+
+	r.line("\nstrategy\tdoc@1\tdoc@3\tdoc@5\tdoc@10\tdoc_mrr\n")
+	for _, s := range run.Strategies {
+		m := s.Metrics
+		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\n",
+			s.Strategy, recall(m.DocRecallAt, 1), recall(m.DocRecallAt, 3), recall(m.DocRecallAt, 5), recall(m.DocRecallAt, 10), m.DocMRR)
 	}
 
 	noAnswer := map[string]bool{}
@@ -293,8 +300,18 @@ func printDiff(r *report, prev evalstep.Run, prevPath string, cur evalstep.Run) 
 			continue
 		}
 		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\t%+d\t%+d\t%+d\n",
-			s.Strategy, recallDelta(d, 1), recallDelta(d, 3), recallDelta(d, 5), recallDelta(d, 10),
+			s.Strategy, recallDelta(d.RecallAt, 1), recallDelta(d.RecallAt, 3), recallDelta(d.RecallAt, 5), recallDelta(d.RecallAt, 10),
 			d.MRR, d.RankedOut, d.ContentLost, d.DocMissing)
+	}
+
+	r.line("\nstrategy\tΔdoc@1\tΔdoc@3\tΔdoc@5\tΔdoc@10\tΔdoc_mrr\n")
+	for _, s := range cur.Strategies {
+		d, ok := deltas[s.Strategy]
+		if !ok {
+			continue
+		}
+		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\n",
+			s.Strategy, recallDelta(d.DocRecallAt, 1), recallDelta(d.DocRecallAt, 3), recallDelta(d.DocRecallAt, 5), recallDelta(d.DocRecallAt, 10), d.DocMRR)
 	}
 
 	r.line("\nstatus changes:\n")
@@ -307,16 +324,16 @@ func printDiff(r *report, prev evalstep.Run, prevPath string, cur evalstep.Run) 
 	}
 }
 
-func recall(m evalstep.Metrics, at int) string {
-	v, ok := m.RecallAt[at]
+func recall(values map[int]float64, at int) string {
+	v, ok := values[at]
 	if !ok {
 		return "-"
 	}
 	return fmt.Sprintf("%.2f", v)
 }
 
-func recallDelta(m evalstep.Metrics, at int) string {
-	v, ok := m.RecallAt[at]
+func recallDelta(values map[int]float64, at int) string {
+	v, ok := values[at]
 	if !ok {
 		return "-"
 	}

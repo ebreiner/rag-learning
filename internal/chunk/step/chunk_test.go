@@ -731,8 +731,38 @@ func TestMergeCandidates(t *testing.T) {
 				mkContainerCandidate(KindGroup, 300, "Ch1", "AB", 10, 11),
 			},
 			want: []ChunkToSave{
-				{Text: "AB", Breadcrumb: "Ch1", Position: 0, Type: TypeGeneric,
+				{Text: "Ch1\n\nAB", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 10}, {ExtractionNodeID: 11, Position: 1}}},
+			},
+		},
+		{
+			name: "group candidates merge with paragraphs under the same breadcrumb",
+			candidates: []chunkCandidate{
+				mkIDCandidate(100, "Ch1", "A"),
+				mkContainerCandidate(KindGroup, 300, "Ch1", "G", 10, 11),
+				mkIDCandidate(101, "Ch1", "B"),
+			},
+			want: []ChunkToSave{
+				{Text: "Ch1\n\nA\n\nG\n\nB", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{
+						{ExtractionNodeID: 100},
+						{ExtractionNodeID: 10, Position: 1},
+						{ExtractionNodeID: 11, Position: 2},
+						{ExtractionNodeID: 101, Position: 3},
+					}},
+			},
+		},
+		{
+			name: "a group candidate under a new breadcrumb flushes the buffer",
+			candidates: []chunkCandidate{
+				mkIDCandidate(100, "Ch1", "A"),
+				mkContainerCandidate(KindGroup, 300, "Ch2", "G", 10),
+			},
+			want: []ChunkToSave{
+				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 100}}},
+				{Text: "Ch2\n\nG", Breadcrumb: "Ch2", Position: 1, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 10, Position: 1}}},
 			},
 		},
 		{

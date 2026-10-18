@@ -35,7 +35,7 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 	case StrategyFTS:
 		chunkIDs, err = runFTS(retrieveCtx, query, k, deps.Retriever)
 	case StrategyHybrid:
-		chunkIDs, err = runHybrid(retrieveCtx, query, k, deps.EmbeddingsClient, deps.Retriever, deps.CollWeigher, deps.Logger)
+		chunkIDs, err = runHybrid(retrieveCtx, query, k, deps.Fusion, deps.EmbeddingsClient, deps.Retriever, deps.CollWeigher, deps.Logger)
 	default:
 		return nil, fmt.Errorf("unknown strategy: '%s'", strategy)
 	}
@@ -99,7 +99,7 @@ func runFTS(ctx context.Context, query string, k int64, retriever TopKRetriever)
 	return chunkIDs, nil
 }
 
-func runHybrid(ctx context.Context, query string, k int64, embed EmbedClient, retriever TopKRetriever, collweigher CollectionWeigher, logger *slog.Logger) ([]ScoredChunkID, error) {
+func runHybrid(ctx context.Context, query string, k int64, fusion FusionConfig, embed EmbedClient, retriever TopKRetriever, collweigher CollectionWeigher, logger *slog.Logger) ([]ScoredChunkID, error) {
 	hybridK := k * 4
 
 	ftsIDs, err := runFTS(ctx, query, hybridK, retriever)
@@ -112,7 +112,9 @@ func runHybrid(ctx context.Context, query string, k int64, embed EmbedClient, re
 		return nil, err
 	}
 
-	scored := rrfMerge(ftsIDs, annIDs)
+	fusion = fusion.withDefaults()
+
+	scored := weightedRRFMerge(fusion.RRFK, []float64{fusion.WeightFTS, fusion.WeightANN}, ftsIDs, annIDs)
 
 	collWeights, err := collweigher.WeighChunks(ctx, scored)
 	if err != nil {
@@ -128,12 +130,20 @@ func runHybrid(ctx context.Context, query string, k int64, embed EmbedClient, re
 }
 
 func rrfMerge(rankings ...[]ScoredChunkID) []ScoredChunkID {
+	weights := make([]float64, len(rankings))
+	for i := range weights {
+		weights[i] = 1
+	}
+	return weightedRRFMerge(rrfK, weights, rankings...)
+}
+
+func weightedRRFMerge(k int64, weights []float64, rankings ...[]ScoredChunkID) []ScoredChunkID {
 	scores := make(map[int64]float64)
 
-	for _, ranking := range rankings {
+	for i, ranking := range rankings {
 		for idx, chunkID := range ranking {
 			rank := int64(idx) + 1
-			scores[chunkID.ID] += 1.0 / float64(rrfK+rank)
+			scores[chunkID.ID] += weights[i] / float64(k+rank)
 		}
 	}
 
