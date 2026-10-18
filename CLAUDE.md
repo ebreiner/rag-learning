@@ -34,7 +34,8 @@ Keep the project knowledge in files. It helps people and Claude instances to con
 - `master` is the source of truth for code and knowledge. The user writes all code on `master` and on its feature branches.
   Claude reviews code there and changes code or tests only with an explicit grant for each set of changes.
   Claude writes `knowledge/` files there as part of the agreed work. The user reviews and commits them.
-- `claude-unstable` is the lab branch of Claude. Claude writes, commits and pushes freely there.
+- `claude-unstable` is the lab branch of Claude. Claude writes code and makes local commits there.
+  Push, merge, branch and tag operations are the work of the user.
 - The code of `claude-unstable` never merges into `master`. Ideas go to `master`, not code.
   The user writes an accepted idea again on `master`, or takes one named commit with an explicit `cherry-pick`.
 
@@ -44,8 +45,11 @@ Keep the project knowledge in files. It helps people and Claude instances to con
    Claude runs one eval on the base after a full re-import. This run is the frozen reference of the cycle.
 2. **Experiment:** one hypothesis, one change, one eval run, one file in `knowledge/experiments/`.
 3. **No merge of `master`** into `claude-unstable` during a cycle.
-4. **Compact:** the user and Claude review the experiment files. Accepted results go to `master` as decisions, designs or backlog rows.
-5. **Archive and reset:** tag `unstable/N/end`, then reset `claude-unstable` to the new `master`.
+4. **Compact:** the user tags the last commit `unstable/N/end` and pushes the tag. The tag keeps the experiment commits reachable after the reset.
+   The user and Claude review the experiment files. Accepted results go to `master` as decisions, designs or backlog rows.
+   On a branch from `master`, copy the new knowledge files without edits: `git checkout unstable/N/end -- <files>`.
+   New decisions name the experiment files, the commit hashes and the tag as evidence.
+5. **Reset:** when `master` has the accepted results, the user resets `claude-unstable` to `master` and tags `unstable/N+1/base`.
 - Compact after about 3 experiments, or at once after a schema change.
 
 ### Knowledge on `claude-unstable`
@@ -53,12 +57,20 @@ Keep the project knowledge in files. It helps people and Claude instances to con
 - Write only new files: `knowledge/experiments/` and draft designs.
 - Do not edit `decisions/`, `requirements/`, accepted designs or `index.md` on `claude-unstable`. Thus the compaction has no conflicts.
 
+### Support commits on `claude-unstable`
+
+- A support commit (tooling, infra) is permitted. It must not change the pipeline output. The next experiment file names it.
+- An eval run on a dirty working tree is permitted only when the dirty files do not change the pipeline output.
+  The experiment file names the dirty files.
+
 ### Frozen eval on `claude-unstable`
 
 - The eval is the yardstick. It stays as it is at `unstable/N/base` for the full cycle.
 - Do not change the eval core: `internal/eval/step`, `internal/platform/evalstore`, the `eval` command, k, the metrics.
 - Do not change the golden set. Each run must have the same `golden_sha256` as the base run.
-- Do not change the corpus. Do a full re-import before each eval run. Check `chunks_built` in the run header.
+- Do not change the corpus. The base run of a cycle uses a full re-import.
+- Before each other eval run, re-run the pipeline from the first step that the experiment changes (extract → chunk → embed).
+  Check `chunk_count` and `chunks_built` in the run header against the expected values.
 - An eval adapter (`internal/platform/sqlite/eval`, the searcher in `cmd/cli/cmd/eval.go`) can change only when an
   interface change of the experiment forces it. Make it a separate commit `eval-adapter: <reason>`, and name it in the experiment file.
 - An improvement of the eval goes to the `master` backlog. It comes into the next cycle.
