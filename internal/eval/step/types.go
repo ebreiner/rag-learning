@@ -46,6 +46,7 @@ type QueryResult struct {
 	QueryID string      `json:"query_id"`
 	Status  Status      `json:"status,omitempty"` // empty for no_answer
 	Rank    int         `json:"rank,omitempty"`
+	DocRank int         `json:"doc_rank,omitempty"` // first rank with a chunk of an expected doc, 0 = none
 	TopK    []SearchHit `json:"top_k"`
 }
 
@@ -56,6 +57,8 @@ type Metrics struct {
 	RankedOut    int             `json:"ranked_out"`
 	ContentLost  int             `json:"content_lost"`
 	DocMissing   int             `json:"doc_missing"`
+	DocRecallAt  map[int]float64 `json:"doc_recall_at"`
+	DocMRR       float64         `json:"doc_mrr"`
 }
 
 type StrategyResult struct {

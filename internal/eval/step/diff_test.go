@@ -10,7 +10,7 @@ func TestDiff(t *testing.T) {
 	header := RunHeader{GoldenSHA256: "abc", EmbedModel: "bge-m3", EmbedDim: 1024, K: 10}
 	prev := Run{Header: header, Strategies: []StrategyResult{{
 		Strategy: "hybrid",
-		Metrics:  Metrics{RecallAt: map[int]float64{1: 0.5}, MRR: 0.5, RankedOut: 1},
+		Metrics:  Metrics{RecallAt: map[int]float64{1: 0.5}, MRR: 0.5, RankedOut: 1, DocRecallAt: map[int]float64{1: 0.5}, DocMRR: 0.5},
 		Queries: []QueryResult{
 			{QueryID: "g1", Status: StatusHit, Rank: 3},
 			{QueryID: "g2", Status: StatusRankedOut},
@@ -20,7 +20,7 @@ func TestDiff(t *testing.T) {
 	cur := Run{Header: header, Strategies: []StrategyResult{
 		{
 			Strategy: "hybrid",
-			Metrics:  Metrics{RecallAt: map[int]float64{1: 0.75}, MRR: 0.25, RankedOut: 2},
+			Metrics:  Metrics{RecallAt: map[int]float64{1: 0.75}, MRR: 0.25, RankedOut: 2, DocRecallAt: map[int]float64{1: 1}, DocMRR: 0.75},
 			Queries: []QueryResult{
 				{QueryID: "g1", Status: StatusRankedOut},
 				{QueryID: "g2", Status: StatusHit, Rank: 1},
@@ -34,7 +34,7 @@ func TestDiff(t *testing.T) {
 	deltas, changes, warnings := Diff(prev, cur)
 
 	wantDeltas := map[string]Metrics{
-		"hybrid": {RecallAt: map[int]float64{1: 0.75 - 0.5}, MRR: 0.25 - 0.5, RankedOut: 1},
+		"hybrid": {RecallAt: map[int]float64{1: 0.75 - 0.5}, MRR: 0.25 - 0.5, RankedOut: 1, DocRecallAt: map[int]float64{1: 1 - 0.5}, DocMRR: 0.75 - 0.5},
 	}
 	if diff := cmp.Diff(wantDeltas, deltas); diff != "" {
 		t.Errorf("deltas (-want +got):\n%s", diff)
@@ -67,5 +67,20 @@ func TestDiffHeaderWarnings(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, warnings); diff != "" {
 		t.Errorf("warnings (-want +got):\n%s", diff)
+	}
+}
+
+// a run file from before the doc metrics has no doc fields: the delta is the full current value
+func TestDiffPrevWithoutDocMetrics(t *testing.T) {
+	prev := Run{Strategies: []StrategyResult{{Strategy: "hybrid", Metrics: Metrics{RecallAt: map[int]float64{1: 0.5}}}}}
+	cur := Run{Strategies: []StrategyResult{{Strategy: "hybrid", Metrics: Metrics{
+		RecallAt: map[int]float64{1: 0.5}, DocRecallAt: map[int]float64{1: 0.8}, DocMRR: 0.7,
+	}}}}
+
+	deltas, _, _ := Diff(prev, cur)
+
+	want := Metrics{RecallAt: map[int]float64{1: 0}, DocRecallAt: map[int]float64{1: 0.8}, DocMRR: 0.7}
+	if diff := cmp.Diff(want, deltas["hybrid"]); diff != "" {
+		t.Errorf("delta (-want +got):\n%s", diff)
 	}
 }

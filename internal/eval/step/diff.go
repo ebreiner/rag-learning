@@ -59,7 +59,9 @@ func statusLabel(q QueryResult) string {
 func subtractMetrics(cur, prev Metrics) Metrics {
 	d := Metrics{
 		RecallAt:     map[int]float64{},
+		DocRecallAt:  map[int]float64{},
 		MRR:          cur.MRR - prev.MRR,
+		DocMRR:       cur.DocMRR - prev.DocMRR,
 		DistinctSect: cur.DistinctSect - prev.DistinctSect,
 		RankedOut:    cur.RankedOut - prev.RankedOut,
 		ContentLost:  cur.ContentLost - prev.ContentLost,
@@ -67,6 +69,10 @@ func subtractMetrics(cur, prev Metrics) Metrics {
 	}
 	for at, v := range cur.RecallAt {
 		d.RecallAt[at] = v - prev.RecallAt[at]
+	}
+	// a run file from before the doc metrics has no DocRecallAt: nil map reads give 0
+	for at, v := range cur.DocRecallAt {
+		d.DocRecallAt[at] = v - prev.DocRecallAt[at]
 	}
 	return d
 }

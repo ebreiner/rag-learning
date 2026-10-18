@@ -8,11 +8,11 @@ import (
 
 func TestComputeMetrics(t *testing.T) {
 	results := []QueryResult{
-		{Status: StatusHit, Rank: 1, TopK: []SearchHit{
+		{Status: StatusHit, Rank: 1, DocRank: 1, TopK: []SearchHit{
 			hit(1, "a.md", "A", ""), hit(2, "a.md", "A", ""), hit(3, "b.md", "A", ""),
 		}},
-		{Status: StatusHit, Rank: 4, TopK: []SearchHit{hit(4, "a.md", "B", "")}},
-		{Status: StatusRankedOut},
+		{Status: StatusHit, Rank: 4, DocRank: 2, TopK: []SearchHit{hit(4, "a.md", "B", "")}},
+		{Status: StatusRankedOut, DocRank: 3}, // doc in the top k, but not the expected chunk
 		{Status: StatusContentLost},
 		{Status: ""}, // no_answe, not counted
 	}
@@ -27,7 +27,14 @@ func TestComputeMetrics(t *testing.T) {
 			5:  2 / n,
 			10: 2 / n,
 		},
-		MRR:          (1.0 + 1.0/4.0) / n,
+		MRR: (1.0 + 1.0/4.0) / n,
+		DocRecallAt: map[int]float64{
+			1:  1 / n,
+			3:  3 / n,
+			5:  3 / n,
+			10: 3 / n,
+		},
+		DocMRR:       (1.0 + 1.0/2.0 + 1.0/3.0) / n,
 		DistinctSect: (2.0 + 1.0) / n, // a.md>A and b.md>A are distinct; a.md>B
 		RankedOut:    1,
 		ContentLost:  1,

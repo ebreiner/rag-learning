@@ -54,6 +54,7 @@ func TestClassify(t *testing.T) {
 		topK     []SearchHit
 		want     Status
 		wantRank int
+		wantDoc  int // DocRank
 	}{
 		{
 			name:     "hit at rank 2",
@@ -61,12 +62,38 @@ func TestClassify(t *testing.T) {
 			topK:     []SearchHit{other, hit(1, "a.md", "Intro", "the anchor text")},
 			want:     StatusHit,
 			wantRank: 2,
+			wantDoc:  2,
+		},
+		{
+			name:     "hit at rank 3, another chunk of the doc at rank 1",
+			gq:       GoldenQuery{ID: "q", Expect: []Expectation{{Doc: "a.md", TextContains: "anchor"}}},
+			topK:     []SearchHit{hit(2, "a.md", "Other", "no match"), other, hit(1, "a.md", "Intro", "the anchor text")},
+			want:     StatusHit,
+			wantRank: 3,
+			wantDoc:  1,
 		},
 		{
 			name: "ranked out: anchor in a chunk of the doc, not in top k",
 			gq:   GoldenQuery{ID: "q", Expect: []Expectation{{Doc: "a.md", TextContains: "anchor"}}},
 			topK: []SearchHit{other},
 			want: StatusRankedOut,
+		},
+		{
+			name:    "ranked out, but a different chunk of the doc is in the top k",
+			gq:      GoldenQuery{ID: "q", Expect: []Expectation{{Doc: "a.md", TextContains: "anchor"}}},
+			topK:    []SearchHit{other, hit(2, "a.md", "Other", "no match")},
+			want:    StatusRankedOut,
+			wantDoc: 2,
+		},
+		{
+			name: "doc rank uses the doc of each expectation",
+			gq: GoldenQuery{ID: "q", Expect: []Expectation{
+				{Doc: "nope.md"},
+				{Doc: "a.md", TextContains: "anchor"},
+			}},
+			topK:    []SearchHit{other, hit(2, "a.md", "Other", "no match")},
+			want:    StatusRankedOut,
+			wantDoc: 2,
 		},
 		{
 			name: "content lost: doc exists, anchor in no chunk",
@@ -116,10 +143,32 @@ func TestClassify(t *testing.T) {
 			if err != nil {
 				t.Fatalf("classify() error = %v", err)
 			}
-			if got.Status != tt.want || got.Rank != tt.wantRank {
-				t.Errorf("classify() = %s@%d, want %s@%d", got.Status, got.Rank, tt.want, tt.wantRank)
+			if got.Status != tt.want || got.Rank != tt.wantRank || got.DocRank != tt.wantDoc {
+				t.Errorf("classify() = %s@%d doc@%d, want %s@%d doc@%d", got.Status, got.Rank, got.DocRank, tt.want, tt.wantRank, tt.wantDoc)
 			}
 		})
+	}
+}
+
+// a matching chunk is always a chunk of an expected doc, so the doc rank is never after the hit rank
+func TestDocRankNotAfterHitRank(t *testing.T) {
+	gq := GoldenQuery{ID: "q", Expect: []Expectation{{Doc: "a.md", TextContains: "anchor"}, {Doc: "b.md"}}}
+	pool := []SearchHit{
+		hit(1, "x.md", "X", "noise"),
+		hit(2, "a.md", "A", "no match"),
+		hit(3, "b.md", "B", "any"),
+		hit(4, "a.md", "A", "the anchor"),
+	}
+	// each rotation of the pool puts the hits at other ranks
+	for shift := range pool {
+		topK := append(append([]SearchHit{}, pool[shift:]...), pool[:shift]...)
+		got, err := classify(testCtx, gq, topK, fakeDocs{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != StatusHit || got.DocRank == 0 || got.DocRank > got.Rank {
+			t.Errorf("shift %d: %s@%d doc@%d, want a hit with 0 < doc rank <= rank", shift, got.Status, got.Rank, got.DocRank)
+		}
 	}
 }
 
