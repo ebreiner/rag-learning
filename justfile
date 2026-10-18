@@ -1,6 +1,7 @@
 set dotenv-load
 
-export OTEL_EXPORTER_OTLP_ENDPOINT := "http://127.0.0.1:4318"
+docling_url := env("RAG_DOCLING_URL", "http://127.0.0.1:5001")
+export OTEL_EXPORTER_OTLP_ENDPOINT := env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
 export OTEL_SERVICE_NAME := "rag-cli-dev"
 
 
@@ -43,7 +44,7 @@ lint:
 e2e input-dir collection-name collection-weight: build
 	#!/usr/bin/env bash
 	set -euxo pipefail
-	./main --db-path ./data/data.db extract -i {{input-dir}} --docling-url "http://127.0.0.1:5001" --collection-name {{collection-name}} --collection-weight {{collection-weight}}
+	./main --db-path ./data/data.db extract -i {{input-dir}} --docling-url "{{docling_url}}" --collection-name {{collection-name}} --collection-weight {{collection-weight}}
 	./main --db-path ./data/data.db chunk
 	./main --db-path ./data/data.db embed --openai-url "http://127.0.0.1:11434" --model bge-m3 --dim 1024
 
@@ -52,8 +53,8 @@ e2e-clear: build cleanup e2e-static
 e2e-static: build
 	#!/usr/bin/env bash
 	set -euxo pipefail
-	./main --db-path ./data/data.db extract -i build/manual --docling-url "http://127.0.0.1:5001" --collection-weight 0.8  --collection-name manual
-	./main --db-path ./data/data.db extract -i build/changelogs --docling-url "http://127.0.0.1:5001" --collection-weight 0.4  --collection-name changelogs
+	./main --db-path ./data/data.db extract -i build/manual --docling-url "{{docling_url}}" --collection-weight 0.8  --collection-name manual
+	./main --db-path ./data/data.db extract -i build/changelogs --docling-url "{{docling_url}}" --collection-weight 0.4  --collection-name changelogs
 	./main --db-path ./data/data.db chunk
 	./main --db-path ./data/data.db embed --openai-url "http://127.0.0.1:11434" --model bge-m3 --dim 1024
 

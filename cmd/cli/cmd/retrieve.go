@@ -89,7 +89,7 @@ to quickly create a Cobra application.`,
 			}
 
 			var embedClient step.EmbedClient
-			httpClient := httpclient.New(time.Minute * 5)
+			httpClient := httpclient.New(time.Minute*5, nil)
 			if cmd.Flags().Lookup("xberg-url").Changed {
 				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger, httpClient); err == nil {
 					embedClient = client

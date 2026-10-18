@@ -73,14 +73,14 @@ func (t *capturingTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return resp, nil
 }
 
-func New(timeout time.Duration) *http.Client {
-	return &http.Client{Timeout: timeout, Transport: otelhttp.NewTransport(http.DefaultTransport)}
+func New(timeout time.Duration, header http.Header) *http.Client {
+	return &http.Client{Timeout: timeout, Transport: otelhttp.NewTransport(withHeaders(http.DefaultTransport, header))}
 }
 
-func NewDump(timeout time.Duration, dumpDir string, logger *slog.Logger) (*http.Client, error) {
+func NewDump(timeout time.Duration, dumpDir string, header http.Header, logger *slog.Logger) (*http.Client, error) {
 	if err := os.MkdirAll(dumpDir, 0755); err != nil {
 		return &http.Client{}, err
 	}
-	captureingT := &capturingTransport{next: http.DefaultTransport, dumpDir: dumpDir, logger: logger}
+	captureingT := &capturingTransport{next: withHeaders(http.DefaultTransport, header), dumpDir: dumpDir, logger: logger}
 	return &http.Client{Timeout: timeout, Transport: otelhttp.NewTransport(captureingT)}, nil
 }
