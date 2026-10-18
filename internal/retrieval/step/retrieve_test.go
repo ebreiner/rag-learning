@@ -229,6 +229,39 @@ func TestRrfMerge(t *testing.T) {
 	}
 }
 
+func TestWeightedRRFMerge(t *testing.T) {
+	fts := []ScoredChunkID{{ID: 1}, {ID: 2}}
+	ann := []ScoredChunkID{{ID: 2}, {ID: 1}}
+
+	// equal weights: both ids have the same score, tie-break by id
+	got := weightedRRFMerge(60, []float64{1, 1}, fts, ann)
+	if got[0].ID != 1 || got[0].Score != got[1].Score {
+		t.Errorf("equal weights: got %+v, want a tie with id 1 first", got)
+	}
+
+	// ANN weight 2: the ANN rank 1 (id 2) wins
+	w := 2.0
+	got = weightedRRFMerge(60, []float64{1, w}, fts, ann)
+	want2 := 1.0/float64(60+2) + w/float64(60+1)
+	want1 := 1.0/float64(60+1) + w/float64(60+2)
+	if got[0].ID != 2 || got[0].Score != want2 || got[1].Score != want1 {
+		t.Errorf("ANN weight 2: got %+v, want id 2 first with %v, then %v", got, want2, want1)
+	}
+}
+
+func TestFusionConfigDefaults(t *testing.T) {
+	got := FusionConfig{}.withDefaults()
+	want := FusionConfig{RRFK: rrfK, WeightFTS: 1, WeightANN: 1}
+	if got != want {
+		t.Errorf("withDefaults() = %+v, want %+v", got, want)
+	}
+
+	set := FusionConfig{RRFK: 20, WeightFTS: 0.5, WeightANN: 3}
+	if got := set.withDefaults(); got != set {
+		t.Errorf("withDefaults() changed set values: %+v", got)
+	}
+}
+
 func TestCollectionRerank(t *testing.T) {
 	t.Run("weight multiplies the raw score", func(t *testing.T) {
 		score, weight := 0.02, 0.5
@@ -297,7 +330,7 @@ func TestRunHybrid(t *testing.T) {
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
 		weigher := &fakeCollWeigher{weights: map[int64]float64{1: 1.0, 2: 1.0, 3: 5.0, 4: 1.0}}
 
-		ids, err := runHybrid(testCtx, "hello", 2, client, retriever, weigher, testLogger)
+		ids, err := runHybrid(testCtx, "hello", 2, FusionConfig{}, client, retriever, weigher, testLogger)
 		if err != nil {
 			t.Fatalf("runHybrid() error = %v", err)
 		}
@@ -324,7 +357,7 @@ func TestRunHybrid(t *testing.T) {
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
 		weigher := &fakeCollWeigher{err: wantErr}
 
-		_, err := runHybrid(testCtx, "hello", 2, client, retriever, weigher, testLogger)
+		_, err := runHybrid(testCtx, "hello", 2, FusionConfig{}, client, retriever, weigher, testLogger)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("runHybrid() error = %v, want %v", err, wantErr)
 		}
@@ -339,7 +372,7 @@ func TestRunHybrid(t *testing.T) {
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
 		weigher := &fakeCollWeigher{weights: map[int64]float64{1: 1.0, 2: 1.0}}
 
-		ids, err := runHybrid(testCtx, "hello", 10, client, retriever, weigher, testLogger)
+		ids, err := runHybrid(testCtx, "hello", 10, FusionConfig{}, client, retriever, weigher, testLogger)
 		if err != nil {
 			t.Fatalf("runHybrid() error = %v", err)
 		}
