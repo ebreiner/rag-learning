@@ -2,7 +2,7 @@
 type: index
 title: Knowledge base index
 status: current
-date: 2026-10-17
+date: 2026-10-18
 tags: [index]
 ---
 
@@ -10,7 +10,7 @@ tags: [index]
 
 Start here:
 1. Read the [handover](requirements/rag-cli-handover.md) for the product goal and the requirements.
-2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0006 supersede parts of it.
+2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0010 supersede or add to parts of it.
 3. Read the [backlog](requirements/backlog.md) for the work order.
 
 ## Decisions
@@ -23,14 +23,22 @@ Start here:
 - [0005-oauth-resource-server](decisions/0005-oauth-resource-server.md): JWT check, RFC 9728 metadata, static token for development.
 - [0006-ingest-command](decisions/0006-ingest-command.md): one `ingest` command with add, replace and delete.
 - [0007-eval-harness-implementation](decisions/0007-eval-harness-implementation.md): the eval implementation is the target where it differs from the locked eval design.
+- [0008-inline-group-merges-as-paragraph](decisions/0008-inline-group-merges-as-paragraph.md): a docling inline group merges like a paragraph, no more `generic` chunks for groups (cycle 1).
+- [0009-fusion-config-default](decisions/0009-fusion-config-default.md): `FusionConfig` port, default RRF k 60 and weights 1/1, no tuning with the current golden set (cycle 1).
+- [0010-source-single-term](decisions/0010-source-single-term.md): "source" replaces "collection" and "data source" in all layers; code rename in S2.
 
 ## Designs
 
 - [eval-harness](designs/eval-harness.md): RC1 eval command, golden format, status for each query, metrics, run files outside the DB. Locked, partly superseded by 0007.
+- [unstable-scopes](designs/unstable-scopes.md): scopes S0–S6 for `claude-unstable`, ports for each scope, cycle plan. Draft.
 
 ## Experiments
 
 - [0001-eval-baseline](experiments/0001-eval-baseline.md): first valid eval baseline (1806 chunks), findings: `generic` chunks without section signal, hybrid vs. ANN at rank 1, golden-set candidates.
+- Cycle 1 of `claude-unstable` (tag `unstable/1/end`):
+  - [0002-generic-breadcrumb](experiments/0002-generic-breadcrumb.md): breadcrumb prefix for `generic` chunks; recall gain, but ANN rank-1 loss and less diversity.
+  - [0003-generic-merge](experiments/0003-generic-merge.md): groups merge like paragraphs; 1116 chunks, hybrid r@5 0.80, MRR 0.503. Basis of 0008.
+  - [0004-fusion-weights](experiments/0004-fusion-weights.md): RRF weight grid; no gain over equal weights. Basis of 0009.
 
 ## Requirements
 
