@@ -84,10 +84,10 @@ func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBacken
 func newEmbedClient(cnf EmbedBackendConfig, logger *slog.Logger) (step.EmbedClient, error) {
 	switch c := cnf.(type) {
 	case XbergConfig:
-		httpClient := httpclient.New(60 * time.Second)
+		httpClient := httpclient.New(60*time.Second, nil)
 		return kreuzberg.NewKreuzbergClient(c.URL, logger, httpClient)
 	case OpenAIConfig:
-		httpClient := httpclient.New(60 * time.Second)
+		httpClient := httpclient.New(60*time.Second, nil)
 		return openai.NewOpenAIClient(c.Model, c.URL, c.Dim, httpClient, logger)
 	default:
 		return openai.ClientOpenAI{}, fmt.Errorf("unknown embed backend")

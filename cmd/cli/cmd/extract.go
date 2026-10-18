@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"rag/internal/extract/step"
 	"rag/internal/platform/config"
 	"rag/internal/platform/extraction/docling"
@@ -88,9 +89,15 @@ to quickly create a Cobra application.`,
 				return fmt.Errorf("missing required flag collection-name")
 			}
 
+			doclingHeader, err := httpclient.ParseHeaders(os.Getenv("RAG_DOCLING_HEADERS"))
+			if err != nil {
+				return fmt.Errorf("error parsing env 'RAG_DOCLING_HEADERS': %w", err)
+			}
+
 			params := createExtractionsParams{
 				InputDir:         inputDir,
 				DoclingURL:       doclingURL,
+				DoclingHeader:    doclingHeader,
 				DBPath:           dbPath,
 				DumpDir:          dumpDir,
 				CollectionName:   collectionName,
@@ -118,6 +125,7 @@ to quickly create a Cobra application.`,
 type createExtractionsParams struct {
 	InputDir         string
 	DoclingURL       string
+	DoclingHeader    http.Header
 	DBPath           string
 	DumpDir          string
 	CollectionName   string
@@ -146,12 +154,12 @@ func createExtractions(ctx context.Context, params createExtractionsParams, logg
 		if err != nil {
 			return err
 		}
-		client, err = httpclient.NewDump(timeout, dumpDir, logger)
+		client, err = httpclient.NewDump(timeout, dumpDir, params.DoclingHeader, logger)
 		if err != nil {
 			return err
 		}
 	} else {
-		client = httpclient.New(timeout)
+		client = httpclient.New(timeout, params.DoclingHeader)
 	}
 
 	extractor, err := docling.NewDoclingExtractor(params.DoclingURL, client, logger)
