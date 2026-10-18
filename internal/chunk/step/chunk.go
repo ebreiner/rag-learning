@@ -417,22 +417,6 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "group node text is empty, skipping")
 				continue
 			}
-			ids := make([]ChunkExtractionNodeID, 0)
-			for pos, id := range candidate.MemberIDs {
-				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
-			}
-
-			toSave := ChunkToSave{
-				Breadcrumb:        candidate.Breadcrumb,
-				Position:          positionCounter,
-				ExtractionNodeIDs: ids,
-				Text:              candidate.Text,
-				Type:              TypeGeneric,
-			}
-
-			merged = append(merged, toSave)
-			positionCounter++
-			continue
 
 		case KindList:
 			if len(candidate.Text) == 0 {
@@ -499,13 +483,24 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 			startBuffer(candidate.Breadcrumb)
 		}
 
+		addMembers := func() {
+			ids := []int64{candidate.Node.ExtractionNodeID}
+			if candidate.Node.Kind == KindGroup {
+				ids = candidate.MemberIDs
+			}
+			for _, id := range ids {
+				extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: id, Position: candidatePos})
+				candidatePos++
+			}
+		}
+
 		if budget-tokenCount(candidate.Text) > 0 {
 			if len(buffer) == 0 {
 				buffer = candidate.Text
 			} else {
 				buffer = fmt.Sprintf("%s\n\n%s", buffer, candidate.Text)
 			}
-			extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: candidatePos})
+			addMembers()
 			budget = budget - len(candidate.Text)
 		} else if len(buffer) > 0 {
 			flush()
@@ -513,16 +508,15 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 			if len(candidate.Text) > 0 {
 				buffer = candidate.Text
 				budget = budget - tokenCount(candidate.Text)
-				extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: candidatePos})
+				addMembers()
 			}
 		} else if len(candidate.Text) > 0 {
 			buffer = candidate.Text
 			budget = budget - tokenCount(candidate.Text)
-			extNodeIDs = append(extNodeIDs, ChunkExtractionNodeID{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: candidatePos})
+			addMembers()
 		}
 
 		lastCrumb = candidate.Breadcrumb
-		candidatePos++
 	}
 
 	if len(buffer) > 0 {
