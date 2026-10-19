@@ -24,13 +24,15 @@ func (f fakeDocs) ChunksOfDoc(ctx context.Context, docName string) ([]Chunk, boo
 }
 
 type fakeSearcher struct {
-	hits  map[string][]SearchHit // key: strategy + "|" + query
-	err   error
-	calls []string
+	hits   map[string][]SearchHit // key: strategy + "|" + query
+	err    error
+	calls  []string
+	kCalls []int64
 }
 
 func (f *fakeSearcher) Search(ctx context.Context, query string, k int64, strategy string) ([]SearchHit, error) {
 	f.calls = append(f.calls, strategy+"|"+query)
+	f.kCalls = append(f.kCalls, k)
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -139,7 +141,7 @@ func TestClassify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := classify(testCtx, tt.gq, tt.topK, docs)
+			got, err := classify(testCtx, tt.gq, tt.topK, 10, docs)
 			if err != nil {
 				t.Fatalf("classify() error = %v", err)
 			}
@@ -162,7 +164,7 @@ func TestDocRankNotAfterHitRank(t *testing.T) {
 	// each rotation of the pool puts the hits at other ranks
 	for shift := range pool {
 		topK := append(append([]SearchHit{}, pool[shift:]...), pool[:shift]...)
-		got, err := classify(testCtx, gq, topK, fakeDocs{})
+		got, err := classify(testCtx, gq, topK, 10, fakeDocs{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +176,7 @@ func TestDocRankNotAfterHitRank(t *testing.T) {
 
 func TestClassifyDocError(t *testing.T) {
 	gq := GoldenQuery{ID: "q", Expect: []Expectation{{Doc: "a.md"}}}
-	_, err := classify(testCtx, gq, nil, fakeDocs{err: errors.New("db down")})
+	_, err := classify(testCtx, gq, nil, 10, fakeDocs{err: errors.New("db down")})
 	if err == nil {
 		t.Fatal("classify() error = nil, want error")
 	}
@@ -190,7 +192,7 @@ func TestRunEval(t *testing.T) {
 	}}
 	docs := fakeDocs{chunks: map[string][]Chunk{"a.md": {{ID: 1, DocName: "a.md"}}}}
 
-	got, err := RunEval(testCtx, gs, []string{"fts", "ann"}, 10, searcher, docs)
+	got, err := RunEval(testCtx, gs, []string{"fts", "ann"}, 10, 40, searcher, docs)
 	if err != nil {
 		t.Fatalf("RunEval() error = %v", err)
 	}
@@ -212,13 +214,62 @@ func TestRunEval(t *testing.T) {
 	if got[0].Metrics.RecallAt[1] != 1 {
 		t.Errorf("fts recall@1 = %v, want 1", got[0].Metrics.RecallAt[1])
 	}
+	for _, k := range searcher.kCalls {
+		if k != 40 {
+			t.Errorf("search k = %d, want 40 (the pool size, deeper than k)", k)
+		}
+	}
+}
+
+func TestRunEvalDepthIsAtLeastK(t *testing.T) {
+	gs := GoldenSet{Queries: []GoldenQuery{{ID: "g1", Query: "q1", NoAnswer: true}}}
+	searcher := &fakeSearcher{}
+
+	if _, err := RunEval(testCtx, gs, []string{"fts"}, 10, 0, searcher, fakeDocs{}); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]int64{10}, searcher.kCalls); diff != "" {
+		t.Errorf("search k (-want +got):\n%s", diff)
+	}
+}
+
+func TestClassifyInPool(t *testing.T) {
+	gq := GoldenQuery{ID: "q", Expect: []Expectation{{Doc: "a.md", TextContains: "anchor"}}}
+	docs := fakeDocs{chunks: map[string][]Chunk{"a.md": {{ID: 1, DocName: "a.md", Text: "the anchor"}}}}
+	hits := []SearchHit{
+		hit(7, "x.md", "X", "noise"),
+		hit(8, "y.md", "Y", "noise"),
+		hit(1, "a.md", "A", "the anchor"),
+	}
+
+	got, err := classify(testCtx, gq, hits, 2, docs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusInPool || got.Rank != 3 {
+		t.Errorf("classify() = %s@%d, want in_pool@3", got.Status, got.Rank)
+	}
+	if len(got.TopK) != 2 {
+		t.Errorf("len(TopK) = %d, want 2: the run file keeps only the top k", len(got.TopK))
+	}
+	if got.DocRank != 0 {
+		t.Errorf("DocRank = %d, want 0: the doc is not in the top k", got.DocRank)
+	}
+
+	got, err = classify(testCtx, gq, hits[:2], 2, docs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusRankedOut {
+		t.Errorf("classify() without the match in the hits = %s, want ranked_out", got.Status)
+	}
 }
 
 func TestRunEvalSearchErrorStopsRun(t *testing.T) {
 	gs := GoldenSet{Queries: []GoldenQuery{{ID: "g1", Query: "q1"}, {ID: "g2", Query: "q2"}}}
 	searcher := &fakeSearcher{err: errors.New("embed down")}
 
-	_, err := RunEval(testCtx, gs, []string{"ann"}, 10, searcher, fakeDocs{})
+	_, err := RunEval(testCtx, gs, []string{"ann"}, 10, 40, searcher, fakeDocs{})
 	if err == nil {
 		t.Fatal("RunEval() error = nil, want error")
 	}

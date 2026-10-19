@@ -26,6 +26,8 @@ func computeMetrics(results []QueryResult, k int64) Metrics {
 					m.RecallAt[at]++
 				}
 			}
+		case StatusInPool:
+			m.InPool++
 		case StatusRankedOut:
 			m.RankedOut++
 		case StatusContentLost:

@@ -78,7 +78,7 @@ show the difference to the previous run.`,
 			}
 
 			docs := sqliteeval.NewDocChunksProvider(db, logger)
-			results, err := evalstep.RunEval(ctx, golden, cnf.Eval.Strategies, k, retrievalSearcher{deps: deps}, &docs)
+			results, err := evalstep.RunEval(ctx, golden, cnf.Eval.Strategies, k, cnf.Retrieval.PoolSize, retrievalSearcher{deps: deps}, &docs)
 			if err != nil {
 				return fmt.Errorf("error running eval: %w", err)
 			}
@@ -102,6 +102,7 @@ show the difference to the previous run.`,
 					EmbedModel:   cnf.Embedding.Model,
 					EmbedDim:     cnf.Embedding.Dim,
 					K:            k,
+					PoolSize:     max(k, cnf.Retrieval.PoolSize),
 				},
 				Strategies: results,
 			}
@@ -169,15 +170,15 @@ func (r *report) flush() error {
 
 func printReport(r *report, run evalstep.Run, golden evalstep.GoldenSet) {
 	h := run.Header
-	r.line("golden: %s (%d queries)  db: %s (%d chunks, built %s)  model: %s/%d  k: %d\n\n",
-		h.GoldenPath, len(golden.Queries), h.DBPath, h.ChunkCount, h.ChunksBuilt, h.EmbedModel, h.EmbedDim, h.K)
+	r.line("golden: %s (%d queries)  db: %s (%d chunks, built %s)  model: %s/%d  k: %d  pool: %d\n\n",
+		h.GoldenPath, len(golden.Queries), h.DBPath, h.ChunkCount, h.ChunksBuilt, h.EmbedModel, h.EmbedDim, h.K, h.PoolSize)
 
-	r.line("strategy\tr@1\tr@3\tr@5\tr@10\tmrr\tsect@10\tranked_out\tlost\tmissing\n")
+	r.line("strategy\tr@1\tr@3\tr@5\tr@10\tmrr\tsect@10\tin_pool\tranked_out\tlost\tmissing\n")
 	for _, s := range run.Strategies {
 		m := s.Metrics
-		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\t%.1f\t%d\t%d\t%d\n",
+		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\t%.1f\t%d\t%d\t%d\t%d\n",
 			s.Strategy, recall(m.RecallAt, 1), recall(m.RecallAt, 3), recall(m.RecallAt, 5), recall(m.RecallAt, 10),
-			m.MRR, m.DistinctSect, m.RankedOut, m.ContentLost, m.DocMissing)
+			m.MRR, m.DistinctSect, m.InPool, m.RankedOut, m.ContentLost, m.DocMissing)
 	}
 
 	r.line("\nstrategy\tdoc@1\tdoc@3\tdoc@5\tdoc@10\tdoc_mrr\n")
@@ -200,6 +201,10 @@ func printReport(r *report, run evalstep.Run, golden evalstep.GoldenSet) {
 				continue
 			}
 			misses++
+			if q.Status == evalstep.StatusInPool {
+				r.line("  %s\t%s\t%s@%d\n", q.QueryID, s.Strategy, q.Status, q.Rank)
+				continue
+			}
 			r.line("  %s\t%s\t%s\n", q.QueryID, s.Strategy, q.Status)
 		}
 	}
@@ -231,15 +236,15 @@ func printDiff(r *report, prev evalstep.Run, prevPath string, cur evalstep.Run) 
 		r.line("  WARNING: %s\n", w)
 	}
 
-	r.line("strategy\tΔr@1\tΔr@3\tΔr@5\tΔr@10\tΔmrr\tΔranked_out\tΔlost\tΔmissing\n")
+	r.line("strategy\tΔr@1\tΔr@3\tΔr@5\tΔr@10\tΔmrr\tΔin_pool\tΔranked_out\tΔlost\tΔmissing\n")
 	for _, s := range cur.Strategies {
 		d, ok := deltas[s.Strategy]
 		if !ok {
 			continue
 		}
-		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\t%+d\t%+d\t%+d\n",
+		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\t%+d\t%+d\t%+d\t%+d\n",
 			s.Strategy, recallDelta(d.RecallAt, 1), recallDelta(d.RecallAt, 3), recallDelta(d.RecallAt, 5), recallDelta(d.RecallAt, 10),
-			d.MRR, d.RankedOut, d.ContentLost, d.DocMissing)
+			d.MRR, d.InPool, d.RankedOut, d.ContentLost, d.DocMissing)
 	}
 
 	r.line("\nstrategy\tΔdoc@1\tΔdoc@3\tΔdoc@5\tΔdoc@10\tΔdoc_mrr\n")

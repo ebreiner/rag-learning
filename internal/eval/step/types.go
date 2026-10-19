@@ -37,15 +37,16 @@ type Status string
 
 const (
 	StatusHit         Status = "hit"
-	StatusRankedOut   Status = "ranked_out"
+	StatusInPool      Status = "in_pool"    // below k, but in the top pool_size: a ranking problem
+	StatusRankedOut   Status = "ranked_out" // not in the top pool_size: a problem of the candidate search
 	StatusContentLost Status = "content_lost"
 	StatusDocMissing  Status = "doc_missing"
 )
 
 type QueryResult struct {
 	QueryID string      `json:"query_id"`
-	Status  Status      `json:"status,omitempty"` // empty for no_answer
-	Rank    int         `json:"rank,omitempty"`
+	Status  Status      `json:"status,omitempty"`   // empty for no_answer
+	Rank    int         `json:"rank,omitempty"`     // for hit and in_pool
 	DocRank int         `json:"doc_rank,omitempty"` // first rank with a chunk of an expected doc, 0 = none
 	TopK    []SearchHit `json:"top_k"`
 }
@@ -54,6 +55,7 @@ type Metrics struct {
 	RecallAt     map[int]float64 `json:"recall_at"` // keys 1, 3, 5, 10
 	MRR          float64         `json:"mrr"`
 	DistinctSect float64         `json:"distinct_sections_at_10"`
+	InPool       int             `json:"in_pool"`
 	RankedOut    int             `json:"ranked_out"`
 	ContentLost  int             `json:"content_lost"`
 	DocMissing   int             `json:"doc_missing"`
@@ -84,6 +86,7 @@ type RunHeader struct {
 	EmbedModel   string    `json:"embed_model"`
 	EmbedDim     int64     `json:"embed_dim"`
 	K            int64     `json:"k"`
+	PoolSize     int64     `json:"pool_size"` // search depth for in_pool, 0 in runs from before in_pool
 }
 
 type StatusChange struct {

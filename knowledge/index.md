@@ -10,7 +10,7 @@ tags: [index]
 
 Start here:
 1. Read the [handover](requirements/rag-cli-handover.md) for the product goal and the requirements.
-2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0013 supersede or add to parts of it.
+2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0014 supersede or add to parts of it.
 3. Read the [backlog](requirements/backlog.md) for the work order.
 
 ## Decisions
@@ -29,6 +29,7 @@ Start here:
 - [0011-config-file-and-composition-root](decisions/0011-config-file-and-composition-root.md): one YAML file via `--config`, config values go into adapters at the composition root, commands `ingest`/`serve`/`eval`/`retrieve`, restart after ingest, secrets in the config for now.
 - [0012-sources-table-replaces-collections](decisions/0012-sources-table-replaces-collections.md): table `sources` (name, weight), `documents.source_name` FK and `rel_path`, first source wins for duplicate content.
 - [0013-retrieval-two-phases](decisions/0013-retrieval-two-phases.md): find (FTS+ANN, fusion, pool) then order (hydrate, source weight, cut to k); weight in hybrid only, no fusion defaults, `RankStage` interface later with the reranker.
+- [0014-eval-in-pool-status](decisions/0014-eval-in-pool-status.md): eval status `in_pool` (rank k+1 to `pool_size`), `ranked_out` = not in the pool, reference run `20261019T135803Z`.
 
 ## Designs
 

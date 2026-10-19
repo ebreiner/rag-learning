@@ -56,7 +56,7 @@ func TestDiff(t *testing.T) {
 
 func TestDiffHeaderWarnings(t *testing.T) {
 	prev := Run{Header: RunHeader{GoldenSHA256: "abc", EmbedModel: "bge-m3", EmbedDim: 1024, K: 10}}
-	cur := Run{Header: RunHeader{GoldenSHA256: "def", EmbedModel: "qwen", EmbedDim: 768, K: 5}}
+	cur := Run{Header: RunHeader{GoldenSHA256: "def", EmbedModel: "qwen", EmbedDim: 768, K: 5, PoolSize: 40}}
 
 	_, _, warnings := Diff(prev, cur)
 
@@ -64,6 +64,7 @@ func TestDiffHeaderWarnings(t *testing.T) {
 		"golden set changed since the previous run",
 		"embed model changed: bge-m3/1024 -> qwen/768",
 		"k changed: 10 -> 5",
+		"pool size changed: 0 -> 40, in_pool and ranked_out are not comparable",
 	}
 	if diff := cmp.Diff(want, warnings); diff != "" {
 		t.Errorf("warnings (-want +got):\n%s", diff)
@@ -82,5 +83,29 @@ func TestDiffPrevWithoutDocMetrics(t *testing.T) {
 	want := Metrics{RecallAt: map[int]float64{1: 0}, DocRecallAt: map[int]float64{1: 0.8}, DocMRR: 0.7}
 	if diff := cmp.Diff(want, deltas["hybrid"]); diff != "" {
 		t.Errorf("delta (-want +got):\n%s", diff)
+	}
+}
+
+func TestDiffInPool(t *testing.T) {
+	header := RunHeader{GoldenSHA256: "abc", K: 10, PoolSize: 40}
+	prev := Run{Header: header, Strategies: []StrategyResult{{
+		Strategy: "hybrid",
+		Metrics:  Metrics{InPool: 1},
+		Queries:  []QueryResult{{QueryID: "g1", Status: StatusInPool, Rank: 12}},
+	}}}
+	cur := Run{Header: header, Strategies: []StrategyResult{{
+		Strategy: "hybrid",
+		Metrics:  Metrics{InPool: 0},
+		Queries:  []QueryResult{{QueryID: "g1", Status: StatusHit, Rank: 2}},
+	}}}
+
+	deltas, changes, _ := Diff(prev, cur)
+
+	if deltas["hybrid"].InPool != -1 {
+		t.Errorf("delta in_pool = %d, want -1", deltas["hybrid"].InPool)
+	}
+	want := []StatusChange{{QueryID: "g1", Strategy: "hybrid", From: "in_pool@12", To: "hit@2"}}
+	if diff := cmp.Diff(want, changes); diff != "" {
+		t.Errorf("changes (-want +got):\n%s", diff)
 	}
 }

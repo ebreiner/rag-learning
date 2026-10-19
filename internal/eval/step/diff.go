@@ -15,6 +15,9 @@ func Diff(prev, cur Run) (deltas map[string]Metrics, changes []StatusChange, war
 	if ph.K != ch.K {
 		warnings = append(warnings, fmt.Sprintf("k changed: %d -> %d", ph.K, ch.K))
 	}
+	if ph.PoolSize != ch.PoolSize {
+		warnings = append(warnings, fmt.Sprintf("pool size changed: %d -> %d, in_pool and ranked_out are not comparable", ph.PoolSize, ch.PoolSize))
+	}
 
 	prevByStrategy := map[string]StrategyResult{}
 	for _, s := range prev.Strategies {
@@ -50,8 +53,8 @@ func Diff(prev, cur Run) (deltas map[string]Metrics, changes []StatusChange, war
 }
 
 func statusLabel(q QueryResult) string {
-	if q.Status == StatusHit {
-		return fmt.Sprintf("hit@%d", q.Rank)
+	if q.Status == StatusHit || q.Status == StatusInPool {
+		return fmt.Sprintf("%s@%d", q.Status, q.Rank)
 	}
 	return string(q.Status)
 }
@@ -63,6 +66,7 @@ func subtractMetrics(cur, prev Metrics) Metrics {
 		MRR:          cur.MRR - prev.MRR,
 		DocMRR:       cur.DocMRR - prev.DocMRR,
 		DistinctSect: cur.DistinctSect - prev.DistinctSect,
+		InPool:       cur.InPool - prev.InPool,
 		RankedOut:    cur.RankedOut - prev.RankedOut,
 		ContentLost:  cur.ContentLost - prev.ContentLost,
 		DocMissing:   cur.DocMissing - prev.DocMissing,

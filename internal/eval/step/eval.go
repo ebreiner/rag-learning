@@ -5,17 +5,18 @@ import (
 	"fmt"
 )
 
-func RunEval(ctx context.Context, gs GoldenSet, strategies []string, k int64, searcher Searcher, docs DocChunksProvider) ([]StrategyResult, error) {
+func RunEval(ctx context.Context, gs GoldenSet, strategies []string, k, poolSize int64, searcher Searcher, docs DocChunksProvider) ([]StrategyResult, error) {
+	depth := max(k, poolSize)
 	results := make([]StrategyResult, 0, len(strategies))
 	for _, strategy := range strategies {
 		queryResults := make([]QueryResult, 0, len(gs.Queries))
 		for _, gq := range gs.Queries {
-			topK, err := searcher.Search(ctx, gq.Query, k, strategy)
+			hits, err := searcher.Search(ctx, gq.Query, depth, strategy)
 			if err != nil {
 				return nil, fmt.Errorf("search %s with strategy %s: %w", gq.ID, strategy, err)
 			}
 
-			res, err := classify(ctx, gq, topK, docs)
+			res, err := classify(ctx, gq, hits, k, docs)
 			if err != nil {
 				return nil, fmt.Errorf("classify %s with strategy %s: %w", gq.ID, strategy, err)
 			}
@@ -32,17 +33,25 @@ func RunEval(ctx context.Context, gs GoldenSet, strategies []string, k int64, se
 	return results, nil
 }
 
-func classify(ctx context.Context, gq GoldenQuery, topK []SearchHit, docs DocChunksProvider) (QueryResult, error) {
+func classify(ctx context.Context, gq GoldenQuery, hits []SearchHit, k int64, docs DocChunksProvider) (QueryResult, error) {
+	topK := hits
+	if len(topK) > int(k) {
+		topK = hits[:k]
+	}
+	// the run file keeps only the top k, the hits below k are only for in_pool
 	res := QueryResult{QueryID: gq.ID, TopK: topK}
 	if gq.NoAnswer {
 		return res, nil
 	}
 	res.DocRank = docRank(gq, topK)
 
-	for i, h := range topK {
+	for i, h := range hits {
 		for _, e := range gq.Expect {
 			if matches(e, h.Chunk) {
 				res.Status, res.Rank = StatusHit, i+1
+				if i >= len(topK) {
+					res.Status = StatusInPool
+				}
 				return res, nil
 			}
 		}
