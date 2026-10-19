@@ -35,6 +35,7 @@ func Execute() {
 	rootCmd.AddCommand(
 		cmd.NewEvalCmd(),
 		cmd.NewRetrieveCmd(),
+		cmd.NewCatalogCmd(),
 		serve.NewServeCmd(),
 		ingest.NewIngestCommand(),
 	)

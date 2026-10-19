@@ -1,7 +1,7 @@
 ---
 type: design
 title: Sidecar metadata, first scope
-status: draft
+status: locked
 date: 2026-10-19
 tags: [metadata, sidecar, source, rc14, rc18, rc5]
 ---

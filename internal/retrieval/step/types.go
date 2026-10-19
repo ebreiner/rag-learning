@@ -10,6 +10,7 @@ type RetrievalDeps struct {
 	Renderer         ChunkRenderer
 	Fusion           FusionConfig
 	PoolSize         int64
+	Sources          []string
 }
 
 type FusionConfig struct {

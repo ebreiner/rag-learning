@@ -20,6 +20,8 @@ type QueryLog struct {
 	Query    string
 	Strategy string
 	K        int64
+	Sources  []string
+	Metadata map[string]any
 	Chunks   []Chunk
 }
 
@@ -49,6 +51,8 @@ func (q *QueryLogger) LogQuery(ctx context.Context, queryLog QueryLog) {
 		slog.String("query", queryLog.Query),
 		slog.String("strategy", queryLog.Strategy),
 		slog.Int64("k", queryLog.K),
+		slog.Any("filter_sources", queryLog.Sources),
+		slog.Any("filter_metadata", queryLog.Metadata),
 		slog.Any("chunks", queryLog.Chunks),
 	)
 }

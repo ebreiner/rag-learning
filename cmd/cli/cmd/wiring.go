@@ -75,6 +75,9 @@ func WireUpRetrieval(ctx context.Context, cnf config.Config, logger *slog.Logger
 
 	deps.Fusion = retrievalstep.FusionConfig(cnf.Retrieval.Fusion)
 	deps.PoolSize = cnf.Retrieval.PoolSize
+	for _, s := range cnf.Sources {
+		deps.Sources = append(deps.Sources, s.Name)
+	}
 	logger.InfoContext(ctx, "wiring", "info", fmt.Sprintf("hybrid: pool size %d, rrf k %d, weight fts %g, weight ann %g", deps.PoolSize, deps.Fusion.RRFK, deps.Fusion.WeightFTS, deps.Fusion.WeightANN))
 
 	return deps, db, closeDB, nil
