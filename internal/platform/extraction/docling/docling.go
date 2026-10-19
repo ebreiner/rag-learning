@@ -16,15 +16,12 @@ import (
 )
 
 type DoclingExtractor struct {
-	BaseURL string
+	BaseURL *url.URL
 	Client  *http.Client
 	Logger  *slog.Logger
 }
 
-func NewDoclingExtractor(doclingURL string, client *http.Client, logger *slog.Logger) (DoclingExtractor, error) {
-	if _, err := url.Parse(doclingURL); err != nil {
-		return DoclingExtractor{}, fmt.Errorf("malformed docling url '%s': %w", doclingURL, err)
-	}
+func NewDoclingExtractor(doclingURL *url.URL, client *http.Client, logger *slog.Logger) (DoclingExtractor, error) {
 	return DoclingExtractor{
 		Client:  client,
 		BaseURL: doclingURL,
@@ -55,17 +52,14 @@ func (e *DoclingExtractor) ExtractSourceDoc(ctx context.Context, sourceDoc step.
 	return extDoc, nil
 }
 
-func doclingConvert(ctx context.Context, client *http.Client, inputPath, doclingURL string) (*rawDoclingDocument, error) {
+func doclingConvert(ctx context.Context, client *http.Client, inputPath string, doclingURL *url.URL) (*rawDoclingDocument, error) {
 	contentType, form, err := convertMultipartForm(inputPath)
 	if err != nil {
 		return nil, err
 	}
-	doclingURL, err = url.JoinPath(doclingURL, "/v1/convert/file")
-	if err != nil {
-		return nil, err
-	}
+	doclingURL = doclingURL.JoinPath("/v1/convert/file")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, doclingURL, form)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, doclingURL.String(), form)
 	if err != nil {
 		return nil, err
 	}

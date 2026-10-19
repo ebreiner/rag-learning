@@ -2,7 +2,7 @@
 type: requirement
 title: Open backlog
 status: open
-date: 2026-10-18
+date: 2026-10-19
 tags: [backlog, handover, eval, data-source, retrieval, mcp, auth]
 ---
 
@@ -16,14 +16,13 @@ tags: [backlog, handover, eval, data-source, retrieval, mcp, auth]
 
 | Phase | Need | Reason | Found | Status |
 |---|---|---|---|---|
-| 1 | **RC1 eval harness.** Done: `eval` command, `just eval`, run files, diff. See [eval-harness](../designs/eval-harness.md) and [0007](../decisions/0007-eval-harness-implementation.md). Baseline: [experiment 0001](../experiments/0001-eval-baseline.md). | RC7, RC13 and RC15 use RC1 as their acceptance test. No rank change without numbers. | Handover, design. | Done. Golden path from `config.yaml` comes with phase 2. |
+| 1 | **RC1 eval harness.** Done: `eval` command, `just eval`, run files, diff. See [eval-harness](../designs/eval-harness.md) and [0007](../decisions/0007-eval-harness-implementation.md). Baseline: [experiment 0001](../experiments/0001-eval-baseline.md). | RC7, RC13 and RC15 use RC1 as their acceptance test. No rank change without numbers. | Handover, design. | Done. The golden path, `k` and the strategies come from `eval:` in the config file ([0011](../decisions/0011-config-file-and-composition-root.md)). `--baseline` stays a flag. |
 | 1 | Choose the eval corpus: the current test corpus, or a second Markdown test corpus. Add the real German PO questions when they come. | The golden set must match a corpus. The PO questions are the real target. | User, handover §7. | Open. |
 | 1 | Golden set review: `g09` (same section, other chunk), `g17` (Grenzwert vs. Schwellwert), `g24` (heading equals the query). Add a second expectation where another answer is also correct. | Some misses are golden-set problems, not retrieval problems. | [Experiment 0001](../experiments/0001-eval-baseline.md). | Open. Do it in a separate run: a golden change gives a new `sha256`. |
 | 1 | **S0.2 on master:** a docling inline group merges like a paragraph. See [0008](../decisions/0008-inline-group-merges-as-paragraph.md). | 66 % of the chunks were `generic` without section signal. Hybrid r@5 0.60 → 0.80 in [experiment 0003](../experiments/0003-generic-merge.md). | Cycle 1 of `claude-unstable`, commit `e336bbd`. | Open. The user writes it again. Acceptance: a full re-import and `just eval` give exactly run `20261017T164359Z` (1116 chunks, hybrid r@5 0.80, MRR 0.503). |
 | 1 | **`FusionConfig` port** with the default k 60, weights 1/1. See [0009](../decisions/0009-fusion-config-default.md). | Fusion tests without code changes. The reranker stages come on the same path. | Cycle 1, commit `3765337`, [experiment 0004](../experiments/0004-fusion-weights.md). | Open. The user writes it again. Acceptance: `just eval` gives the same numbers as before the change. |
-| 1 | **Docling static headers** (`RAG_DOCLING_HEADERS`, redaction in the `--dump-dir` dump). | Auth at a proxy in front of a public docling-serve. Cycle 2 uses this docling. | Cycle 1, support commit `b7fab68`. | Open. `git cherry-pick -x b7fab68` before the fork of cycle 2. |
 | 1 | **Eval: document-level hit rate.** A query is a doc hit when a chunk of an expected document is in the top k. | Most misses after S0.2 are "correct document, other chunk". The chunk-level status hides them. Cycle 2 changes ingest, and a doc-level metric shows those effects. | [Experiment 0003](../experiments/0003-generic-merge.md), finding 4. | Open. Before the fork of cycle 2. Do it after S0.2 on master, so that the two effects stay separate. |
-| 1 | **Eval: more golden queries.** | With 30 queries, one query is 0.033 recall. A gain of 1–2 queries is not visible. | [Experiment 0004](../experiments/0004-fusion-weights.md), finding 1. | Open. After the fork of cycle 2. A golden change gives a new `sha256` and a new baseline. |
+| 1 | **Eval: more golden queries.** | With 30 queries, one query is 0.033 recall. A gain of 1–2 queries is not visible. | [Experiment 0004](../experiments/0004-fusion-weights.md), finding 1. | In progress. 2026-10-19: `g34`–`g36` added from a support ticket with customer words (`g36` is the full ticket as one query). Golden set 36 queries, `golden_sha256` `1a6ebe1a…`, new baseline run `20261019T130844Z` (hybrid r@1 0.30, r@5 0.82, MRR 0.518). Compare later runs with this run, not with older runs. Put new candidates into `eval/golden.candidates.json` (same format, IDs `cNN`, gitignored). Promote a candidate only after an eval run on the candidates file. Open candidates: `c02`, `c03`. |
 | 2 | **Data source design** (`designs/data-source-model.md`): `config.yaml` schema, sidecar `<file>.meta.json` schema, RC17 names and validation, required set (RC18 and more), system attributes, URL template, freshness policy fields, flag precedence, DB tables for metadata. | RC2–RC6, RC11 and RC15 all need this model. | [0001](../decisions/0001-config-yaml-data-sources.md), [0002](../decisions/0002-document-identity-derived-db.md). | Open. |
 | 3 | **`ingest` command + RC11:** path identity, hash compare, add, replace, delete. (Old T18) | Exporters write all the time. Now a changed file adds a second document. | [0006](../decisions/0006-ingest-command.md). | Open. Remove the old extraction on replace. |
 | 3 | Chunk step tolerance for a failure of one document. | One bad document stops the full run. Unattended `ingest` needs tolerance. | Design. | Open. |
@@ -50,7 +49,6 @@ tags: [backlog, handover, eval, data-source, retrieval, mcp, auth]
 | Fix the `httpclient` dump: unique file names, check dump errors, log `respFileErr`. (Old T21) | Dumps collide. Dev tooling only. | Code audit. | Open. |
 | Fix OTel shutdown in `serve/cmd.go` with a new bounded context. | Each graceful stop logs "context canceled". | Code audit. | Open. |
 | Replace the Cobra placeholder `Short`/`Long` text. | The help output is wrong. | Code audit. | Open. |
-| Remove or fix the `just inspect` recipe. | It calls a command that does not exist. | Code audit. | Open. |
 | "Weak match" hint when no result is a dual hit. | Floor-only scores show a content gap. | Query log. | Idea. Compare with the reranker score first. |
 
 ## Parked

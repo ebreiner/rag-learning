@@ -1,20 +1,22 @@
+CREATE TABLE IF NOT EXISTS sources (
+  name TEXT PRIMARY KEY,
+  weight REAL NOT NULL,
+
+  CHECK(weight > 0)
+);
+
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY,
   created_at DATETIME NOT NULL,
   name TEXT NOT NULL,
+  rel_path TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   metadata_json TEXT,
-  collection_name TEXT NOT NULL,
+  source_name TEXT NOT NULL,
 
-  FOREIGN KEY(collection_name) REFERENCES collections(name),
+  FOREIGN KEY(source_name) REFERENCES sources(name),
+  UNIQUE(source_name, rel_path),
   CHECK(metadata_json IS NULL OR json_valid(metadata_json))
-);
-
-CREATE TABLE IF NOT EXISTS collections (
-  name TEXT PRIMARY KEY,
-  weight REAL NOT NULL,
-
-  CHECK(weight >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS chunks (

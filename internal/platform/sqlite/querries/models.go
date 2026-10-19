@@ -26,18 +26,14 @@ type ChunkNode struct {
 	Position         int64
 }
 
-type Collection struct {
-	Name   string
-	Weight float64
-}
-
 type Document struct {
-	ID             int64
-	CreatedAt      time.Time
-	Name           string
-	Sha256         string
-	MetadataJson   sql.NullString
-	CollectionName string
+	ID           int64
+	CreatedAt    time.Time
+	Name         string
+	RelPath      string
+	Sha256       string
+	MetadataJson sql.NullString
+	SourceName   string
 }
 
 type Extraction struct {
@@ -57,4 +53,9 @@ type ExtractionNode struct {
 	Layer          string
 	ContentJson    sql.NullString
 	ProvenanceJson sql.NullString
+}
+
+type Source struct {
+	Name   string
+	Weight float64
 }

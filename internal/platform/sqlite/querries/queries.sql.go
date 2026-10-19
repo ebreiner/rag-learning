@@ -12,100 +12,36 @@ import (
 	"time"
 )
 
-const collectionWeightForChunkIDs = `-- name: CollectionWeightForChunkIDs :many
-SELECT chunks.id, collections.weight
-FROM chunks
-JOIN documents
-ON chunks.document_id = documents.id
-JOIN collections
-ON documents.collection_name = collections.name
-WHERE chunks.id IN (/*SLICE:chunk_ids*/?)
-`
-
-type CollectionWeightForChunkIDsRow struct {
-	ID     int64
-	Weight float64
-}
-
-func (q *Queries) CollectionWeightForChunkIDs(ctx context.Context, chunkIds []int64) ([]CollectionWeightForChunkIDsRow, error) {
-	query := collectionWeightForChunkIDs
-	var queryParams []interface{}
-	if len(chunkIds) > 0 {
-		for _, v := range chunkIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:chunk_ids*/?", strings.Repeat(",?", len(chunkIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:chunk_ids*/?", "NULL", 1)
-	}
-	rows, err := q.query(ctx, nil, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CollectionWeightForChunkIDsRow
-	for rows.Next() {
-		var i CollectionWeightForChunkIDsRow
-		if err := rows.Scan(&i.ID, &i.Weight); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const createCollectionOrUpdateWeight = `-- name: CreateCollectionOrUpdateWeight :exec
-INSERT INTO collections (
-	name,
-	weight
-) VALUES (?,?)
-ON CONFLICT DO
-UPDATE SET weight = excluded.weight
-`
-
-type CreateCollectionOrUpdateWeightParams struct {
-	Name   string
-	Weight float64
-}
-
-func (q *Queries) CreateCollectionOrUpdateWeight(ctx context.Context, arg CreateCollectionOrUpdateWeightParams) error {
-	_, err := q.exec(ctx, q.createCollectionOrUpdateWeightStmt, createCollectionOrUpdateWeight, arg.Name, arg.Weight)
-	return err
-}
-
 const createDocument = `-- name: CreateDocument :one
 INSERT INTO documents (
 	created_at,
 	name,
+	rel_path,
 	sha256,
-	collection_name,
+	source_name,
 	metadata_json
 ) VALUES (
-	?,?,?,?,?
+	?,?,?,?,?,?
 )
 RETURNING id
 `
 
 type CreateDocumentParams struct {
-	CreatedAt      time.Time
-	Name           string
-	Sha256         string
-	CollectionName string
-	MetadataJson   sql.NullString
+	CreatedAt    time.Time
+	Name         string
+	RelPath      string
+	Sha256       string
+	SourceName   string
+	MetadataJson sql.NullString
 }
 
 func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) (int64, error) {
 	row := q.queryRow(ctx, q.createDocumentStmt, createDocument,
 		arg.CreatedAt,
 		arg.Name,
+		arg.RelPath,
 		arg.Sha256,
-		arg.CollectionName,
+		arg.SourceName,
 		arg.MetadataJson,
 	)
 	var id int64
@@ -264,23 +200,21 @@ func (q *Queries) EvalDocExists(ctx context.Context, name string) (int64, error)
 }
 
 const existsDocument = `-- name: ExistsDocument :one
-SELECT  d.id, d.sha256, c.name AS collection_name
-FROM documents d
-JOIN collections c
-ON d.collection_name = c.name
-WHERE d.sha256 = ?
+SELECT id, sha256, source_name
+FROM documents
+WHERE sha256 = ?
 `
 
 type ExistsDocumentRow struct {
-	ID             int64
-	Sha256         string
-	CollectionName string
+	ID         int64
+	Sha256     string
+	SourceName string
 }
 
 func (q *Queries) ExistsDocument(ctx context.Context, sha256 string) (ExistsDocumentRow, error) {
 	row := q.queryRow(ctx, q.existsDocumentStmt, existsDocument, sha256)
 	var i ExistsDocumentRow
-	err := row.Scan(&i.ID, &i.Sha256, &i.CollectionName)
+	err := row.Scan(&i.ID, &i.Sha256, &i.SourceName)
 	return i, err
 }
 
@@ -300,33 +234,6 @@ DELETE FROM chunks
 func (q *Queries) FlushChunks(ctx context.Context) error {
 	_, err := q.exec(ctx, q.flushChunksStmt, flushChunks)
 	return err
-}
-
-const getAllCollectionWeights = `-- name: GetAllCollectionWeights :many
-SELECT name, weight FROM collections
-`
-
-func (q *Queries) GetAllCollectionWeights(ctx context.Context) ([]Collection, error) {
-	rows, err := q.query(ctx, q.getAllCollectionWeightsStmt, getAllCollectionWeights)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Collection
-	for rows.Next() {
-		var i Collection
-		if err := rows.Scan(&i.Name, &i.Weight); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getDocumentIDsAfterID = `-- name: GetDocumentIDsAfterID :one
@@ -473,27 +380,27 @@ const retrievalChunksByIDs = `-- name: RetrievalChunksByIDs :many
 SELECT
 	c.id,
 	d.name,
-	d.collection_name,
-	w.weight,
+	d.source_name,
+	s.weight,
 	c.position,
 	c.breadcrumb,
 	c.text
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
-JOIN collections AS w
-	ON d.collection_name = w.name
+JOIN sources AS s
+	ON d.source_name = s.name
 WHERE c.id IN (/*SLICE:chunk_ids*/?)
 `
 
 type RetrievalChunksByIDsRow struct {
-	ID             int64
-	Name           string
-	CollectionName string
-	Weight         float64
-	Position       int64
-	Breadcrumb     string
-	Text           string
+	ID         int64
+	Name       string
+	SourceName string
+	Weight     float64
+	Position   int64
+	Breadcrumb string
+	Text       string
 }
 
 func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([]RetrievalChunksByIDsRow, error) {
@@ -518,7 +425,7 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.CollectionName,
+			&i.SourceName,
 			&i.Weight,
 			&i.Position,
 			&i.Breadcrumb,
@@ -535,4 +442,23 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveSource = `-- name: SaveSource :exec
+INSERT INTO sources (
+	name,
+	weight
+) VALUES (?,?)
+ON CONFLICT(name) DO
+UPDATE SET weight = excluded.weight
+`
+
+type SaveSourceParams struct {
+	Name   string
+	Weight float64
+}
+
+func (q *Queries) SaveSource(ctx context.Context, arg SaveSourceParams) error {
+	_, err := q.exec(ctx, q.saveSourceStmt, saveSource, arg.Name, arg.Weight)
+	return err
 }

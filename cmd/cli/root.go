@@ -4,8 +4,8 @@ import (
 	"log"
 	"os"
 	"rag/cmd/cli/cmd"
+	"rag/cmd/cli/cmd/ingest"
 	"rag/cmd/cli/cmd/serve"
-	"rag/internal/platform/config"
 
 	"github.com/spf13/cobra"
 )
@@ -13,27 +13,30 @@ import (
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "rag-cli",
-		Short: "A brief description of your application",
-		Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application`,
+		Short: "Local RAG over document sources, served to agents via MCP",
+		Long: `rag-cli extracts documents with docling, chunks and embeds them into a SQLite DB,
+and serves hybrid retrieval (FTS + ANN) via MCP.
+
+All settings come from one YAML file, given with --config. See config.yaml.example.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
-	config.RegisterFlags(root.PersistentFlags(), config.GlobalsList())
+
+	flags := root.PersistentFlags()
+	flags.StringP("config", "c", "", "--config | -c /etc/foo/config.yaml")
 
 	return root
 }
 
 func Execute() {
+
 	rootCmd := NewRootCmd()
 
 	rootCmd.AddCommand(
-		cmd.NewExtractionCmd(),
-		cmd.NewChunkCmd(),
-		cmd.NewEmbedCmd(),
-		cmd.NewRetrieveCmd(),
 		cmd.NewEvalCmd(),
+		cmd.NewRetrieveCmd(),
 		serve.NewServeCmd(),
+		ingest.NewIngestCommand(),
 	)
 
 	err := rootCmd.Execute()

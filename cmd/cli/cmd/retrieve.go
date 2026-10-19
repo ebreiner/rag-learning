@@ -2,20 +2,10 @@ package cmd
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"rag/internal/platform/config"
-	"rag/internal/platform/embedclient/kreuzberg"
-	"rag/internal/platform/embedclient/openai"
-	"rag/internal/platform/httpclient"
-	"rag/internal/platform/sqlite"
-	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/platform/telemetry/logging"
 	"rag/internal/retrieval/step"
-	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -23,17 +13,14 @@ import (
 func NewRetrieveCmd() *cobra.Command {
 	retrieveCmd := &cobra.Command{
 		Use:   "retrieve",
-		Short: "A brief description of your command",
-		Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+		Short: "Run one hybrid query against the DB and print the chunks as JSON",
+		Long: `Run one query with the hybrid strategy against the DB from the config and
+print the top 10 chunks as JSON. The query uses the same retrieval wiring as
+serve and eval, with the fusion settings from retrieval.fusion.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
-			logger, otelShutdownFunc, err := Setup(ctx, cmd)
+			logger, cnf, otelShutdownFunc, err := Setup(ctx, cmd)
 			if err != nil {
 				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
@@ -50,66 +37,19 @@ to quickly create a Cobra application.`,
 				return fmt.Errorf("missing query string --query 'query string'")
 			}
 
-			globals := config.GlobalOptions
-
-			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
+			deps, _, closeDB, err := WireUpRetrieval(ctx, cnf, logger)
+			if closeDB != nil {
+				defer func() {
+					if err := closeDB(ctx); err != nil {
+						logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error closing db: %w", err))
+					}
+				}()
+			}
 			if err != nil {
 				return err
 			}
 
-			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
-			if err != nil {
-				return err
-			}
-
-			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
-			if err != nil {
-				return err
-			}
-
-			db, err := sqlite.NewConn(dbPath, false)
-			if err != nil {
-				return err
-			}
-
-			modelFlag := cmd.Flags().Lookup("model")
-			if !modelFlag.Changed || modelFlag.Value.String() == "" {
-				return fmt.Errorf("missing flag required flag: --model model-name")
-			}
-			model := modelFlag.Value.String()
-
-			dimFlag := cmd.Flags().Lookup("dim")
-			if !dimFlag.Changed || dimFlag.Value.String() == "" {
-				return fmt.Errorf("missing flag required flag: --dimension 1024")
-			}
-
-			dim, err := strconv.Atoi(dimFlag.Value.String())
-			if err != nil {
-				return fmt.Errorf("error parsing flag --dimension: %w", err)
-			}
-
-			var embedClient step.EmbedClient
-			httpClient := httpclient.New(time.Minute*5, nil)
-			if cmd.Flags().Lookup("xberg-url").Changed {
-				if client, err := kreuzberg.NewKreuzbergClient(xbergBaseURL, logger, httpClient); err == nil {
-					embedClient = client
-				} else {
-					return err
-				}
-			} else if cmd.Flags().Lookup("openai-url").Changed {
-				if client, err := openai.NewOpenAIClient(model, openAIBaseURL, int64(dim), httpClient, logger); err == nil {
-					embedClient = client
-				} else {
-					return err
-				}
-			} else {
-				return fmt.Errorf("missing embedding provider url")
-			}
-
-			retrievalTypeFlag := cmd.Flag("retrieval-type")
-			retrievalType := retrievalTypeFlag.Value.String()
-
-			err = retrieveChunks(db, embedClient, userQuery, retrievalType, logger)
+			err = retrieveChunks(ctx, deps, userQuery, "hybrid")
 			if err != nil {
 				return fmt.Errorf("error running retrieval: %w", err)
 			}
@@ -119,14 +59,11 @@ to quickly create a Cobra application.`,
 	}
 
 	retrieveCmd.Flags().StringP("query", "q", "", "-q 'alles zur farbe grün")
-	retrieveCmd.Flags().StringP("retrieval-type", "t", "hybrid", "-t fts | ann | hybrid")
-	retrieveCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
-	retrieveCmd.Flags().Int64P("dim", "d", -1, "--dimension | -d 768")
 
 	return retrieveCmd
 }
 
-func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalType string, logger *slog.Logger) error {
+func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, query, retrievalType string) error {
 	var strategy step.RetrievalStrategy
 	switch retrievalType {
 	case "fts":
@@ -137,30 +74,6 @@ func retrieveChunks(db *sql.DB, embedClient step.EmbedClient, query, retrievalTy
 		strategy = step.StrategyANN
 	default:
 		return fmt.Errorf("unknown retrieval type: %s", retrievalType)
-	}
-
-	ctx := context.Background()
-	hydrator := retrieval.NewChunkHydrator(db, logger)
-
-	retriever, err := retrieval.NewSQLiteRetriever(db, logger)
-	if err != nil {
-		return err
-	}
-
-	collWeigher := retrieval.NewCollectionWeigher(db, logger)
-
-	renderer, err := retrieval.NewChunkRenderer(ctx, db, logger)
-	if err != nil {
-		return err
-	}
-
-	deps := step.RetrievalDeps{
-		Logger:           logger,
-		Hydrator:         &hydrator,
-		Retriever:        retriever,
-		EmbeddingsClient: embedClient,
-		CollWeigher:      &collWeigher,
-		Renderer:         &renderer,
 	}
 
 	chunks, err := step.RunRetrieval(ctx, query, 10, strategy, deps)

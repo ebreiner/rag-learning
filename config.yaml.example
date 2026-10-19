@@ -1,0 +1,63 @@
+# Example config for rag-cli. Copy it to config.yaml (gitignored) and run: ./main -c config.yaml <command>
+# Relative paths resolve against the directory of this file, not against the working directory.
+# Durations are strings with a unit ("90s", "10m"). An int such as 0 or 30 does not parse.
+# Unknown keys are an error.
+
+storage:
+  db_path: ./data/data.db
+  # schema changes have no migration: delete the DB and run ingest again
+
+log:
+  app_log: ./rag-cli.log
+  # optional, must not be the same file as app_log
+  query_log: ./data/query.log
+
+docling:
+  # http or https with a host, no user info in the URL
+  url: http://127.0.0.1:5001
+  timeout: 10m
+  # optional, empty: no dump of the docling requests and responses
+  dump_dir: ""
+  # optional, sent with each docling request. The value can be a secret, so keep it only in config.yaml.
+  # headers:
+  #   Authorization: Bearer <token>
+
+embedding:
+  # openai | kreuzberg
+  backend: openai
+  url: http://127.0.0.1:11434
+  # model and dim give the name of the vec table, both are required for each backend
+  model: bge-m3
+  dim: 1024
+  timeout: 30m
+
+# at least one source. The name is unique, the weight is > 0, the paths must not overlap.
+# A document with the same content in two sources goes only into the first source.
+sources:
+  - name: manual
+    path: build/manual
+    weight: 0.8
+  - name: changelogs
+    path: build/changelogs
+    weight: 0.4
+
+retrieval:
+  # FTS and ANN each give pool_size candidates, the fusion result is cut to pool_size.
+  # The pool is hydrated, the source weight applies, then the result is cut to k. A pool smaller than k becomes k.
+  pool_size: 40
+  fusion:
+    # rrf_k > 0, weights >= 0, not both weights 0
+    rrf_k: 60
+    weight_fts: 1
+    weight_ann: 1
+
+server:
+  # host:port, port 1-65535. The MCP API token comes from the env RAG_CLI_API_TOKEN, not from this file.
+  listen: 127.0.0.1:8808
+
+eval:
+  golden: eval/golden.json
+  runs_dir: eval/runs
+  k: 10
+  # a subset of fts, ann, hybrid, no duplicates
+  strategies: [fts, ann, hybrid]

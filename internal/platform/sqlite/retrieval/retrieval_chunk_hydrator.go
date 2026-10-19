@@ -61,8 +61,8 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs []step.Score
 			Score:      chunkIDs[idx].Score,
 		}
 
-		chunk.CollectionWeight = row.Weight
-		chunk.CollectionName = row.CollectionName
+		chunk.SourceWeight = row.Weight
+		chunk.SourceName = row.SourceName
 
 		chunks = append(chunks, chunk)
 	}

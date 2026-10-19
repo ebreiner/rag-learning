@@ -2,7 +2,7 @@
 type: index
 title: Knowledge base index
 status: current
-date: 2026-10-18
+date: 2026-10-19
 tags: [index]
 ---
 
@@ -10,7 +10,7 @@ tags: [index]
 
 Start here:
 1. Read the [handover](requirements/rag-cli-handover.md) for the product goal and the requirements.
-2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0010 supersede or add to parts of it.
+2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0013 supersede or add to parts of it.
 3. Read the [backlog](requirements/backlog.md) for the work order.
 
 ## Decisions
@@ -26,6 +26,9 @@ Start here:
 - [0008-inline-group-merges-as-paragraph](decisions/0008-inline-group-merges-as-paragraph.md): a docling inline group merges like a paragraph, no more `generic` chunks for groups (cycle 1).
 - [0009-fusion-config-default](decisions/0009-fusion-config-default.md): `FusionConfig` port, default RRF k 60 and weights 1/1, no tuning with the current golden set (cycle 1).
 - [0010-source-single-term](decisions/0010-source-single-term.md): "source" replaces "collection" and "data source" in all layers; code rename in S2.
+- [0011-config-file-and-composition-root](decisions/0011-config-file-and-composition-root.md): one YAML file via `--config`, config values go into adapters at the composition root, commands `ingest`/`serve`/`eval`/`retrieve`, restart after ingest, secrets in the config for now.
+- [0012-sources-table-replaces-collections](decisions/0012-sources-table-replaces-collections.md): table `sources` (name, weight), `documents.source_name` FK and `rel_path`, first source wins for duplicate content.
+- [0013-retrieval-two-phases](decisions/0013-retrieval-two-phases.md): find (FTS+ANN, fusion, pool) then order (hydrate, source weight, cut to k); weight in hybrid only, no fusion defaults, `RankStage` interface later with the reranker.
 
 ## Designs
 
