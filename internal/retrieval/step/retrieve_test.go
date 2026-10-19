@@ -56,22 +56,16 @@ func (f *fakeEmbedClient) EmbedQuery(ctx context.Context, q string) (Query, erro
 	return f.query, nil
 }
 
-type fakeCollWeigher struct {
-	weights map[int64]float64
-	err     error
-}
-
-func (f *fakeCollWeigher) WeighChunks(ctx context.Context, chunkIDs []ScoredChunkID) (map[int64]float64, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.weights, nil
-}
+// testFusion is the fusion of the example config. RunRetrieval has no defaults, the config validation guarantees the values.
+var testFusion = FusionConfig{RRFK: 60, WeightFTS: 1, WeightANN: 1}
 
 type fakeHydrator struct {
 	chunks     []RetrievedChunk
 	err        error
 	calledWith []ScoredChunkID
+	// weights, when set, makes the fake return one chunk per requested id, with the score
+	// and rank of the id and the source weight from this map, like the real hydrator
+	weights map[int64]float64
 }
 
 func (f *fakeHydrator) HydrateChunks(ctx context.Context, ids []ScoredChunkID) ([]RetrievedChunk, error) {
@@ -79,7 +73,30 @@ func (f *fakeHydrator) HydrateChunks(ctx context.Context, ids []ScoredChunkID) (
 	if f.err != nil {
 		return nil, f.err
 	}
+	if f.weights != nil {
+		chunks := make([]RetrievedChunk, 0, len(ids))
+		for _, id := range ids {
+			chunks = append(chunks, RetrievedChunk{ID: id.ID, Score: id.Score, Rank: id.Rank, SourceWeight: f.weights[id.ID]})
+		}
+		return chunks, nil
+	}
 	return f.chunks, nil
+}
+
+func scoredIDs(scored []ScoredChunkID) []int64 {
+	out := make([]int64, 0, len(scored))
+	for _, s := range scored {
+		out = append(out, s.ID)
+	}
+	return out
+}
+
+func chunkIDs(chunks []RetrievedChunk) []int64 {
+	ids := make([]int64, 0, len(chunks))
+	for _, c := range chunks {
+		ids = append(ids, c.ID)
+	}
+	return ids
 }
 
 type fakeRenderer struct {
@@ -249,130 +266,84 @@ func TestWeightedRRFMerge(t *testing.T) {
 	}
 }
 
-func TestFusionConfigDefaults(t *testing.T) {
-	got := FusionConfig{}.withDefaults()
-	want := FusionConfig{RRFK: rrfK, WeightFTS: 1, WeightANN: 1}
-	if got != want {
-		t.Errorf("withDefaults() = %+v, want %+v", got, want)
-	}
-
-	set := FusionConfig{RRFK: 20, WeightFTS: 0.5, WeightANN: 3}
-	if got := set.withDefaults(); got != set {
-		t.Errorf("withDefaults() changed set values: %+v", got)
-	}
-}
-
-func TestCollectionRerank(t *testing.T) {
-	t.Run("weight multiplies the raw score", func(t *testing.T) {
+func TestSourceRerank(t *testing.T) {
+	t.Run("weight multiplies the score and sets the rank", func(t *testing.T) {
 		score, weight := 0.02, 0.5
-		got := collectionRerank(testCtx, []ScoredChunkID{{ID: 1, Score: score}}, map[int64]float64{1: weight}, testLogger)
-		want := []ScoredChunkID{{ID: 1, Score: score * weight, Rank: 1}}
+		got := sourceRerank([]RetrievedChunk{{ID: 1, Score: score, Rank: 7, SourceWeight: weight}})
+		want := []RetrievedChunk{{ID: 1, Score: score * weight, Rank: 1, SourceWeight: weight}}
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("collectionRerank() mismatch (-want +got):\n%s", diff)
+			t.Errorf("sourceRerank() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("a lower raw score with a high enough weight outranks a higher raw score with a low weight", func(t *testing.T) {
+	t.Run("a lower score with a high enough weight outranks a higher score with a low weight", func(t *testing.T) {
 		s1, w1 := 0.02, 1.0
 		s2, w2 := 0.01, 5.0
-		got := collectionRerank(
-			testCtx,
-			[]ScoredChunkID{{ID: 1, Score: s1}, {ID: 2, Score: s2}},
-			map[int64]float64{1: w1, 2: w2},
-			testLogger,
-		)
-		want := []ScoredChunkID{
-			{ID: 2, Score: s2 * w2, Rank: 1},
-			{ID: 1, Score: s1 * w1, Rank: 2},
+		got := sourceRerank([]RetrievedChunk{
+			{ID: 1, Score: s1, SourceWeight: w1},
+			{ID: 2, Score: s2, SourceWeight: w2},
+		})
+		want := []RetrievedChunk{
+			{ID: 2, Score: s2 * w2, Rank: 1, SourceWeight: w2},
+			{ID: 1, Score: s1 * w1, Rank: 2, SourceWeight: w1},
 		}
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("collectionRerank() mismatch (-want +got):\n%s", diff)
+			t.Errorf("sourceRerank() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("equal boosted scores tie-break by ascending id", func(t *testing.T) {
+	t.Run("equal weighted scores tie-break by ascending id", func(t *testing.T) {
 		score, weight := 0.03, 1.0
-		got := collectionRerank(
-			testCtx,
-			[]ScoredChunkID{{ID: 20, Score: score}, {ID: 10, Score: score}},
-			map[int64]float64{20: weight, 10: weight},
-			testLogger,
-		)
-		want := []ScoredChunkID{
-			{ID: 10, Score: score * weight, Rank: 1},
-			{ID: 20, Score: score * weight, Rank: 2},
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("collectionRerank() mismatch (-want +got):\n%s", diff)
+		got := sourceRerank([]RetrievedChunk{
+			{ID: 20, Score: score, SourceWeight: weight},
+			{ID: 10, Score: score, SourceWeight: weight},
+		})
+		if diff := cmp.Diff([]int64{10, 20}, chunkIDs(got)); diff != "" {
+			t.Errorf("sourceRerank() order mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("a chunk with no discoverable weight is dropped, not defaulted", func(t *testing.T) {
-		got := collectionRerank(
-			testCtx,
-			[]ScoredChunkID{{ID: 1, Score: 0.02}, {ID: 2, Score: 0.01}},
-			map[int64]float64{1: 1.0}, // no entry for id 2
-			testLogger,
-		)
-		want := []ScoredChunkID{{ID: 1, Score: 0.02, Rank: 1}}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("collectionRerank() mismatch (-want +got):\n%s", diff)
+	t.Run("does not change the input slice", func(t *testing.T) {
+		in := []RetrievedChunk{{ID: 1, Score: 0.02, SourceWeight: 0.5}}
+		sourceRerank(in)
+		if in[0].Score != 0.02 {
+			t.Errorf("input score = %v, want 0.02 unchanged", in[0].Score)
 		}
 	})
 }
 
 func TestRunHybrid(t *testing.T) {
-	t.Run("fts and ann are both queried at k*4, merged, weighted, and truncated to k", func(t *testing.T) {
+	t.Run("fts and ann are both queried with the pool size, merged, and cut to the pool size", func(t *testing.T) {
 		retriever := &fakeRetriever{
 			ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}, {ID: 3}},
 			annIDs: []ScoredChunkID{{ID: 2}, {ID: 3}, {ID: 4}},
 		}
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
-		weigher := &fakeCollWeigher{weights: map[int64]float64{1: 1.0, 2: 1.0, 3: 5.0, 4: 1.0}}
 
-		ids, err := runHybrid(testCtx, "hello", 2, FusionConfig{}, client, retriever, weigher, testLogger)
+		ids, err := runHybrid(testCtx, "hello", 2, testFusion, client, retriever)
 		if err != nil {
 			t.Fatalf("runHybrid() error = %v", err)
 		}
-		if len(ids) != 2 {
-			t.Fatalf("got %d ids, want 2 (truncated to k)", len(ids))
-		}
-		// chunk 3 has a modest raw RRF score but a 5x collection weight, so it
-		// should be boosted to the top despite not being the strongest raw match.
-		if ids[0].ID != 3 {
-			t.Errorf("ids[0].ID = %d, want 3 (boosted by collection weight)", ids[0].ID)
+		// 2 and 3 are in both lists, so they have the highest fused scores
+		want := []int64{2, 3}
+		got := []int64{ids[0].ID, ids[1].ID}
+		if len(ids) != 2 || cmp.Diff(want, got) != "" {
+			t.Fatalf("got ids %+v, want %v (cut to the pool size)", ids, want)
 		}
 
-		if len(retriever.ftsCalls) != 1 || retriever.ftsKCalls[0] != 8 {
-			t.Errorf("fts should be called once with k=8 (k*4), got calls=%d k=%v", len(retriever.ftsCalls), retriever.ftsKCalls)
+		if len(retriever.ftsCalls) != 1 || retriever.ftsKCalls[0] != 2 {
+			t.Errorf("fts should be called once with k=2 (the pool size), got calls=%d k=%v", len(retriever.ftsCalls), retriever.ftsKCalls)
 		}
-		if len(retriever.annCalls) != 1 || retriever.annKCalls[0] != 8 {
-			t.Errorf("ann should be called once with k=8 (k*4), got calls=%d k=%v", len(retriever.annCalls), retriever.annKCalls)
+		if len(retriever.annCalls) != 1 || retriever.annKCalls[0] != 2 {
+			t.Errorf("ann should be called once with k=2 (the pool size), got calls=%d k=%v", len(retriever.annCalls), retriever.annKCalls)
 		}
 	})
 
-	t.Run("weigher error propagates", func(t *testing.T) {
-		wantErr := errors.New("weigh broke")
-		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}}}
-		client := &fakeEmbedClient{query: Query{Model: "fake"}}
-		weigher := &fakeCollWeigher{err: wantErr}
-
-		_, err := runHybrid(testCtx, "hello", 2, FusionConfig{}, client, retriever, weigher, testLogger)
-		if !errors.Is(err, wantErr) {
-			t.Fatalf("runHybrid() error = %v, want %v", err, wantErr)
-		}
-	})
-
-	// regression guard: the merged+weighted pool can legitimately end up
-	// smaller than k (small corpus, narrow query, or chunks dropped by
-	// collectionRerank for missing a collection weight) -- runHybrid must not
-	// assume there are at least k survivors before slicing.
-	t.Run("does not panic when the weighted pool is smaller than k", func(t *testing.T) {
+	t.Run("returns the merged list when it is smaller than the pool", func(t *testing.T) {
 		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}}}
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
-		weigher := &fakeCollWeigher{weights: map[int64]float64{1: 1.0, 2: 1.0}}
 
-		ids, err := runHybrid(testCtx, "hello", 10, FusionConfig{}, client, retriever, weigher, testLogger)
+		ids, err := runHybrid(testCtx, "hello", 10, testFusion, client, retriever)
 		if err != nil {
 			t.Fatalf("runHybrid() error = %v", err)
 		}
@@ -383,14 +354,13 @@ func TestRunHybrid(t *testing.T) {
 }
 
 func TestRunRetrieval(t *testing.T) {
-	t.Run("FTS strategy skips embedding and collection weighting entirely", func(t *testing.T) {
+	t.Run("FTS strategy skips embedding and source weighting entirely", func(t *testing.T) {
 		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}}}
 		client := &fakeEmbedClient{err: errors.New("should never be called")}
-		weigher := &fakeCollWeigher{err: errors.New("should never be called")}
 		hydrator := &fakeHydrator{chunks: []RetrievedChunk{{ID: 1, Rank: 1}}}
 		renderer := &fakeRenderer{}
 
-		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, CollWeigher: weigher, Renderer: renderer}
+		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion}
 		chunks, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
@@ -465,39 +435,71 @@ func TestRunRetrieval(t *testing.T) {
 		}
 	})
 
-	t.Run("Hybrid strategy weighs, reranks, and truncates before ever calling the hydrator", func(t *testing.T) {
+	t.Run("Hybrid strategy hydrates the pool, applies the source weight, then cuts to k", func(t *testing.T) {
 		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}, {ID: 3}}}
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
-		weigher := &fakeCollWeigher{weights: map[int64]float64{1: 1.0, 2: 1.0, 3: 5.0}}
-		hydrator := &fakeHydrator{chunks: []RetrievedChunk{{ID: 3}, {ID: 1}}}
+		hydrator := &fakeHydrator{weights: map[int64]float64{1: 1.0, 2: 1.0, 3: 5.0}}
 		renderer := &fakeRenderer{}
 
-		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, CollWeigher: weigher, Renderer: renderer}
+		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 3}
 		chunks, err := RunRetrieval(testCtx, "q", 2, StrategyHybrid, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
-		if len(chunks) != 2 {
-			t.Fatalf("got %d chunks, want 2", len(chunks))
+		if len(hydrator.calledWith) != 3 {
+			t.Fatalf("hydrator called with %d ids, want 3 (the full pool)", len(hydrator.calledWith))
 		}
-		if len(hydrator.calledWith) != 2 {
-			t.Fatalf("hydrator called with %d ids, want 2 (already truncated to k)", len(hydrator.calledWith))
+		// chunk 3 has the lowest fused score (rank 3) but a 5x source weight
+		if diff := cmp.Diff([]int64{3, 1}, chunkIDs(chunks)); diff != "" {
+			t.Errorf("chunk order mismatch (-want +got):\n%s", diff)
 		}
-		// chunk 3 has the lowest raw RRF score (rank 3) but a 5x collection
-		// weight, so it should be the one surviving truncation ahead of chunk 2.
-		if hydrator.calledWith[0].ID != 3 {
-			t.Errorf("hydrator.calledWith[0].ID = %d, want 3 (boosted by collection weight)", hydrator.calledWith[0].ID)
+		if chunks[0].Rank != 1 || chunks[1].Rank != 2 {
+			t.Errorf("ranks = %d, %d, want 1, 2", chunks[0].Rank, chunks[1].Rank)
+		}
+	})
+
+	t.Run("Hybrid strategy does not weigh a chunk outside the pool", func(t *testing.T) {
+		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}, {ID: 3}}}
+		client := &fakeEmbedClient{query: Query{Model: "fake"}}
+		hydrator := &fakeHydrator{weights: map[int64]float64{1: 1.0, 2: 1.0, 3: 5.0}}
+		renderer := &fakeRenderer{}
+
+		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 2}
+		chunks, err := RunRetrieval(testCtx, "q", 1, StrategyHybrid, deps)
+		if err != nil {
+			t.Fatalf("RunRetrieval() error = %v", err)
+		}
+		if diff := cmp.Diff([]int64{1, 2}, scoredIDs(hydrator.calledWith)); diff != "" {
+			t.Errorf("hydrated ids mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]int64{1}, chunkIDs(chunks)); diff != "" {
+			t.Errorf("chunk 3 is outside the pool and must not win with its weight (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("Hybrid strategy uses k as the pool when the pool size is smaller than k", func(t *testing.T) {
+		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}, {ID: 3}}}
+		client := &fakeEmbedClient{query: Query{Model: "fake"}}
+		hydrator := &fakeHydrator{weights: map[int64]float64{1: 1.0, 2: 1.0, 3: 1.0}}
+		renderer := &fakeRenderer{}
+
+		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 1}
+		chunks, err := RunRetrieval(testCtx, "q", 3, StrategyHybrid, deps)
+		if err != nil {
+			t.Fatalf("RunRetrieval() error = %v", err)
+		}
+		if retriever.ftsKCalls[0] != 3 || len(chunks) != 3 {
+			t.Errorf("fts k = %v, chunks = %d, want 3 and 3", retriever.ftsKCalls, len(chunks))
 		}
 	})
 
 	t.Run("Hybrid strategy returns fewer than k chunks without panicking when the pool is smaller than k", func(t *testing.T) {
 		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}}}
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
-		weigher := &fakeCollWeigher{weights: map[int64]float64{1: 1.0, 2: 1.0}}
-		hydrator := &fakeHydrator{chunks: []RetrievedChunk{{ID: 1}, {ID: 2}}}
+		hydrator := &fakeHydrator{weights: map[int64]float64{1: 1.0, 2: 1.0}}
 		renderer := &fakeRenderer{}
 
-		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, CollWeigher: weigher, Renderer: renderer}
+		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 40}
 		chunks, err := RunRetrieval(testCtx, "q", 10, StrategyHybrid, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)

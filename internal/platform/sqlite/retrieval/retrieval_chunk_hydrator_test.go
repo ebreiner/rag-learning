@@ -11,32 +11,36 @@ import (
 	"rag/internal/retrieval/step"
 )
 
-// insertChunkInCollection seeds a document+chunk under an explicit collection
-// name/weight (upserting the collection row too), unlike sqlitetest.InsertChunk
-// which always uses a fixed "test-collection". Needed here because the
-// hydrator's whole job is joining through collection_name -> collections.weight.
-func insertChunkInCollection(t *testing.T, db *sql.DB, text, collectionName string, weight float64) int64 {
+// insertChunkInSource seeds a document+chunk under an explicit source
+// name/weight (upserting the source row too), unlike sqlitetest.InsertChunk
+// which always uses sqlitetest.TestSource. Needed here because the
+// hydrator's whole job is joining through source_name -> sources.weight.
+// docSeq keeps UNIQUE(source_name, rel_path) satisfied, the tests in this package do not run in parallel.
+var docSeq int
+
+func insertChunkInSource(t *testing.T, db *sql.DB, text, sourceName string, weight float64) int64 {
 	t.Helper()
 	ctx := context.Background()
 	now := time.Now()
 
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO collections (name, weight) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET weight = excluded.weight`,
-		collectionName, weight,
+		`INSERT INTO sources (name, weight) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET weight = excluded.weight`,
+		sourceName, weight,
 	); err != nil {
-		t.Fatalf("insertChunkInCollection: upserting collection: %v", err)
+		t.Fatalf("insertChunkInSource: upserting source: %v", err)
 	}
 
+	docSeq++
 	docRes, err := db.ExecContext(ctx,
-		`INSERT INTO documents (created_at, name, sha256, collection_name) VALUES (?, ?, ?, ?)`,
-		now, "test-doc", fmt.Sprintf("sha-%s-%d", collectionName, time.Now().UnixNano()), collectionName,
+		`INSERT INTO documents (created_at, name, rel_path, sha256, source_name) VALUES (?, ?, ?, ?, ?)`,
+		now, "test-doc", fmt.Sprintf("test-doc-%d", docSeq), fmt.Sprintf("sha-%s-%d", sourceName, docSeq), sourceName,
 	)
 	if err != nil {
-		t.Fatalf("insertChunkInCollection: inserting document: %v", err)
+		t.Fatalf("insertChunkInSource: inserting document: %v", err)
 	}
 	docID, err := docRes.LastInsertId()
 	if err != nil {
-		t.Fatalf("insertChunkInCollection: document id: %v", err)
+		t.Fatalf("insertChunkInSource: document id: %v", err)
 	}
 
 	chunkRes, err := db.ExecContext(ctx,
@@ -44,22 +48,22 @@ func insertChunkInCollection(t *testing.T, db *sql.DB, text, collectionName stri
 		now, docID, 0, "content", text, "",
 	)
 	if err != nil {
-		t.Fatalf("insertChunkInCollection: inserting chunk: %v", err)
+		t.Fatalf("insertChunkInSource: inserting chunk: %v", err)
 	}
 	chunkID, err := chunkRes.LastInsertId()
 	if err != nil {
-		t.Fatalf("insertChunkInCollection: chunk id: %v", err)
+		t.Fatalf("insertChunkInSource: chunk id: %v", err)
 	}
 
 	return chunkID
 }
 
 func TestHydrateChunks(t *testing.T) {
-	t.Run("populates collection name and weight via the documents join", func(t *testing.T) {
+	t.Run("populates source name and weight via the documents join", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		manualID := insertChunkInCollection(t, db, "manual chunk", "manual", 0.8)
-		changelogID := insertChunkInCollection(t, db, "changelog chunk", "changelog", 0.3)
+		manualID := insertChunkInSource(t, db, "manual chunk", "manual", 0.8)
+		changelogID := insertChunkInSource(t, db, "changelog chunk", "changelog", 0.3)
 
 		hydrator := NewChunkHydrator(db, testLogger)
 
@@ -76,43 +80,43 @@ func TestHydrateChunks(t *testing.T) {
 			byID[c.ID] = c
 		}
 
-		if got := byID[manualID]; got.CollectionName != "manual" || got.CollectionWeight != 0.8 {
-			t.Errorf("manual chunk collection = (%q, %v), want (%q, %v)", got.CollectionName, got.CollectionWeight, "manual", 0.8)
+		if got := byID[manualID]; got.SourceName != "manual" || got.SourceWeight != 0.8 {
+			t.Errorf("manual chunk source = (%q, %v), want (%q, %v)", got.SourceName, got.SourceWeight, "manual", 0.8)
 		}
-		if got := byID[changelogID]; got.CollectionName != "changelog" || got.CollectionWeight != 0.3 {
-			t.Errorf("changelog chunk collection = (%q, %v), want (%q, %v)", got.CollectionName, got.CollectionWeight, "changelog", 0.3)
+		if got := byID[changelogID]; got.SourceName != "changelog" || got.SourceWeight != 0.3 {
+			t.Errorf("changelog chunk source = (%q, %v), want (%q, %v)", got.SourceName, got.SourceWeight, "changelog", 0.3)
 		}
 	})
 
-	t.Run("hydrates a chunk whose collection was created after the hydrator was constructed", func(t *testing.T) {
+	t.Run("hydrates a chunk whose source was created after the hydrator was constructed", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		insertChunkInCollection(t, db, "early chunk", "early-collection", 1.0)
+		insertChunkInSource(t, db, "early chunk", "early-source", 1.0)
 
 		hydrator := NewChunkHydrator(db, testLogger)
 
-		// Simulates an extract run adding a new collection while `serve mcp`
+		// Simulates an extract run adding a new source while `serve mcp`
 		// is already up. The old startup snapshot made every query touching
-		// the new collection fail until restart; the weight now comes from
+		// the new source fail until restart; the weight now comes from
 		// the hydration query's join, so there is no snapshot to go stale.
-		lateID := insertChunkInCollection(t, db, "late chunk", "late-collection", 0.5)
+		lateID := insertChunkInSource(t, db, "late chunk", "late-source", 0.5)
 
 		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: lateID}})
 		if err != nil {
-			t.Fatalf("HydrateChunks() error = %v, want nil for a collection created after construction", err)
+			t.Fatalf("HydrateChunks() error = %v, want nil for a source created after construction", err)
 		}
 		if len(chunks) != 1 {
 			t.Fatalf("got %d chunks, want 1", len(chunks))
 		}
-		if got := chunks[0]; got.CollectionName != "late-collection" || got.CollectionWeight != 0.5 {
-			t.Errorf("late chunk collection = (%q, %v), want (%q, %v)", got.CollectionName, got.CollectionWeight, "late-collection", 0.5)
+		if got := chunks[0]; got.SourceName != "late-source" || got.SourceWeight != 0.5 {
+			t.Errorf("late chunk source = (%q, %v), want (%q, %v)", got.SourceName, got.SourceWeight, "late-source", 0.5)
 		}
 	})
 
 	t.Run("a chunk id with no matching row is skipped, not an error", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		insertChunkInCollection(t, db, "real chunk", "manual", 1.0)
+		insertChunkInSource(t, db, "real chunk", "manual", 1.0)
 
 		hydrator := NewChunkHydrator(db, testLogger)
 
@@ -128,14 +132,14 @@ func TestHydrateChunks(t *testing.T) {
 	t.Run("output order follows the order of the requested ids, not db insertion order, and Rank/Score pass through unchanged", func(t *testing.T) {
 		db := sqlitetest.New(t)
 		ctx := context.Background()
-		idA := insertChunkInCollection(t, db, "chunk A", "manual", 1.0)
-		idB := insertChunkInCollection(t, db, "chunk B", "manual", 1.0)
+		idA := insertChunkInSource(t, db, "chunk A", "manual", 1.0)
+		idB := insertChunkInSource(t, db, "chunk B", "manual", 1.0)
 
 		hydrator := NewChunkHydrator(db, testLogger)
 
 		// Rank/Score are set here because HydrateChunks no longer derives
 		// Rank from position -- it's the caller's job (rrfMerge/runFTS/
-		// runANN/collectionRerank) to have already assigned the real final
+		// runANN/sourceRerank) to have already assigned the real final
 		// Rank before hydration ever runs; HydrateChunks just carries it
 		// through onto the RetrievedChunk unchanged.
 		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{

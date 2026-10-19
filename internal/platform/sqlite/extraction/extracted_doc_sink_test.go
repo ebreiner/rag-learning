@@ -7,20 +7,37 @@ import (
 	"testing"
 
 	"rag/internal/extract/step"
+	"rag/internal/platform/config"
+	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/sqlitetest"
 )
 
 var testCtx = context.Background()
 var testLogger = slog.New(slog.DiscardHandler)
 
-func simpleExtractedDoc(name, sha256, collectionName string, weight float64) step.ExtractedDoc {
+// newDBWithSources returns a test DB with the sources "manual" and "changelog".
+// documents.source_name has a FK to sources, and the composition root writes them before the extraction.
+func newDBWithSources(t *testing.T) *sql.DB {
+	t.Helper()
+	db := sqlitetest.New(t)
+	sources := []config.Source{
+		{Name: "manual", Weight: 0.8},
+		{Name: "changelog", Weight: 0.4},
+	}
+	if err := sqlite.SaveSources(testCtx, db, sources); err != nil {
+		t.Fatalf("SaveSources() error = %v", err)
+	}
+	return db
+}
+
+func simpleExtractedDoc(name, sha256, sourceName string) step.ExtractedDoc {
 	return step.ExtractedDoc{
 		MimeType: "application/pdf",
 		Source: step.SourceDoc{
-			Name:             name,
-			SHA256:           sha256,
-			CollectionName:   collectionName,
-			CollectionWeight: weight,
+			Name:       name,
+			RelPath:    "docs/" + name,
+			SHA256:     sha256,
+			SourceName: sourceName,
 		},
 		RootNodes: []*step.Node{
 			{
@@ -42,14 +59,14 @@ func simpleExtractedDoc(name, sha256, collectionName string, weight float64) ste
 }
 
 func TestSaveExtractedDoc(t *testing.T) {
-	t.Run("happy path writes the collection, document, extraction, and nodes", func(t *testing.T) {
-		db := sqlitetest.New(t)
+	t.Run("happy path writes the document, extraction, and nodes", func(t *testing.T) {
+		db := newDBWithSources(t)
 		sink, err := NewExtractedDocSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewExtractedDocSink() error = %v", err)
 		}
 
-		docID, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("manual.pdf", "sha-1", "manual", 0.8))
+		docID, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("manual.pdf", "sha-1", "manual"))
 		if err != nil {
 			t.Fatalf("SaveExtractedDoc() error = %v", err)
 		}
@@ -57,20 +74,12 @@ func TestSaveExtractedDoc(t *testing.T) {
 			t.Fatalf("docID = %d, want a positive id", docID)
 		}
 
-		var name, sha, collectionName string
-		if err := db.QueryRow("SELECT name, sha256, collection_name FROM documents WHERE id = ?", docID).Scan(&name, &sha, &collectionName); err != nil {
+		var name, relPath, sha, sourceName string
+		if err := db.QueryRow("SELECT name, rel_path, sha256, source_name FROM documents WHERE id = ?", docID).Scan(&name, &relPath, &sha, &sourceName); err != nil {
 			t.Fatalf("querying document: %v", err)
 		}
-		if name != "manual.pdf" || sha != "sha-1" || collectionName != "manual" {
-			t.Errorf("document row = (%q, %q, %q), want (%q, %q, %q)", name, sha, collectionName, "manual.pdf", "sha-1", "manual")
-		}
-
-		var weight float64
-		if err := db.QueryRow("SELECT weight FROM collections WHERE name = 'manual'").Scan(&weight); err != nil {
-			t.Fatalf("querying collection weight: %v", err)
-		}
-		if weight != 0.8 {
-			t.Errorf("collection weight = %v, want 0.8", weight)
+		if name != "manual.pdf" || relPath != "docs/manual.pdf" || sha != "sha-1" || sourceName != "manual" {
+			t.Errorf("document row = (%q, %q, %q, %q), want (%q, %q, %q, %q)", name, relPath, sha, sourceName, "manual.pdf", "docs/manual.pdf", "sha-1", "manual")
 		}
 
 		var mimeType string
@@ -107,98 +116,87 @@ func TestSaveExtractedDoc(t *testing.T) {
 		}
 	})
 
-	t.Run("saving a second doc under the same collection with a new weight updates the collection live", func(t *testing.T) {
-		db := sqlitetest.New(t)
+	t.Run("a doc of an unknown source fails on the FK and writes nothing", func(t *testing.T) {
+		db := newDBWithSources(t)
 		sink, err := NewExtractedDocSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewExtractedDocSink() error = %v", err)
 		}
 
-		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("first.pdf", "sha-1", "manual", 0.8)); err != nil {
-			t.Fatalf("SaveExtractedDoc() error = %v", err)
-		}
-		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("second.pdf", "sha-2", "manual", 0.3)); err != nil {
-			t.Fatalf("SaveExtractedDoc() error = %v", err)
+		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("x.pdf", "sha-1", "unknown")); err == nil {
+			t.Fatalf("SaveExtractedDoc() error = nil, want a FOREIGN KEY constraint violation")
 		}
 
-		var weight float64
-		if err := db.QueryRow("SELECT weight FROM collections WHERE name = 'manual'").Scan(&weight); err != nil {
-			t.Fatalf("querying collection weight: %v", err)
-		}
-		if weight != 0.3 {
-			t.Errorf("collection weight = %v, want 0.3 (the most recently saved value)", weight)
-		}
+		assertCount(t, db, "documents", 0)
+		assertCount(t, db, "extractions", 0)
 	})
 
-	t.Run("a failure partway through rolls back the whole write, leaving prior state untouched", func(t *testing.T) {
-		db := sqlitetest.New(t)
+	t.Run("the same rel path in the same source fails, the same rel path in another source is permitted", func(t *testing.T) {
+		db := newDBWithSources(t)
 		sink, err := NewExtractedDocSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewExtractedDocSink() error = %v", err)
 		}
 
-		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("first.pdf", "sha-1", "manual", 1.0)); err != nil {
-			t.Fatalf("SaveExtractedDoc() error = %v", err)
+		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("a.pdf", "sha-1", "manual")); err != nil {
+			t.Fatalf("first SaveExtractedDoc() error = %v", err)
+		}
+		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("a.pdf", "sha-2", "manual")); err == nil {
+			t.Fatalf("second SaveExtractedDoc() error = nil, want a UNIQUE(source_name, rel_path) violation")
+		}
+		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("a.pdf", "sha-3", "changelog")); err != nil {
+			t.Fatalf("SaveExtractedDoc() in another source error = %v", err)
 		}
 
-		// weight < 0 violates the collections.weight CHECK constraint --
-		// the whole transaction, including the document insert, must roll back.
-		_, err = sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("second.pdf", "sha-2", "manual", -1.0))
-		if err == nil {
-			t.Fatalf("SaveExtractedDoc() error = nil, want a CHECK constraint violation")
-		}
-
-		var docCount int
-		if err := db.QueryRow("SELECT COUNT(*) FROM documents").Scan(&docCount); err != nil {
-			t.Fatalf("counting documents: %v", err)
-		}
-		if docCount != 1 {
-			t.Errorf("got %d documents, want 1 (the failed second save must not have partially committed)", docCount)
-		}
-
-		var weight float64
-		if err := db.QueryRow("SELECT weight FROM collections WHERE name = 'manual'").Scan(&weight); err != nil {
-			t.Fatalf("querying collection weight: %v", err)
-		}
-		if weight != 1.0 {
-			t.Errorf("collection weight = %v, want 1.0 (unchanged by the rolled-back save)", weight)
-		}
+		assertCount(t, db, "documents", 2)
+		assertCount(t, db, "extractions", 2)
 	})
+}
+
+func assertCount(t *testing.T, db *sql.DB, table string, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&got); err != nil {
+		t.Fatalf("counting %s: %v", table, err)
+	}
+	if got != want {
+		t.Errorf("got %d rows in %s, want %d", got, table, want)
+	}
 }
 
 func TestExistsDoc(t *testing.T) {
 	t.Run("unknown sha256 reports not a duplicate", func(t *testing.T) {
-		db := sqlitetest.New(t)
+		db := newDBWithSources(t)
 		sink, err := NewExtractedDocSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewExtractedDocSink() error = %v", err)
 		}
 
-		isDup, collectionName, err := sink.ExistsDoc(testCtx, "unknown-sha")
+		isDup, sourceName, err := sink.ExistsDoc(testCtx, "unknown-sha")
 		if err != nil {
 			t.Fatalf("ExistsDoc() error = %v", err)
 		}
-		if isDup || collectionName != "" {
-			t.Errorf("ExistsDoc() = (%v, %q), want (false, \"\")", isDup, collectionName)
+		if isDup || sourceName != "" {
+			t.Errorf("ExistsDoc() = (%v, %q), want (false, \"\")", isDup, sourceName)
 		}
 	})
 
-	t.Run("known sha256 reports the doc's actual collection", func(t *testing.T) {
-		db := sqlitetest.New(t)
+	t.Run("known sha256 reports the doc's actual source", func(t *testing.T) {
+		db := newDBWithSources(t)
 		sink, err := NewExtractedDocSink(db, testLogger)
 		if err != nil {
 			t.Fatalf("NewExtractedDocSink() error = %v", err)
 		}
-		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("manual.pdf", "sha-1", "manual", 0.8)); err != nil {
+		if _, err := sink.SaveExtractedDoc(testCtx, simpleExtractedDoc("manual.pdf", "sha-1", "manual")); err != nil {
 			t.Fatalf("SaveExtractedDoc() error = %v", err)
 		}
 
-		isDup, collectionName, err := sink.ExistsDoc(testCtx, "sha-1")
+		isDup, sourceName, err := sink.ExistsDoc(testCtx, "sha-1")
 		if err != nil {
 			t.Fatalf("ExistsDoc() error = %v", err)
 		}
-		if !isDup || collectionName != "manual" {
-			t.Errorf("ExistsDoc() = (%v, %q), want (true, \"manual\")", isDup, collectionName)
+		if !isDup || sourceName != "manual" {
+			t.Errorf("ExistsDoc() = (%v, %q), want (true, \"manual\")", isDup, sourceName)
 		}
 	})
 }

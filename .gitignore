@@ -12,6 +12,7 @@ venv
 .venv
 rag-cli.log
 ./data.*
+config.yaml
 
 eval/golden*.json
 !eval/golden.example.json

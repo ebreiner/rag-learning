@@ -35,7 +35,7 @@ func (e *ExtractedDocSink) ExistsDoc(ctx context.Context, sha256 string) (bool, 
 			return false, "", err
 		}
 	} else {
-		return true, rows.CollectionName, nil
+		return true, rows.SourceName, nil
 	}
 }
 
@@ -47,18 +47,12 @@ func (e *ExtractedDocSink) SaveExtractedDoc(ctx context.Context, doc step.Extrac
 	q := querries.New(tx)
 	defer tx.Rollback()
 
-	collectionParam := querries.CreateCollectionOrUpdateWeightParams{
-		Name:   doc.Source.CollectionName,
-		Weight: doc.Source.CollectionWeight,
-	}
-	if err := q.CreateCollectionOrUpdateWeight(ctx, collectionParam); err != nil {
-		return -1, err
-	}
 	docParam := querries.CreateDocumentParams{
-		CreatedAt:      time.Now(),
-		Name:           doc.Source.Name,
-		Sha256:         doc.Source.SHA256,
-		CollectionName: doc.Source.CollectionName,
+		CreatedAt:  time.Now(),
+		Name:       doc.Source.Name,
+		RelPath:    doc.Source.RelPath,
+		Sha256:     doc.Source.SHA256,
+		SourceName: doc.Source.SourceName,
 	}
 	if len(doc.Source.Additional) > 0 {
 		docAdditotionalMetadata, err := json.Marshal(doc.Source.Additional)

@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"rag/internal/platform/config"
-
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -26,23 +23,6 @@ type options struct {
 	logPath string
 }
 
-func FromCommand(cmd *cobra.Command) (*slog.Logger, error) {
-	globals := config.GlobalOptions
-
-	logFile, err := config.ResolveGlobal(cmd, globals.LogPath)
-	if err != nil {
-		return nil, err
-	}
-	withPath := WithLogPath(logFile)
-	logger, err := NewLogger(withPath)
-	if err != nil {
-		return nil, err
-	} else {
-		return logger, nil
-	}
-
-}
-
 func WithLogPath(path string) Option {
 	return func(o *options) { o.logPath = path }
 }
@@ -54,7 +34,7 @@ func NewLogger(opts ...Option) (*slog.Logger, error) {
 	}
 
 	handlers := []slog.Handler{
-		slog.NewJSONHandler(os.Stdout, nil),
+		slog.NewJSONHandler(os.Stderr, nil),
 	}
 
 	if cfg.logPath != "" {

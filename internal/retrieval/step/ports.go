@@ -7,10 +7,6 @@ type TopKRetriever interface {
 	TopKByFTS(ctx context.Context, query string, k int64) ([]ScoredChunkID, error)
 }
 
-type CollectionWeigher interface {
-	WeighChunks(ctx context.Context, chunkIDs []ScoredChunkID) (map[int64]float64, error)
-}
-
 type ChunkHydrator interface {
 	HydrateChunks(ctx context.Context, chunkIDs []ScoredChunkID) ([]RetrievedChunk, error)
 }

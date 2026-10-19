@@ -7,12 +7,25 @@ package sqlitetest
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"rag/internal/platform/sqlite"
 )
+
+// TestSource is the name of the source that the Insert* helpers attach their documents to.
+const TestSource = "test-source"
+
+var relPathSeq atomic.Int64
+
+// uniqueRelPath keeps UNIQUE(source_name, rel_path) satisfied when a test
+// inserts several documents with the same name.
+func uniqueRelPath(name string) string {
+	return fmt.Sprintf("%s-%d", name, relPathSeq.Add(1))
+}
 
 // New creates a fresh, isolated SQLite database backed by a temp file (not
 // :memory: -- database/sql's connection pooling means pooled connections to
@@ -53,16 +66,16 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 	now := time.Now()
 
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO collections (name, weight) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`,
-		"test-collection", 1.0,
+		`INSERT INTO sources (name, weight) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`,
+		TestSource, 1.0,
 	)
 	if err != nil {
-		t.Fatalf("sqlitetest.InsertChunk: inserting collection: %v", err)
+		t.Fatalf("sqlitetest.InsertChunk: inserting source: %v", err)
 	}
 
 	docRes, err := db.ExecContext(ctx,
-		`INSERT INTO documents (created_at, name, sha256, collection_name) VALUES (?, ?, ?, ?)`,
-		now, "test-doc", "deadbeef", "test-collection",
+		`INSERT INTO documents (created_at, name, rel_path, sha256, source_name) VALUES (?, ?, ?, ?, ?)`,
+		now, "test-doc", uniqueRelPath("test-doc"), "deadbeef", TestSource,
 	)
 	if err != nil {
 		t.Fatalf("sqlitetest.InsertChunk: inserting document: %v", err)
@@ -87,7 +100,7 @@ func InsertChunkWithBreadcrumb(t *testing.T, db *sql.DB, text, breadcrumb string
 	return chunkID
 }
 
-// InsertDocument seeds a minimal collections -> documents chain and returns
+// InsertDocument seeds a minimal sources -> documents chain and returns
 // the new document's id. Every real chunks/extractions row needs a valid
 // document_id, so this exists to keep that boilerplate out of every
 // individual test that only needs a document to hang something else off of.
@@ -104,16 +117,16 @@ func InsertDocumentNamed(t *testing.T, db *sql.DB, name string) int64 {
 	now := time.Now()
 
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO collections (name, weight) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`,
-		"test-collection", 1.0,
+		`INSERT INTO sources (name, weight) VALUES (?, ?) ON CONFLICT(name) DO NOTHING`,
+		TestSource, 1.0,
 	)
 	if err != nil {
-		t.Fatalf("sqlitetest.InsertDocument: inserting collection: %v", err)
+		t.Fatalf("sqlitetest.InsertDocument: inserting source: %v", err)
 	}
 
 	docRes, err := db.ExecContext(ctx,
-		`INSERT INTO documents (created_at, name, sha256, collection_name) VALUES (?, ?, ?, ?)`,
-		now, name, "deadbeef", "test-collection",
+		`INSERT INTO documents (created_at, name, rel_path, sha256, source_name) VALUES (?, ?, ?, ?, ?)`,
+		now, name, uniqueRelPath(name), "deadbeef", TestSource,
 	)
 	if err != nil {
 		t.Fatalf("sqlitetest.InsertDocument: inserting document: %v", err)

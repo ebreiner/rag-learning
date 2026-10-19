@@ -8,10 +8,8 @@ import (
 	"os"
 	"os/signal"
 	cmdpkg "rag/cmd/cli/cmd"
-	"rag/internal/platform/config"
 	"rag/internal/platform/telemetry/logging"
 
-	"strconv"
 	"syscall"
 	"time"
 
@@ -22,71 +20,24 @@ import (
 func NewServeCmd() *cobra.Command {
 	mcpCmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "serve retrieval via mcp",
+		Short: "Serve the hybrid retrieval as an MCP tool over streamable HTTP",
+		Long: `Serve the hybrid retrieval as the MCP tool "rag" over streamable HTTP on
+server.listen from the config. Each request needs the bearer token from the
+env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			logger, otelShutdownFunc, err := cmdpkg.Setup(ctx, cmd)
+			logger, cnf, otelShutdownFunc, err := cmdpkg.Setup(ctx, cmd)
 			if err != nil {
 				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
-			logger.With(logging.KeyStep, "serve-mcp")
+			logger = logger.With(logging.KeyStep, "serve-mcp")
 			defer func() {
 				if err := otelShutdownFunc(ctx); err != nil {
 					logger.ErrorContext(ctx, "shutdown-err", "err", fmt.Errorf("error flushing signals and shuting down otel: %w", err))
 				}
 			}()
-
-			globals := config.GlobalOptions
-			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
-			if err != nil {
-				return err
-			}
-
-			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
-			if err != nil {
-				return err
-			}
-			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
-			if err != nil {
-				return err
-			}
-
-			modelFlag := cmd.Flags().Lookup("model")
-			if !modelFlag.Changed || modelFlag.Value.String() == "" {
-				return fmt.Errorf("missing required flag model")
-			}
-
-			model := modelFlag.Value.String()
-
-			dimFlag := cmd.Flags().Lookup("dim")
-			if !dimFlag.Changed || dimFlag.Value.String() == "" {
-				return fmt.Errorf("missing required flag dim")
-			}
-			dim, err := strconv.Atoi(dimFlag.Value.String())
-			if err != nil {
-				return fmt.Errorf("error parsing int give for 'dim': %w", err)
-			}
-
-			bindAddrFlag := cmd.Flags().Lookup("bind-addr")
-			bindAddr := bindAddrFlag.Value.String()
-
-			queryLogPath := cmd.Flags().Lookup("query-log").Value.String()
-
-			var embedConfig cmdpkg.EmbedBackendConfig
-			if cmd.Flags().Lookup("xberg-url").Changed {
-				embedConfig = cmdpkg.XbergConfig{URL: xbergBaseURL}
-
-			} else if cmd.Flags().Lookup("openai-url").Changed {
-				embedConfig = cmdpkg.OpenAIConfig{
-					URL:   openAIBaseURL,
-					Model: model,
-					Dim:   int64(dim),
-				}
-			} else {
-				return fmt.Errorf("missing required flag for embedding provider")
-			}
 
 			apiToken, ok := os.LookupEnv("RAG_CLI_API_TOKEN")
 			if !ok {
@@ -96,8 +47,7 @@ func NewServeCmd() *cobra.Command {
 				return fmt.Errorf("env 'RAG_CLI_API_TOKEN' cannot be empty")
 			}
 
-			// TODO: db mit defer schließen
-			deps, _, closeDB, err := cmdpkg.WireUpRetrieval(ctx, dbPath, embedConfig, logger)
+			deps, _, closeDB, err := cmdpkg.WireUpRetrieval(ctx, cnf, logger)
 
 			if err != nil {
 				if closeDB == nil {
@@ -111,7 +61,7 @@ func NewServeCmd() *cobra.Command {
 			}
 
 			var queryLogger *logging.QueryLogger
-			queryLogger, err = logging.NewQueryLogger(logging.WithLogPath(queryLogPath))
+			queryLogger, err = logging.NewQueryLogger(logging.WithLogPath(cnf.Log.QueryLog))
 			if err != nil {
 				if closeDBErr := closeDB(ctx); closeDBErr != nil {
 					return errors.Join(err, closeDBErr)
@@ -125,7 +75,7 @@ func NewServeCmd() *cobra.Command {
 			wrappedAuth := BearerAuth(apiToken, logger)(mcpHandler)
 
 			serverConf := serverConfig{
-				Addr:         bindAddr,
+				Addr:         cnf.Server.Listen,
 				Handler:      wrappedAuth,
 				Cleanup:      []func(context.Context) error{closeDB},
 				TimeoutRead:  time.Second * 30,
@@ -147,13 +97,9 @@ func NewServeCmd() *cobra.Command {
 
 	serveCmd := &cobra.Command{
 		Use:   "serve",
-		Short: "A brief description of your command",
-		Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+		Short: "Run a server for the retrieval",
+		Long: `Run a server for the retrieval. The only server type now is mcp.
+The DB is read at start: restart the server after ingest.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log.Println("missing sub-command 'mcp'")
 			return nil
@@ -161,10 +107,6 @@ to quickly create a Cobra application.`,
 	}
 
 	serveCmd.AddCommand(mcpCmd)
-	mcpCmd.Flags().String("query-log", "", "--query-log ./query.log")
-	mcpCmd.Flags().StringP("bind-addr", "b", "127.0.0.1:8808", "--bind-addr | -b 127.0.0.1:12345")
-	mcpCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
-	mcpCmd.Flags().IntP("dim", "d", -1, "--dim | -d 1024")
 
 	return serveCmd
 }

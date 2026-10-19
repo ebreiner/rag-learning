@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"rag/internal/platform/config"
 	"rag/internal/platform/evalstore"
 	sqliteeval "rag/internal/platform/sqlite/eval"
 	"rag/internal/platform/sqlite/querries"
@@ -29,8 +28,7 @@ for each query (hit, ranked_out, content_lost, doc_missing), write a run file an
 show the difference to the previous run.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
-
-			logger, otelShutdownFunc, err := Setup(ctx, cmd)
+			logger, cnf, otelShutdownFunc, err := Setup(ctx, cmd)
 			if err != nil {
 				return fmt.Errorf("error setting up otel and logger: %w", err)
 			}
@@ -41,69 +39,15 @@ show the difference to the previous run.`,
 				}
 			}()
 
-			goldenPath := cmd.Flag("golden").Value.String()
-			runsDir := cmd.Flag("runs-dir").Value.String()
+			golden, goldenSHA, err := evalstore.LoadGolden(cnf.Eval.Golden)
+			if err != nil {
+				return err
+			}
+
+			// the baseline is a choice for each run, so it stays a flag and is not in the config
 			baselinePath := cmd.Flag("baseline").Value.String()
-
-			k, err := cmd.Flags().GetInt64("k")
-			if err != nil {
-				return err
-			}
-			if k < 1 {
-				return fmt.Errorf("--k must be 1 or more")
-			}
-
-			strategies, err := cmd.Flags().GetStringSlice("strategies")
-			if err != nil {
-				return err
-			}
-			for _, s := range strategies {
-				switch retrievalstep.RetrievalStrategy(s) {
-				case retrievalstep.StrategyFTS, retrievalstep.StrategyANN, retrievalstep.StrategyHybrid:
-				default:
-					return fmt.Errorf("unknown strategy %q, use fts, ann or hybrid", s)
-				}
-			}
-
-			model := cmd.Flag("model").Value.String()
-			if model == "" {
-				return fmt.Errorf("missing required flag --model")
-			}
-			dim, err := cmd.Flags().GetInt64("dim")
-			if err != nil {
-				return err
-			}
-			if dim < 1 {
-				return fmt.Errorf("missing required flag --dim")
-			}
-
-			globals := config.GlobalOptions
-			xbergBaseURL, err := config.ResolveGlobal(cmd, globals.XBergURL)
-			if err != nil {
-				return err
-			}
-			openAIBaseURL, err := config.ResolveGlobal(cmd, globals.OpenAIEmbedURL)
-			if err != nil {
-				return err
-			}
-			dbPath, err := config.ResolveGlobal(cmd, globals.DBPath)
-			if err != nil {
-				return err
-			}
-
-			var embedConfig EmbedBackendConfig
-			if cmd.Flags().Lookup("xberg-url").Changed {
-				embedConfig = XbergConfig{URL: xbergBaseURL}
-			} else if cmd.Flags().Lookup("openai-url").Changed {
-				embedConfig = OpenAIConfig{URL: openAIBaseURL, Model: model, Dim: dim}
-			} else {
-				return fmt.Errorf("missing embedding provider url")
-			}
-
-			golden, goldenSHA, err := evalstore.LoadGolden(goldenPath)
-			if err != nil {
-				return err
-			}
+			runsDir := cnf.Eval.RunsDir
+			k := cnf.Eval.K
 
 			// load the baseline before Save else Latest gives the new run
 			var baseline evalstep.Run
@@ -121,7 +65,7 @@ show the difference to the previous run.`,
 				}
 			}
 
-			deps, db, closeDB, err := WireUpRetrieval(ctx, dbPath, embedConfig, logger)
+			deps, db, closeDB, err := WireUpRetrieval(ctx, cnf, logger)
 			if closeDB != nil {
 				defer func() {
 					if err := closeDB(ctx); err != nil {
@@ -134,7 +78,7 @@ show the difference to the previous run.`,
 			}
 
 			docs := sqliteeval.NewDocChunksProvider(db, logger)
-			results, err := evalstep.RunEval(ctx, golden, strategies, k, retrievalSearcher{deps: deps}, &docs)
+			results, err := evalstep.RunEval(ctx, golden, cnf.Eval.Strategies, k, cnf.Retrieval.PoolSize, retrievalSearcher{deps: deps}, &docs)
 			if err != nil {
 				return fmt.Errorf("error running eval: %w", err)
 			}
@@ -150,14 +94,15 @@ show the difference to the previous run.`,
 					Timestamp:    time.Now().UTC(),
 					GitCommit:    commit,
 					GitDirty:     dirty,
-					GoldenPath:   goldenPath,
+					GoldenPath:   cnf.Eval.Golden,
 					GoldenSHA256: goldenSHA,
-					DBPath:       dbPath,
+					DBPath:       cnf.Storage.DBPath,
 					ChunkCount:   chunkStats.ChunkCount,
 					ChunksBuilt:  chunkStats.LatestCreatedAt,
-					EmbedModel:   model,
-					EmbedDim:     dim,
+					EmbedModel:   cnf.Embedding.Model,
+					EmbedDim:     cnf.Embedding.Dim,
 					K:            k,
+					PoolSize:     max(k, cnf.Retrieval.PoolSize),
 				},
 				Strategies: results,
 			}
@@ -183,13 +128,7 @@ show the difference to the previous run.`,
 		},
 	}
 
-	evalCmd.Flags().String("golden", "eval/golden.json", "--golden eval/golden.json")
-	evalCmd.Flags().String("runs-dir", "eval/runs", "--runs-dir eval/runs")
-	evalCmd.Flags().String("baseline", "", "--baseline eval/runs/<file>.json (default: newest file in --runs-dir)")
-	evalCmd.Flags().Int64("k", 10, "--k 10")
-	evalCmd.Flags().StringSlice("strategies", []string{"fts", "ann", "hybrid"}, "--strategies fts,ann,hybrid")
-	evalCmd.Flags().StringP("model", "m", "", "--model | -m bge-m3")
-	evalCmd.Flags().Int64P("dim", "d", -1, "--dim | -d 1024")
+	evalCmd.Flags().String("baseline", "", "--baseline eval/runs/<file>.json (default: newest file in eval.runs_dir)")
 
 	return evalCmd
 }
@@ -231,15 +170,15 @@ func (r *report) flush() error {
 
 func printReport(r *report, run evalstep.Run, golden evalstep.GoldenSet) {
 	h := run.Header
-	r.line("golden: %s (%d queries)  db: %s (%d chunks, built %s)  model: %s/%d  k: %d\n\n",
-		h.GoldenPath, len(golden.Queries), h.DBPath, h.ChunkCount, h.ChunksBuilt, h.EmbedModel, h.EmbedDim, h.K)
+	r.line("golden: %s (%d queries)  db: %s (%d chunks, built %s)  model: %s/%d  k: %d  pool: %d\n\n",
+		h.GoldenPath, len(golden.Queries), h.DBPath, h.ChunkCount, h.ChunksBuilt, h.EmbedModel, h.EmbedDim, h.K, h.PoolSize)
 
-	r.line("strategy\tr@1\tr@3\tr@5\tr@10\tmrr\tsect@10\tranked_out\tlost\tmissing\n")
+	r.line("strategy\tr@1\tr@3\tr@5\tr@10\tmrr\tsect@10\tin_pool\tranked_out\tlost\tmissing\n")
 	for _, s := range run.Strategies {
 		m := s.Metrics
-		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\t%.1f\t%d\t%d\t%d\n",
+		r.line("%s\t%s\t%s\t%s\t%s\t%.3f\t%.1f\t%d\t%d\t%d\t%d\n",
 			s.Strategy, recall(m.RecallAt, 1), recall(m.RecallAt, 3), recall(m.RecallAt, 5), recall(m.RecallAt, 10),
-			m.MRR, m.DistinctSect, m.RankedOut, m.ContentLost, m.DocMissing)
+			m.MRR, m.DistinctSect, m.InPool, m.RankedOut, m.ContentLost, m.DocMissing)
 	}
 
 	r.line("\nstrategy\tdoc@1\tdoc@3\tdoc@5\tdoc@10\tdoc_mrr\n")
@@ -262,6 +201,10 @@ func printReport(r *report, run evalstep.Run, golden evalstep.GoldenSet) {
 				continue
 			}
 			misses++
+			if q.Status == evalstep.StatusInPool {
+				r.line("  %s\t%s\t%s@%d\n", q.QueryID, s.Strategy, q.Status, q.Rank)
+				continue
+			}
 			r.line("  %s\t%s\t%s\n", q.QueryID, s.Strategy, q.Status)
 		}
 	}
@@ -293,15 +236,15 @@ func printDiff(r *report, prev evalstep.Run, prevPath string, cur evalstep.Run) 
 		r.line("  WARNING: %s\n", w)
 	}
 
-	r.line("strategy\tΔr@1\tΔr@3\tΔr@5\tΔr@10\tΔmrr\tΔranked_out\tΔlost\tΔmissing\n")
+	r.line("strategy\tΔr@1\tΔr@3\tΔr@5\tΔr@10\tΔmrr\tΔin_pool\tΔranked_out\tΔlost\tΔmissing\n")
 	for _, s := range cur.Strategies {
 		d, ok := deltas[s.Strategy]
 		if !ok {
 			continue
 		}
-		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\t%+d\t%+d\t%+d\n",
+		r.line("%s\t%s\t%s\t%s\t%s\t%+.3f\t%+d\t%+d\t%+d\t%+d\n",
 			s.Strategy, recallDelta(d.RecallAt, 1), recallDelta(d.RecallAt, 3), recallDelta(d.RecallAt, 5), recallDelta(d.RecallAt, 10),
-			d.MRR, d.RankedOut, d.ContentLost, d.DocMissing)
+			d.MRR, d.InPool, d.RankedOut, d.ContentLost, d.DocMissing)
 	}
 
 	r.line("\nstrategy\tΔdoc@1\tΔdoc@3\tΔdoc@5\tΔdoc@10\tΔdoc_mrr\n")

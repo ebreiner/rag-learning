@@ -3,7 +3,6 @@ package step
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sort"
 
 	"go.opentelemetry.io/otel"
@@ -35,7 +34,7 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 	case StrategyFTS:
 		chunkIDs, err = runFTS(retrieveCtx, query, k, deps.Retriever)
 	case StrategyHybrid:
-		chunkIDs, err = runHybrid(retrieveCtx, query, k, deps.Fusion, deps.EmbeddingsClient, deps.Retriever, deps.CollWeigher, deps.Logger)
+		chunkIDs, err = runHybrid(retrieveCtx, query, max(k, deps.PoolSize), deps.Fusion, deps.EmbeddingsClient, deps.Retriever)
 	default:
 		return nil, fmt.Errorf("unknown strategy: '%s'", strategy)
 	}
@@ -52,6 +51,16 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 		return nil, err
 	}
 	hydrateSpan.End()
+
+	// phase 2 of hybrid: order the hydrated pool, then cut to k
+	if strategy == StrategyHybrid {
+		_, weightSpan := tracer.Start(stepCtx, "source-weight")
+		hydrated = sourceRerank(hydrated)
+		if len(hydrated) > int(k) {
+			hydrated = hydrated[:k]
+		}
+		weightSpan.End()
+	}
 
 	renderCtx, renderSpan := tracer.Start(stepCtx, "render-chunks")
 	defer renderSpan.End()
@@ -99,34 +108,23 @@ func runFTS(ctx context.Context, query string, k int64, retriever TopKRetriever)
 	return chunkIDs, nil
 }
 
-func runHybrid(ctx context.Context, query string, k int64, fusion FusionConfig, embed EmbedClient, retriever TopKRetriever, collweigher CollectionWeigher, logger *slog.Logger) ([]ScoredChunkID, error) {
-	hybridK := k * 4
-
-	ftsIDs, err := runFTS(ctx, query, hybridK, retriever)
+func runHybrid(ctx context.Context, query string, pool int64, fusion FusionConfig, embed EmbedClient, retriever TopKRetriever) ([]ScoredChunkID, error) {
+	ftsIDs, err := runFTS(ctx, query, pool, retriever)
 	if err != nil {
 		return nil, err
 	}
 
-	annIDs, err := runANN(ctx, query, hybridK, embed, retriever)
+	annIDs, err := runANN(ctx, query, pool, embed, retriever)
 	if err != nil {
 		return nil, err
 	}
-
-	fusion = fusion.withDefaults()
 
 	scored := weightedRRFMerge(fusion.RRFK, []float64{fusion.WeightFTS, fusion.WeightANN}, ftsIDs, annIDs)
 
-	collWeights, err := collweigher.WeighChunks(ctx, scored)
-	if err != nil {
-		return nil, err
+	if len(scored) > int(pool) {
+		return scored[:pool], nil
 	}
-	collectionReranked := collectionRerank(ctx, scored, collWeights, logger)
-
-	if len(collectionReranked) > int(k) {
-		return collectionReranked[:k], nil
-	} else {
-		return collectionReranked, nil
-	}
+	return scored, nil
 }
 
 func rrfMerge(rankings ...[]ScoredChunkID) []ScoredChunkID {
@@ -169,26 +167,22 @@ func weightedRRFMerge(k int64, weights []float64, rankings ...[]ScoredChunkID) [
 	return scored
 }
 
-func collectionRerank(ctx context.Context, chunks []ScoredChunkID, weights map[int64]float64, logger *slog.Logger) []ScoredChunkID {
-	filtered := make([]ScoredChunkID, 0, len(chunks))
+func sourceRerank(chunks []RetrievedChunk) []RetrievedChunk {
+	weighted := make([]RetrievedChunk, 0, len(chunks))
 	for _, c := range chunks {
-		if weight, ok := weights[c.ID]; ok {
-			c.Score *= weight
-			filtered = append(filtered, c)
-		} else {
-			logger.WarnContext(ctx, "collection-rerank", "warn", fmt.Sprintf("dropping chunk %d: no collection weight found", c.ID))
-		}
+		c.Score *= c.SourceWeight
+		weighted = append(weighted, c)
 	}
 
-	sort.Slice(filtered, func(i, j int) bool {
-		if filtered[i].Score == filtered[j].Score {
-			return filtered[i].ID < filtered[j].ID
+	sort.Slice(weighted, func(i, j int) bool {
+		if weighted[i].Score == weighted[j].Score {
+			return weighted[i].ID < weighted[j].ID
 		}
-		return filtered[i].Score > filtered[j].Score
+		return weighted[i].Score > weighted[j].Score
 	})
-	for i := range filtered {
-		filtered[i].Rank = int64(i + 1)
+	for i := range weighted {
+		weighted[i].Rank = int64(i + 1)
 	}
 
-	return filtered
+	return weighted
 }

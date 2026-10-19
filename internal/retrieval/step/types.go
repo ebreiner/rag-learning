@@ -7,9 +7,9 @@ type RetrievalDeps struct {
 	Hydrator         ChunkHydrator
 	Retriever        TopKRetriever
 	EmbeddingsClient EmbedClient
-	CollWeigher      CollectionWeigher
 	Renderer         ChunkRenderer
 	Fusion           FusionConfig
+	PoolSize         int64
 }
 
 type FusionConfig struct {
@@ -18,29 +18,16 @@ type FusionConfig struct {
 	WeightANN float64
 }
 
-func (c FusionConfig) withDefaults() FusionConfig {
-	if c.RRFK <= 0 {
-		c.RRFK = rrfK
-	}
-	if c.WeightFTS <= 0 {
-		c.WeightFTS = 1
-	}
-	if c.WeightANN <= 0 {
-		c.WeightANN = 1
-	}
-	return c
-}
-
 type RetrievedChunk struct {
-	ID               int64
-	Rank             int64
-	DocTitle         string
-	Position         int64
-	Score            float64
-	Breadcrumb       string
-	Text             string
-	CollectionWeight float64
-	CollectionName   string
+	ID           int64
+	Rank         int64
+	DocTitle     string
+	Position     int64
+	Score        float64
+	Breadcrumb   string
+	Text         string
+	SourceWeight float64
+	SourceName   string
 }
 
 type ScoredChunkID struct {

@@ -75,7 +75,7 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 		attribute.String("doc.sha256", sourceDoc.SHA256),
 	)
 
-	isDuplicate, collectionName, err := sink.ExistsDoc(ctx, sourceDoc.SHA256)
+	isDuplicate, sourceName, err := sink.ExistsDoc(ctx, sourceDoc.SHA256)
 	if err != nil {
 		return err
 	}
@@ -83,8 +83,8 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 		stepSpan.SetAttributes(attribute.String("doc.is_duplicate", strconv.FormatBool(true)))
 		logger.WarnContext(ctx, "run-extract", "warn", fmt.Sprintf("duplicate doc skipping:  %s", sourceDoc.SourcePath))
 
-		if collectionName != sourceDoc.CollectionName {
-			logger.WarnContext(ctx, "run-extract", "warn", fmt.Sprintf("collection name not equal for duplicate doc %s: expected: %s, got:%s", sourceDoc.Name, collectionName, sourceDoc.CollectionName))
+		if sourceName != sourceDoc.SourceName {
+			logger.WarnContext(ctx, "run-extract", "warn", fmt.Sprintf("duplicate doc %s already saved for source %s, skipping it for source %s", sourceDoc.SourcePath, sourceName, sourceDoc.SourceName))
 		}
 
 		return ErrDuplicateDoc

@@ -24,12 +24,6 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
-	if q.collectionWeightForChunkIDsStmt, err = db.PrepareContext(ctx, collectionWeightForChunkIDs); err != nil {
-		return nil, fmt.Errorf("error preparing query CollectionWeightForChunkIDs: %w", err)
-	}
-	if q.createCollectionOrUpdateWeightStmt, err = db.PrepareContext(ctx, createCollectionOrUpdateWeight); err != nil {
-		return nil, fmt.Errorf("error preparing query CreateCollectionOrUpdateWeight: %w", err)
-	}
 	if q.createDocumentStmt, err = db.PrepareContext(ctx, createDocument); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateDocument: %w", err)
 	}
@@ -60,9 +54,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.flushChunksStmt, err = db.PrepareContext(ctx, flushChunks); err != nil {
 		return nil, fmt.Errorf("error preparing query FlushChunks: %w", err)
 	}
-	if q.getAllCollectionWeightsStmt, err = db.PrepareContext(ctx, getAllCollectionWeights); err != nil {
-		return nil, fmt.Errorf("error preparing query GetAllCollectionWeights: %w", err)
-	}
 	if q.getDocumentIDsAfterIDStmt, err = db.PrepareContext(ctx, getDocumentIDsAfterID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetDocumentIDsAfterID: %w", err)
 	}
@@ -78,21 +69,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.retrievalChunksByIDsStmt, err = db.PrepareContext(ctx, retrievalChunksByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query RetrievalChunksByIDs: %w", err)
 	}
+	if q.saveSourceStmt, err = db.PrepareContext(ctx, saveSource); err != nil {
+		return nil, fmt.Errorf("error preparing query SaveSource: %w", err)
+	}
 	return &q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
-	if q.collectionWeightForChunkIDsStmt != nil {
-		if cerr := q.collectionWeightForChunkIDsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing collectionWeightForChunkIDsStmt: %w", cerr)
-		}
-	}
-	if q.createCollectionOrUpdateWeightStmt != nil {
-		if cerr := q.createCollectionOrUpdateWeightStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing createCollectionOrUpdateWeightStmt: %w", cerr)
-		}
-	}
 	if q.createDocumentStmt != nil {
 		if cerr := q.createDocumentStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createDocumentStmt: %w", cerr)
@@ -143,11 +127,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing flushChunksStmt: %w", cerr)
 		}
 	}
-	if q.getAllCollectionWeightsStmt != nil {
-		if cerr := q.getAllCollectionWeightsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getAllCollectionWeightsStmt: %w", cerr)
-		}
-	}
 	if q.getDocumentIDsAfterIDStmt != nil {
 		if cerr := q.getDocumentIDsAfterIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getDocumentIDsAfterIDStmt: %w", cerr)
@@ -171,6 +150,11 @@ func (q *Queries) Close() error {
 	if q.retrievalChunksByIDsStmt != nil {
 		if cerr := q.retrievalChunksByIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing retrievalChunksByIDsStmt: %w", cerr)
+		}
+	}
+	if q.saveSourceStmt != nil {
+		if cerr := q.saveSourceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing saveSourceStmt: %w", cerr)
 		}
 	}
 	return err
@@ -210,49 +194,45 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                 DBTX
-	tx                                 *sql.Tx
-	collectionWeightForChunkIDsStmt    *sql.Stmt
-	createCollectionOrUpdateWeightStmt *sql.Stmt
-	createDocumentStmt                 *sql.Stmt
-	createExtractionStmt               *sql.Stmt
-	createExtractionNodeStmt           *sql.Stmt
-	docAlreadyChunkedStmt              *sql.Stmt
-	evalChunkStatsStmt                 *sql.Stmt
-	evalChunksOfDocStmt                *sql.Stmt
-	evalDocExistsStmt                  *sql.Stmt
-	existsDocumentStmt                 *sql.Stmt
-	flushChunkNodesStmt                *sql.Stmt
-	flushChunksStmt                    *sql.Stmt
-	getAllCollectionWeightsStmt        *sql.Stmt
-	getDocumentIDsAfterIDStmt          *sql.Stmt
-	getLatestExtractionOfDocStmt       *sql.Stmt
-	insertChunkStmt                    *sql.Stmt
-	insertChunkNodesStmt               *sql.Stmt
-	retrievalChunksByIDsStmt           *sql.Stmt
+	db                           DBTX
+	tx                           *sql.Tx
+	createDocumentStmt           *sql.Stmt
+	createExtractionStmt         *sql.Stmt
+	createExtractionNodeStmt     *sql.Stmt
+	docAlreadyChunkedStmt        *sql.Stmt
+	evalChunkStatsStmt           *sql.Stmt
+	evalChunksOfDocStmt          *sql.Stmt
+	evalDocExistsStmt            *sql.Stmt
+	existsDocumentStmt           *sql.Stmt
+	flushChunkNodesStmt          *sql.Stmt
+	flushChunksStmt              *sql.Stmt
+	getDocumentIDsAfterIDStmt    *sql.Stmt
+	getLatestExtractionOfDocStmt *sql.Stmt
+	insertChunkStmt              *sql.Stmt
+	insertChunkNodesStmt         *sql.Stmt
+	retrievalChunksByIDsStmt     *sql.Stmt
+	saveSourceStmt               *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                                 tx,
-		tx:                                 tx,
-		collectionWeightForChunkIDsStmt:    q.collectionWeightForChunkIDsStmt,
-		createCollectionOrUpdateWeightStmt: q.createCollectionOrUpdateWeightStmt,
-		createDocumentStmt:                 q.createDocumentStmt,
-		createExtractionStmt:               q.createExtractionStmt,
-		createExtractionNodeStmt:           q.createExtractionNodeStmt,
-		docAlreadyChunkedStmt:              q.docAlreadyChunkedStmt,
-		evalChunkStatsStmt:                 q.evalChunkStatsStmt,
-		evalChunksOfDocStmt:                q.evalChunksOfDocStmt,
-		evalDocExistsStmt:                  q.evalDocExistsStmt,
-		existsDocumentStmt:                 q.existsDocumentStmt,
-		flushChunkNodesStmt:                q.flushChunkNodesStmt,
-		flushChunksStmt:                    q.flushChunksStmt,
-		getAllCollectionWeightsStmt:        q.getAllCollectionWeightsStmt,
-		getDocumentIDsAfterIDStmt:          q.getDocumentIDsAfterIDStmt,
-		getLatestExtractionOfDocStmt:       q.getLatestExtractionOfDocStmt,
-		insertChunkStmt:                    q.insertChunkStmt,
-		insertChunkNodesStmt:               q.insertChunkNodesStmt,
-		retrievalChunksByIDsStmt:           q.retrievalChunksByIDsStmt,
+		db:                           tx,
+		tx:                           tx,
+		createDocumentStmt:           q.createDocumentStmt,
+		createExtractionStmt:         q.createExtractionStmt,
+		createExtractionNodeStmt:     q.createExtractionNodeStmt,
+		docAlreadyChunkedStmt:        q.docAlreadyChunkedStmt,
+		evalChunkStatsStmt:           q.evalChunkStatsStmt,
+		evalChunksOfDocStmt:          q.evalChunksOfDocStmt,
+		evalDocExistsStmt:            q.evalDocExistsStmt,
+		existsDocumentStmt:           q.existsDocumentStmt,
+		flushChunkNodesStmt:          q.flushChunkNodesStmt,
+		flushChunksStmt:              q.flushChunksStmt,
+		getDocumentIDsAfterIDStmt:    q.getDocumentIDsAfterIDStmt,
+		getLatestExtractionOfDocStmt: q.getLatestExtractionOfDocStmt,
+		insertChunkStmt:              q.insertChunkStmt,
+		insertChunkNodesStmt:         q.insertChunkNodesStmt,
+		retrievalChunksByIDsStmt:     q.retrievalChunksByIDsStmt,
+		saveSourceStmt:               q.saveSourceStmt,
 	}
 }

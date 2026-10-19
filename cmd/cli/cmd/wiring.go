@@ -5,36 +5,36 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
+	embedstep "rag/internal/embedding/step"
+	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient/kreuzberg"
 	"rag/internal/platform/embedclient/openai"
 	"rag/internal/platform/httpclient"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
-	"rag/internal/retrieval/step"
-	"strconv"
-	"time"
+	retrievalstep "rag/internal/retrieval/step"
 )
 
-type EmbedBackendConfig interface{ isEmbedBackendConfig() }
-
-type XbergConfig struct {
-	URL string
+type EmbedClient interface {
+	embedstep.EmbedClient
+	retrievalstep.EmbedClient
 }
 
-func (XbergConfig) isEmbedBackendConfig() {}
-
-type OpenAIConfig struct {
-	URL   string
-	Model string
-	Dim   int64
+func NewEmbedClient(cnf config.Embedding, logger *slog.Logger) (EmbedClient, error) {
+	httpClient := httpclient.New(cnf.Timeout, nil)
+	switch cnf.Backend {
+	case config.EmbedBackendOpenAI:
+		return openai.NewOpenAIClient(cnf.Model, cnf.URL.String(), cnf.Dim, httpClient, logger)
+	case config.EmbedBackendKreuzberg:
+		return kreuzberg.NewKreuzbergClient(cnf.URL.String(), logger, httpClient)
+	default:
+		return nil, fmt.Errorf("unknown embed backend %q", cnf.Backend)
+	}
 }
 
-func (OpenAIConfig) isEmbedBackendConfig() {}
-
-func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBackendConfig, logger *slog.Logger) (deps step.RetrievalDeps, db *sql.DB, closeDB func(context.Context) error, err error) {
-	db, err = sqlite.NewConn(dbPath, false)
-	deps = step.RetrievalDeps{}
+func WireUpRetrieval(ctx context.Context, cnf config.Config, logger *slog.Logger) (deps retrievalstep.RetrievalDeps, db *sql.DB, closeDB func(context.Context) error, err error) {
+	db, err = sqlite.NewConn(cnf.Storage.DBPath, false)
+	deps = retrievalstep.RetrievalDeps{}
 	if err != nil {
 		return deps, db, nil, err
 	}
@@ -50,10 +50,6 @@ func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBacken
 		}
 	}
 
-	if err != nil {
-		return deps, db, closeDB, err
-	}
-
 	deps.Logger = logger
 
 	hydrator := retrieval.NewChunkHydrator(db, logger)
@@ -65,7 +61,7 @@ func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBacken
 	}
 	deps.Retriever = retriever
 
-	embedClient, err := newEmbedClient(embedConfig, logger)
+	embedClient, err := NewEmbedClient(cnf.Embedding, logger)
 	if err != nil {
 		return deps, db, closeDB, err
 	}
@@ -77,54 +73,9 @@ func WireUpRetrieval(ctx context.Context, dbPath string, embedConfig EmbedBacken
 	}
 	deps.Renderer = &renderer
 
-	collWeigher := retrieval.NewCollectionWeigher(db, logger)
-	deps.CollWeigher = &collWeigher
-
-	fusion, err := fusionFromEnv()
-	if err != nil {
-		return deps, db, closeDB, err
-	}
-	deps.Fusion = fusion
-	logger.InfoContext(ctx, "wiring", "info", fmt.Sprintf("hybrid fusion: rrf k %d, weight fts %g, weight ann %g (0 = default)", fusion.RRFK, fusion.WeightFTS, fusion.WeightANN))
+	deps.Fusion = retrievalstep.FusionConfig(cnf.Retrieval.Fusion)
+	deps.PoolSize = cnf.Retrieval.PoolSize
+	logger.InfoContext(ctx, "wiring", "info", fmt.Sprintf("hybrid: pool size %d, rrf k %d, weight fts %g, weight ann %g", deps.PoolSize, deps.Fusion.RRFK, deps.Fusion.WeightFTS, deps.Fusion.WeightANN))
 
 	return deps, db, closeDB, nil
-}
-
-func newEmbedClient(cnf EmbedBackendConfig, logger *slog.Logger) (step.EmbedClient, error) {
-	switch c := cnf.(type) {
-	case XbergConfig:
-		httpClient := httpclient.New(60*time.Second, nil)
-		return kreuzberg.NewKreuzbergClient(c.URL, logger, httpClient)
-	case OpenAIConfig:
-		httpClient := httpclient.New(60*time.Second, nil)
-		return openai.NewOpenAIClient(c.Model, c.URL, c.Dim, httpClient, logger)
-	default:
-		return openai.ClientOpenAI{}, fmt.Errorf("unknown embed backend")
-	}
-}
-
-func fusionFromEnv() (step.FusionConfig, error) {
-	var c step.FusionConfig
-	if v, ok := os.LookupEnv("RAG_FUSION_RRF_K"); ok {
-		k, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return c, fmt.Errorf("parsing RAG_FUSION_RRF_K: %w", err)
-		}
-		c.RRFK = k
-	}
-	for name, dst := range map[string]*float64{
-		"RAG_FUSION_WEIGHT_FTS": &c.WeightFTS,
-		"RAG_FUSION_WEIGHT_ANN": &c.WeightANN,
-	} {
-		v, ok := os.LookupEnv(name)
-		if !ok {
-			continue
-		}
-		w, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return c, fmt.Errorf("parsing %s: %w", name, err)
-		}
-		*dst = w
-	}
-	return c, nil
 }

@@ -2,28 +2,27 @@
 INSERT INTO documents (
 	created_at,
 	name,
+	rel_path,
 	sha256,
-	collection_name,
+	source_name,
 	metadata_json
 ) VALUES (
-	?,?,?,?,?
+	?,?,?,?,?,?
 )
 RETURNING id;
 
 -- name: ExistsDocument :one
-SELECT  d.id, d.sha256, c.name AS collection_name
-FROM documents d
-JOIN collections c
-ON d.collection_name = c.name
-WHERE d.sha256 = ?;
+SELECT id, sha256, source_name
+FROM documents
+WHERE sha256 = ?;
 
 
--- name: CreateCollectionOrUpdateWeight :exec
-INSERT INTO collections (
+-- name: SaveSource :exec
+INSERT INTO sources (
 	name,
 	weight
 ) VALUES (?,?)
-ON CONFLICT DO
+ON CONFLICT(name) DO
 UPDATE SET weight = excluded.weight;
 
 
@@ -110,33 +109,21 @@ WHERE e.document_id = ?
 ORDER BY en.id;
 
 
--- name: GetAllCollectionWeights :many
-SELECT name, weight FROM collections;
-
 -- name: RetrievalChunksByIDs :many
 SELECT
 	c.id,
 	d.name,
-	d.collection_name,
-	w.weight,
+	d.source_name,
+	s.weight,
 	c.position,
 	c.breadcrumb,
 	c.text
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
-JOIN collections AS w
-	ON d.collection_name = w.name
+JOIN sources AS s
+	ON d.source_name = s.name
 WHERE c.id IN (sqlc.slice('chunk_ids'));
-
--- name: CollectionWeightForChunkIDs :many
-SELECT chunks.id, collections.weight
-FROM chunks
-JOIN documents
-ON chunks.document_id = documents.id
-JOIN collections
-ON documents.collection_name = collections.name
-WHERE chunks.id IN (sqlc.slice('chunk_ids'));
 
 -- name: EvalDocExists :one
 SELECT EXISTS(SELECT 1 FROM documents WHERE name = ?);

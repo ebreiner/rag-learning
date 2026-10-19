@@ -12,8 +12,8 @@ var testCtx = context.Background()
 var testLogger = slog.New(slog.DiscardHandler)
 
 type existsResult struct {
-	isDuplicate    bool
-	collectionName string
+	isDuplicate bool
+	sourceName  string
 }
 
 type fakeDocSource struct {
@@ -50,7 +50,7 @@ func (f *fakeDocSink) ExistsDoc(ctx context.Context, sha256 string) (bool, strin
 		return false, "", f.existsErr
 	}
 	if res, ok := f.existsResults[sha256]; ok {
-		return res.isDuplicate, res.collectionName, nil
+		return res.isDuplicate, res.sourceName, nil
 	}
 	return false, "", nil
 }
@@ -120,11 +120,11 @@ func TestExtract(t *testing.T) {
 		}
 	})
 
-	t.Run("duplicate doc under the same collection is skipped without saving", func(t *testing.T) {
-		doc := SourceDoc{SHA256: "abc", Name: "doc", CollectionName: "manual"}
+	t.Run("duplicate doc under the same source is skipped without saving", func(t *testing.T) {
+		doc := SourceDoc{SHA256: "abc", Name: "doc", SourceName: "manual"}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{existsResults: map[string]existsResult{
-			"abc": {isDuplicate: true, collectionName: "manual"},
+			"abc": {isDuplicate: true, sourceName: "manual"},
 		}}
 		extractor := &fakeExtractor{}
 
@@ -140,11 +140,11 @@ func TestExtract(t *testing.T) {
 		}
 	})
 
-	t.Run("duplicate doc re-submitted under a different collection is still skipped, not re-tagged", func(t *testing.T) {
-		doc := SourceDoc{SHA256: "abc", Name: "doc", CollectionName: "changelog"}
+	t.Run("duplicate doc under a different source is still skipped, the first source wins", func(t *testing.T) {
+		doc := SourceDoc{SHA256: "abc", Name: "doc", SourceName: "changelog"}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{existsResults: map[string]existsResult{
-			"abc": {isDuplicate: true, collectionName: "manual"},
+			"abc": {isDuplicate: true, sourceName: "manual"},
 		}}
 		extractor := &fakeExtractor{}
 
@@ -153,12 +153,12 @@ func TestExtract(t *testing.T) {
 			t.Fatalf("extract() error = %v, want ErrDuplicateDoc", err)
 		}
 		if len(sink.savedDocs) != 0 {
-			t.Errorf("sink.SaveExtractedDoc should not have been called -- a doc's collection must not change via re-extraction")
+			t.Errorf("sink.SaveExtractedDoc should not have been called -- a doc's source must not change via re-extraction")
 		}
 	})
 
-	t.Run("collection name and weight propagate from the source doc to the saved extracted doc", func(t *testing.T) {
-		doc := SourceDoc{SHA256: "abc", Name: "doc", CollectionName: "manual", CollectionWeight: 0.8}
+	t.Run("source name and rel path propagate from the source doc to the saved extracted doc", func(t *testing.T) {
+		doc := SourceDoc{SHA256: "abc", Name: "doc.pdf", RelPath: "sub/doc.pdf", SourceName: "manual"}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{}
 		extractor := &fakeExtractor{}
@@ -170,8 +170,8 @@ func TestExtract(t *testing.T) {
 			t.Fatalf("got %d saved docs, want 1", len(sink.savedDocs))
 		}
 		got := sink.savedDocs[0].Source
-		if got.CollectionName != "manual" || got.CollectionWeight != 0.8 {
-			t.Errorf("saved doc collection = (%q, %v), want (%q, %v)", got.CollectionName, got.CollectionWeight, "manual", 0.8)
+		if got.SourceName != "manual" || got.RelPath != "sub/doc.pdf" {
+			t.Errorf("saved doc source = (%q, %q), want (%q, %q)", got.SourceName, got.RelPath, "manual", "sub/doc.pdf")
 		}
 	})
 
@@ -248,7 +248,7 @@ func TestRunExtract(t *testing.T) {
 		}
 		source := &fakeDocSource{docs: docs}
 		sink := &fakeDocSink{existsResults: map[string]existsResult{
-			"dup": {isDuplicate: true, collectionName: ""},
+			"dup": {isDuplicate: true, sourceName: ""},
 		}}
 		extractor := &fakeExtractor{}
 

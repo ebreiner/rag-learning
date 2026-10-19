@@ -61,3 +61,20 @@ func TestComputeMetricsNoQueries(t *testing.T) {
 		t.Errorf("computeMetrics() = %+v, want zero values", got)
 	}
 }
+
+// in_pool is a miss for the top k: it counts in InPool, not in recall or MRR
+func TestComputeMetricsInPool(t *testing.T) {
+	results := []QueryResult{
+		{Status: StatusHit, Rank: 1},
+		{Status: StatusInPool, Rank: 15},
+	}
+
+	got := computeMetrics(results, 10)
+
+	if got.InPool != 1 || got.RankedOut != 0 {
+		t.Errorf("InPool = %d, RankedOut = %d, want 1 and 0", got.InPool, got.RankedOut)
+	}
+	if got.MRR != 0.5 || got.RecallAt[10] != 0.5 {
+		t.Errorf("MRR = %v, r@10 = %v, want 0.5 and 0.5", got.MRR, got.RecallAt[10])
+	}
+}
