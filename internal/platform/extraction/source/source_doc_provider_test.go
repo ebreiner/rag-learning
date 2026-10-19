@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"rag/internal/platform/config"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 var testCtx = context.Background()
@@ -209,6 +211,84 @@ func TestNewSourceDocSource(t *testing.T) {
 		}
 		if _, err := src.NextSourceDoc(); err != io.EOF {
 			t.Fatalf("second NextSourceDoc() error = %v, want io.EOF", err)
+		}
+	})
+}
+
+func TestSourceDocMetadata(t *testing.T) {
+	t.Run("a sidecar key overrides an attribute, a key only in the sidecar is added", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, "a.md"), "a")
+		writeFile(t, filepath.Join(dir, "a.md.meta.json"), `{"classification.personal_data": true, "title": "A"}`)
+		attributes := map[string]any{"classification.personal_data": false, "team": "x"}
+
+		src, err := NewSourceDocSource(testCtx, []config.Source{{Name: "manual", Path: dir, Weight: 1, Attributes: attributes}}, testLogger)
+		if err != nil {
+			t.Fatalf("NewSourceDocSource() error = %v", err)
+		}
+		doc, err := src.NextSourceDoc()
+		if err != nil {
+			t.Fatalf("NextSourceDoc() error = %v", err)
+		}
+
+		want := map[string]any{"classification.personal_data": true, "team": "x", "title": "A"}
+		if diff := cmp.Diff(want, doc.Metadata); diff != "" {
+			t.Errorf("metadata (-want +got):\n%s", diff)
+		}
+		if attributes["classification.personal_data"] != false || len(attributes) != 2 {
+			t.Errorf("the sidecar changed the source attributes: %v", attributes)
+		}
+	})
+
+	t.Run("a doc without a sidecar gets only the attributes", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, "a.md"), "a")
+		attributes := map[string]any{"classification.personal_data": false}
+
+		src, err := NewSourceDocSource(testCtx, []config.Source{{Name: "manual", Path: dir, Weight: 1, Attributes: attributes}}, testLogger)
+		if err != nil {
+			t.Fatalf("NewSourceDocSource() error = %v", err)
+		}
+		doc, err := src.NextSourceDoc()
+		if err != nil {
+			t.Fatalf("NextSourceDoc() error = %v", err)
+		}
+		if diff := cmp.Diff(attributes, doc.Metadata); diff != "" {
+			t.Errorf("metadata (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a sidecar is not a doc", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, "a.md"), "a")
+		writeFile(t, filepath.Join(dir, "a.md.meta.json"), `{}`)
+
+		src, err := NewSourceDocSource(testCtx, oneSource(dir), testLogger)
+		if err != nil {
+			t.Fatalf("NewSourceDocSource() error = %v", err)
+		}
+		docs := drainSourceDocs(t, &src)
+		if len(docs) != 1 || docs[0].Name != "a.md" {
+			t.Fatalf("got docs %+v, want only a.md", docs)
+		}
+	})
+
+	t.Run("an invalid sidecar fails only its own doc, the next doc follows", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, "a.md"), "a")
+		writeFile(t, filepath.Join(dir, "a.md.meta.json"), `{not json`)
+		writeFile(t, filepath.Join(dir, "b.md"), "b")
+
+		src, err := NewSourceDocSource(testCtx, oneSource(dir), testLogger)
+		if err != nil {
+			t.Fatalf("NewSourceDocSource() error = %v, want nil: a bad sidecar must not stop the ingest", err)
+		}
+		if _, err := src.NextSourceDoc(); err == nil || err == io.EOF {
+			t.Fatalf("first NextSourceDoc() error = %v, want the sidecar error", err)
+		}
+		doc, err := src.NextSourceDoc()
+		if err != nil || doc.Name != "b.md" {
+			t.Fatalf("second NextSourceDoc() = (%q, %v), want (b.md, nil)", doc.Name, err)
 		}
 	})
 }

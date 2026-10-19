@@ -9,7 +9,7 @@ import (
 	"rag/internal/retrieval/step"
 )
 
-func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int64) ([]step.ScoredChunkID, error) {
+func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int64, filter step.Filter) ([]step.ScoredChunkID, error) {
 	chunkIDs := make([]step.ScoredChunkID, 0)
 
 	packed, err := sqlite.PackVector(query.Vector)
@@ -23,8 +23,22 @@ func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int
 	}
 
 	q := fmt.Sprintf("SELECT e.chunk_id, e.distance FROM %s AS e WHERE e.embedding MATCH ? ORDER BY e.distance LIMIT ?", tableName)
+	args := []any{packed, k}
+	if !filter.IsEmpty() {
+		// the KNN query applies a WHERE on joined tables only after the k nearest chunks,
+		// so a filter needs a full scan of the filtered chunks, L2 is the vec0 default  order stays the same
+		clause, filterArgs := filterClause(filter)
+		q = fmt.Sprintf(`SELECT e.chunk_id, vec_distance_l2(e.embedding, ?) AS distance
+			FROM %s AS e
+			JOIN chunks AS c ON c.id = e.chunk_id
+			JOIN documents AS d ON d.id = c.document_id
+			WHERE 1 = 1%s
+			ORDER BY distance
+			LIMIT ?`, tableName, clause)
+		args = append(append([]any{packed}, filterArgs...), k)
+	}
 
-	rows, err := r.db.QueryContext(ctx, q, packed, k)
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return chunkIDs, fmt.Errorf("error: no rows found")
 	}

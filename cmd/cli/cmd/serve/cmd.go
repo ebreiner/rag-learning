@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	cmdpkg "rag/cmd/cli/cmd"
+	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/platform/telemetry/logging"
 
 	"syscall"
@@ -47,7 +48,7 @@ env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 				return fmt.Errorf("env 'RAG_CLI_API_TOKEN' cannot be empty")
 			}
 
-			deps, _, closeDB, err := cmdpkg.WireUpRetrieval(ctx, cnf, logger)
+			deps, db, closeDB, err := cmdpkg.WireUpRetrieval(ctx, cnf, logger)
 
 			if err != nil {
 				if closeDB == nil {
@@ -69,8 +70,24 @@ env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 				return fmt.Errorf("error setting up querry logger: %w", err)
 			}
 
+			catalog, err := retrieval.ReadCatalog(ctx, db)
+			if err != nil {
+				if closeDBErr := closeDB(ctx); closeDBErr != nil {
+					return errors.Join(err, closeDBErr)
+				}
+				return fmt.Errorf("error reading catalog: %w", err)
+			}
+			catalogTool, err := newCatalogTool(catalog, deps.Sources, queryLogger)
+			if err != nil {
+				if closeDBErr := closeDB(ctx); closeDBErr != nil {
+					return errors.Join(err, closeDBErr)
+				}
+				return err
+			}
+
 			hybridTool := hyridRetrievalTool(deps, queryLogger)
-			tools := []server.ServerTool{hybridTool}
+			readTool := newReadTool(cmdpkg.NewReadDeps(db, cnf, logger), queryLogger, logger)
+			tools := []server.ServerTool{hybridTool, catalogTool, readTool}
 			mcpHandler := MCPHandler(tools)
 			wrappedAuth := BearerAuth(apiToken, logger)(mcpHandler)
 

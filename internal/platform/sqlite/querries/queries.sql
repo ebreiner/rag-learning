@@ -117,7 +117,8 @@ SELECT
 	s.weight,
 	c.position,
 	c.breadcrumb,
-	c.text
+	c.text,
+	d.metadata_json
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id

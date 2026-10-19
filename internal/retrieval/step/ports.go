@@ -3,8 +3,8 @@ package step
 import "context"
 
 type TopKRetriever interface {
-	TopKByANN(ctx context.Context, query Query, k int64) ([]ScoredChunkID, error)
-	TopKByFTS(ctx context.Context, query string, k int64) ([]ScoredChunkID, error)
+	TopKByANN(ctx context.Context, query Query, k int64, filter Filter) ([]ScoredChunkID, error)
+	TopKByFTS(ctx context.Context, query string, k int64, filter Filter) ([]ScoredChunkID, error)
 }
 
 type ChunkHydrator interface {

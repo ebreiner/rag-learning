@@ -10,6 +10,7 @@ type RetrievalDeps struct {
 	Renderer         ChunkRenderer
 	Fusion           FusionConfig
 	PoolSize         int64
+	Sources          []string
 }
 
 type FusionConfig struct {
@@ -28,6 +29,7 @@ type RetrievedChunk struct {
 	Text         string
 	SourceWeight float64
 	SourceName   string
+	Metadata     map[string]any
 }
 
 type ScoredChunkID struct {

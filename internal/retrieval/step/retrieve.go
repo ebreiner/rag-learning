@@ -11,7 +11,7 @@ import (
 
 const rrfK int64 = 60
 
-func RunRetrieval(ctx context.Context, query string, k int64, strategy RetrievalStrategy, deps RetrievalDeps) ([]RetrievedChunk, error) {
+func RunRetrieval(ctx context.Context, query string, k int64, strategy RetrievalStrategy, filter Filter, deps RetrievalDeps) ([]RetrievedChunk, error) {
 	tracer := otel.Tracer("rag-cli-sdk")
 	stepCtx, stepSpan := tracer.Start(ctx, "step-retrieval")
 	defer stepSpan.End()
@@ -20,7 +20,13 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 		attribute.String("query.query", query),
 		attribute.Int64("query.k", k),
 		attribute.String("query.strategy", string(strategy)),
+		attribute.StringSlice("query.filter.sources", filter.Sources),
+		attribute.String("query.filter.metadata", fmt.Sprint(filter.Metadata)),
 	)
+
+	if err := filter.validate(deps.Sources); err != nil {
+		return nil, err
+	}
 
 	retrieveCtx, retrieveSpan := tracer.Start(stepCtx, "run-query")
 	defer retrieveSpan.End()
@@ -30,11 +36,11 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 	var chunks []RetrievedChunk
 	switch strategy {
 	case StrategyANN:
-		chunkIDs, err = runANN(retrieveCtx, query, k, deps.EmbeddingsClient, deps.Retriever)
+		chunkIDs, err = runANN(retrieveCtx, query, k, filter, deps.EmbeddingsClient, deps.Retriever)
 	case StrategyFTS:
-		chunkIDs, err = runFTS(retrieveCtx, query, k, deps.Retriever)
+		chunkIDs, err = runFTS(retrieveCtx, query, k, filter, deps.Retriever)
 	case StrategyHybrid:
-		chunkIDs, err = runHybrid(retrieveCtx, query, max(k, deps.PoolSize), deps.Fusion, deps.EmbeddingsClient, deps.Retriever)
+		chunkIDs, err = runHybrid(retrieveCtx, query, max(k, deps.PoolSize), filter, deps.Fusion, deps.EmbeddingsClient, deps.Retriever)
 	default:
 		return nil, fmt.Errorf("unknown strategy: '%s'", strategy)
 	}
@@ -74,13 +80,13 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 	return chunks, nil
 }
 
-func runANN(ctx context.Context, query string, k int64, embed EmbedClient, retriever TopKRetriever) ([]ScoredChunkID, error) {
+func runANN(ctx context.Context, query string, k int64, filter Filter, embed EmbedClient, retriever TopKRetriever) ([]ScoredChunkID, error) {
 	embeddedQ, err := embed.EmbedQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	chunkIDs, err := retriever.TopKByANN(ctx, embeddedQ, k)
+	chunkIDs, err := retriever.TopKByANN(ctx, embeddedQ, k, filter)
 	if err != nil {
 		return chunkIDs, err
 	}
@@ -94,8 +100,8 @@ func runANN(ctx context.Context, query string, k int64, embed EmbedClient, retri
 	return chunkIDs, nil
 }
 
-func runFTS(ctx context.Context, query string, k int64, retriever TopKRetriever) ([]ScoredChunkID, error) {
-	chunkIDs, err := retriever.TopKByFTS(ctx, query, k)
+func runFTS(ctx context.Context, query string, k int64, filter Filter, retriever TopKRetriever) ([]ScoredChunkID, error) {
+	chunkIDs, err := retriever.TopKByFTS(ctx, query, k, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -108,13 +114,13 @@ func runFTS(ctx context.Context, query string, k int64, retriever TopKRetriever)
 	return chunkIDs, nil
 }
 
-func runHybrid(ctx context.Context, query string, pool int64, fusion FusionConfig, embed EmbedClient, retriever TopKRetriever) ([]ScoredChunkID, error) {
-	ftsIDs, err := runFTS(ctx, query, pool, retriever)
+func runHybrid(ctx context.Context, query string, pool int64, filter Filter, fusion FusionConfig, embed EmbedClient, retriever TopKRetriever) ([]ScoredChunkID, error) {
+	ftsIDs, err := runFTS(ctx, query, pool, filter, retriever)
 	if err != nil {
 		return nil, err
 	}
 
-	annIDs, err := runANN(ctx, query, pool, embed, retriever)
+	annIDs, err := runANN(ctx, query, pool, filter, embed, retriever)
 	if err != nil {
 		return nil, err
 	}

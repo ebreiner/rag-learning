@@ -6,9 +6,13 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 var testCtx = context.Background()
+
+var validMetadata = map[string]any{KeyPersonalData: false}
 var testLogger = slog.New(slog.DiscardHandler)
 
 type existsResult struct {
@@ -121,7 +125,7 @@ func TestExtract(t *testing.T) {
 	})
 
 	t.Run("duplicate doc under the same source is skipped without saving", func(t *testing.T) {
-		doc := SourceDoc{SHA256: "abc", Name: "doc", SourceName: "manual"}
+		doc := SourceDoc{SHA256: "abc", Name: "doc", SourceName: "manual", Metadata: validMetadata}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{existsResults: map[string]existsResult{
 			"abc": {isDuplicate: true, sourceName: "manual"},
@@ -141,7 +145,7 @@ func TestExtract(t *testing.T) {
 	})
 
 	t.Run("duplicate doc under a different source is still skipped, the first source wins", func(t *testing.T) {
-		doc := SourceDoc{SHA256: "abc", Name: "doc", SourceName: "changelog"}
+		doc := SourceDoc{SHA256: "abc", Name: "doc", SourceName: "changelog", Metadata: validMetadata}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{existsResults: map[string]existsResult{
 			"abc": {isDuplicate: true, sourceName: "manual"},
@@ -158,7 +162,7 @@ func TestExtract(t *testing.T) {
 	})
 
 	t.Run("source name and rel path propagate from the source doc to the saved extracted doc", func(t *testing.T) {
-		doc := SourceDoc{SHA256: "abc", Name: "doc.pdf", RelPath: "sub/doc.pdf", SourceName: "manual"}
+		doc := SourceDoc{SHA256: "abc", Name: "doc.pdf", RelPath: "sub/doc.pdf", SourceName: "manual", Metadata: validMetadata}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{}
 		extractor := &fakeExtractor{}
@@ -177,7 +181,7 @@ func TestExtract(t *testing.T) {
 
 	t.Run("extractor error wraps ErrExtractionFailed", func(t *testing.T) {
 		wantErr := errors.New("docling broke")
-		doc := SourceDoc{SHA256: "abc", Name: "doc"}
+		doc := SourceDoc{SHA256: "abc", Name: "doc", Metadata: validMetadata}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{}
 		extractor := &fakeExtractor{err: wantErr}
@@ -190,7 +194,7 @@ func TestExtract(t *testing.T) {
 
 	t.Run("sink save error propagates unwrapped, unlike an extractor error", func(t *testing.T) {
 		wantErr := errors.New("disk full")
-		doc := SourceDoc{SHA256: "abc", Name: "doc"}
+		doc := SourceDoc{SHA256: "abc", Name: "doc", Metadata: validMetadata}
 		source := &fakeDocSource{docs: []SourceDoc{doc}}
 		sink := &fakeDocSink{saveErr: wantErr}
 		extractor := &fakeExtractor{}
@@ -221,9 +225,9 @@ func TestRunExtract(t *testing.T) {
 
 	t.Run("N docs are each extracted and saved exactly once", func(t *testing.T) {
 		docs := []SourceDoc{
-			{SHA256: "a", Name: "doc-a"},
-			{SHA256: "b", Name: "doc-b"},
-			{SHA256: "c", Name: "doc-c"},
+			{SHA256: "a", Name: "doc-a", Metadata: validMetadata},
+			{SHA256: "b", Name: "doc-b", Metadata: validMetadata},
+			{SHA256: "c", Name: "doc-c", Metadata: validMetadata},
 		}
 		source := &fakeDocSource{docs: docs}
 		sink := &fakeDocSink{}
@@ -242,9 +246,9 @@ func TestRunExtract(t *testing.T) {
 
 	t.Run("a duplicate doc is skipped without stopping the loop", func(t *testing.T) {
 		docs := []SourceDoc{
-			{SHA256: "a", Name: "doc-a"},
-			{SHA256: "dup", Name: "doc-dup"},
-			{SHA256: "c", Name: "doc-c"},
+			{SHA256: "a", Name: "doc-a", Metadata: validMetadata},
+			{SHA256: "dup", Name: "doc-dup", Metadata: validMetadata},
+			{SHA256: "c", Name: "doc-c", Metadata: validMetadata},
 		}
 		source := &fakeDocSource{docs: docs}
 		sink := &fakeDocSink{existsResults: map[string]existsResult{
@@ -262,8 +266,8 @@ func TestRunExtract(t *testing.T) {
 
 	t.Run("sink save error stops the loop immediately, unlike an extractor error", func(t *testing.T) {
 		docs := []SourceDoc{
-			{SHA256: "a", Name: "doc-a"},
-			{SHA256: "b", Name: "doc-b"},
+			{SHA256: "a", Name: "doc-a", Metadata: validMetadata},
+			{SHA256: "b", Name: "doc-b", Metadata: validMetadata},
 		}
 		wantErr := errors.New("disk full")
 		source := &fakeDocSource{docs: docs}
@@ -282,7 +286,7 @@ func TestRunExtract(t *testing.T) {
 	t.Run("extractor error does not stop the loop until 10 consecutive failures", func(t *testing.T) {
 		docs := make([]SourceDoc, 11)
 		for i := range docs {
-			docs[i] = SourceDoc{SHA256: string(rune('a' + i)), Name: "doc"}
+			docs[i] = SourceDoc{SHA256: string(rune('a' + i)), Name: "doc", Metadata: validMetadata}
 		}
 		source := &fakeDocSource{docs: docs}
 		sink := &fakeDocSink{}
@@ -300,7 +304,7 @@ func TestRunExtract(t *testing.T) {
 	t.Run("a success in between resets the consecutive failure count", func(t *testing.T) {
 		docs := make([]SourceDoc, 19)
 		for i := range docs {
-			docs[i] = SourceDoc{SHA256: string(rune('a' + i)), Name: "doc"}
+			docs[i] = SourceDoc{SHA256: string(rune('a' + i)), Name: "doc", Metadata: validMetadata}
 		}
 		source := &fakeDocSource{docs: docs}
 		sink := &fakeDocSink{}
@@ -328,4 +332,63 @@ type fakeExtractorFunc struct {
 
 func (f *fakeExtractorFunc) ExtractSourceDoc(ctx context.Context, doc SourceDoc) (ExtractedDoc, error) {
 	return f.fn(doc)
+}
+
+func TestValidateMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]any
+		wantErr  bool
+	}{
+		{name: "false is valid", metadata: map[string]any{KeyPersonalData: false}},
+		{name: "true is valid, other keys are free", metadata: map[string]any{KeyPersonalData: true, "tags": []any{"a"}}},
+		{name: "nil map", metadata: nil, wantErr: true},
+		{name: "key missing", metadata: map[string]any{"other": true}, wantErr: true},
+		{name: "string is not a boolean", metadata: map[string]any{KeyPersonalData: "false"}, wantErr: true},
+		{name: "number is not a boolean", metadata: map[string]any{KeyPersonalData: 0.0}, wantErr: true},
+		{name: "null is not a boolean", metadata: map[string]any{KeyPersonalData: nil}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateMetadata(tt.metadata)
+			if tt.wantErr != (err != nil) {
+				t.Fatalf("validateMetadata() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && !errors.Is(err, ErrInvalidMetadata) {
+				t.Errorf("validateMetadata() error = %v, want ErrInvalidMetadata", err)
+			}
+		})
+	}
+}
+
+func TestExtractMetadata(t *testing.T) {
+	t.Run("invalid metadata rejects the doc before the extractor and the sink", func(t *testing.T) {
+		doc := SourceDoc{SHA256: "abc", Name: "doc", Metadata: map[string]any{"other": true}}
+		source := &fakeDocSource{docs: []SourceDoc{doc}}
+		sink := &fakeDocSink{}
+		extractor := &fakeExtractor{}
+
+		err := extract(testCtx, source, sink, extractor, testLogger)
+		if !errors.Is(err, ErrExtractionFailed) || !errors.Is(err, ErrInvalidMetadata) {
+			t.Fatalf("extract() error = %v, want ErrExtractionFailed and ErrInvalidMetadata", err)
+		}
+		if len(extractor.extractCalls) != 0 || len(sink.savedDocs) != 0 {
+			t.Errorf("extractor calls = %d, saved docs = %d, want 0 and 0", len(extractor.extractCalls), len(sink.savedDocs))
+		}
+	})
+
+	t.Run("valid metadata reaches the sink unchanged", func(t *testing.T) {
+		metadata := map[string]any{KeyPersonalData: true, "tags": []any{"a"}}
+		doc := SourceDoc{SHA256: "abc", Name: "doc", Metadata: metadata}
+		source := &fakeDocSource{docs: []SourceDoc{doc}}
+		sink := &fakeDocSink{}
+		extractor := &fakeExtractor{}
+
+		if err := extract(testCtx, source, sink, extractor, testLogger); err != nil {
+			t.Fatalf("extract() error = %v", err)
+		}
+		if diff := cmp.Diff(metadata, sink.savedDocs[0].Source.Metadata); diff != "" {
+			t.Errorf("saved metadata (-want +got):\n%s", diff)
+		}
+	})
 }

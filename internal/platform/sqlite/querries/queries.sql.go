@@ -384,7 +384,8 @@ SELECT
 	s.weight,
 	c.position,
 	c.breadcrumb,
-	c.text
+	c.text,
+	d.metadata_json
 FROM chunks AS c
 JOIN documents AS d
 	ON c.document_id = d.id
@@ -394,13 +395,14 @@ WHERE c.id IN (/*SLICE:chunk_ids*/?)
 `
 
 type RetrievalChunksByIDsRow struct {
-	ID         int64
-	Name       string
-	SourceName string
-	Weight     float64
-	Position   int64
-	Breadcrumb string
-	Text       string
+	ID           int64
+	Name         string
+	SourceName   string
+	Weight       float64
+	Position     int64
+	Breadcrumb   string
+	Text         string
+	MetadataJson sql.NullString
 }
 
 func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([]RetrievalChunksByIDsRow, error) {
@@ -430,6 +432,7 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 			&i.Position,
 			&i.Breadcrumb,
 			&i.Text,
+			&i.MetadataJson,
 		); err != nil {
 			return nil, err
 		}

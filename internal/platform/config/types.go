@@ -28,9 +28,10 @@ type rawConfig struct {
 		Timeout time.Duration `yaml:"timeout"`
 	} `yaml:"embedding"`
 	Sources []struct {
-		Name   string  `yaml:"name"`
-		Path   string  `yaml:"path"`
-		Weight float64 `yaml:"weight"`
+		Name       string         `yaml:"name"`
+		Path       string         `yaml:"path"`
+		Weight     float64        `yaml:"weight"`
+		Attributes map[string]any `yaml:"attributes"`
 	} `yaml:"sources"`
 	Retrieval struct {
 		PoolSize int64 `yaml:"pool_size"`
@@ -40,6 +41,9 @@ type rawConfig struct {
 			WeightANN float64 `yaml:"weight_ann"`
 		} `yaml:"fusion"`
 	} `yaml:"retrieval"`
+	Read struct {
+		MaxChars int64 `yaml:"max_chars"`
+	} `yaml:"read"`
 	Server struct {
 		Listen string `yaml:"listen"`
 	} `yaml:"server"`
@@ -58,6 +62,7 @@ type Config struct {
 	Embedding Embedding
 	Sources   []Source
 	Retrieval Retrieval
+	Read      Read
 	Server    Server
 	Eval      Eval
 }
@@ -94,9 +99,10 @@ type Embedding struct {
 }
 
 type Source struct {
-	Name   string
-	Path   string
-	Weight float64
+	Name       string
+	Path       string
+	Weight     float64
+	Attributes map[string]any // metadata defaults for each document of the source, a sidecar overrides them
 }
 
 type Retrieval struct {
@@ -108,6 +114,10 @@ type Fusion struct {
 	RRFK      int64
 	WeightFTS float64
 	WeightANN float64
+}
+
+type Read struct {
+	MaxChars int64
 }
 
 type Server struct {

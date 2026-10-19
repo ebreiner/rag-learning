@@ -33,13 +33,19 @@ embedding:
 
 # at least one source. The name is unique, the weight is > 0, the paths must not overlap.
 # A document with the same content in two sources goes only into the first source.
+# attributes: metadata defaults for each document of the source. A sidecar <file>.meta.json
+# next to a document overrides them. Each document needs classification.personal_data (true or false).
 sources:
   - name: manual
     path: build/manual
     weight: 0.8
+    attributes:
+      classification.personal_data: false
   - name: changelogs
     path: build/changelogs
     weight: 0.4
+    attributes:
+      classification.personal_data: false
 
 retrieval:
   # FTS and ANN each give pool_size candidates, the fusion result is cut to pool_size.
@@ -50,6 +56,11 @@ retrieval:
     rrf_k: 60
     weight_fts: 1
     weight_ann: 1
+
+read:
+  # the read tool gives no more text than this. A larger document or section gives its outline,
+  # then pages, then a warning. 30000 characters are about 7-8k tokens.
+  max_chars: 30000
 
 server:
   # host:port, port 1-65535. The MCP API token comes from the env RAG_CLI_API_TOKEN, not from this file.

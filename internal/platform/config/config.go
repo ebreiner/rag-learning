@@ -116,9 +116,10 @@ func resolve(ctx context.Context, cnf rawConfig, baseDir string) (Config, error)
 
 	for _, s := range cnf.Sources {
 		c.Sources = append(c.Sources, Source{
-			Name:   s.Name,
-			Path:   absPath(s.Path),
-			Weight: s.Weight,
+			Name:       s.Name,
+			Path:       absPath(s.Path),
+			Weight:     s.Weight,
+			Attributes: s.Attributes,
 		})
 	}
 
@@ -128,6 +129,8 @@ func resolve(ctx context.Context, cnf rawConfig, baseDir string) (Config, error)
 		WeightFTS: cnf.Retrieval.Fusion.WeightFTS,
 		WeightANN: cnf.Retrieval.Fusion.WeightANN,
 	}
+
+	c.Read.MaxChars = cnf.Read.MaxChars
 
 	c.Server.Listen = cnf.Server.Listen
 
@@ -247,6 +250,10 @@ func validate(ctx context.Context, cnf Config) error {
 	}
 	if f.WeightFTS == 0 && f.WeightANN == 0 {
 		fail("retrieval.fusion", "weight_fts and weight_ann must not both be 0")
+	}
+
+	if cnf.Read.MaxChars <= 0 {
+		fail("read.max_chars", "must be > 0")
 	}
 
 	if cnf.Server.Listen == "" {

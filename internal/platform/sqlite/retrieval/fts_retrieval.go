@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) ([]step.ScoredChunkID, error) {
+func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64, filter step.Filter) ([]step.ScoredChunkID, error) {
 	chunkIDs := make([]step.ScoredChunkID, 0)
 
 	parts := strings.Fields(query)
@@ -47,7 +47,21 @@ func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64) 
 	ORDER BY bm25(chunks_fts)
 	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, q, matchTerm, k)
+	args := []any{matchTerm, k}
+	if !filter.IsEmpty() {
+		clause, filterArgs := filterClause(filter)
+		q = `
+		SELECT chunks_fts.rowid, bm25(chunks_fts)
+		FROM chunks_fts
+		JOIN chunks AS c ON c.id = chunks_fts.rowid
+		JOIN documents AS d ON d.id = c.document_id
+		WHERE chunks_fts MATCH ?` + clause + `
+		ORDER BY bm25(chunks_fts)
+		LIMIT ?
+		`
+		args = append(append([]any{matchTerm}, filterArgs...), k)
+	}
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return chunkIDs, fmt.Errorf("error querring rows: %w", err)
 	}

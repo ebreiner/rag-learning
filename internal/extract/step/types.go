@@ -6,7 +6,7 @@ type SourceDoc struct {
 	Name       string
 	SHA256     string
 	SourceName string
-	Additional map[string]string
+	Metadata   map[string]any
 }
 
 type ExtractedDoc struct {

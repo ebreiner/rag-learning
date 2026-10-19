@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"rag/internal/platform/sqlite/sqlitetest"
+	"rag/internal/retrieval/step"
 )
 
 func TestTopKByFTS(t *testing.T) {
@@ -19,7 +20,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "auth0", 10)
+		got, err := retriever.TopKByFTS(ctx, "auth0", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -39,7 +40,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "auth0", 10)
+		got, err := retriever.TopKByFTS(ctx, "auth0", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -64,7 +65,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "nonexistent-term-xyz", 10)
+		got, err := retriever.TopKByFTS(ctx, "nonexistent-term-xyz", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -83,7 +84,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "auth0 ldap", 10)
+		got, err := retriever.TopKByFTS(ctx, "auth0 ldap", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -105,7 +106,7 @@ func TestTopKByFTS(t *testing.T) {
 		// "an" is <=2 runes and gets filtered from the term list, but the
 		// whole raw query is always appended as a final term (fts_retrieval.go),
 		// so "an ldap configuration guide" as a literal phrase should still match.
-		got, err := retriever.TopKByFTS(ctx, "an ldap configuration guide", 10)
+		got, err := retriever.TopKByFTS(ctx, "an ldap configuration guide", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -124,7 +125,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "it is on", 10)
+		got, err := retriever.TopKByFTS(ctx, "it is on", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -143,7 +144,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		_, err = retriever.TopKByFTS(ctx, `auth0 "quoted" settings`, 10)
+		_, err = retriever.TopKByFTS(ctx, `auth0 "quoted" settings`, 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v, want no error -- the quote should be escaped, not break the MATCH syntax", err)
 		}
@@ -161,7 +162,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "auth0", 2)
+		got, err := retriever.TopKByFTS(ctx, "auth0", 2, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS() error = %v", err)
 		}
@@ -184,7 +185,7 @@ func TestTopKByFTS(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByFTS(ctx, "", 10)
+		got, err := retriever.TopKByFTS(ctx, "", 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByFTS(\"\") error = %v (if this now errors, that's a behavior change -- update this test deliberately)", err)
 		}

@@ -43,7 +43,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}, 10)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}, 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -67,7 +67,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "empty-model"}, 10)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "empty-model"}, 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -98,7 +98,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "modelB"}, 10)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "modelB"}, 10, step.Filter{})
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}
@@ -122,7 +122,7 @@ func TestTopKByANN(t *testing.T) {
 			t.Fatalf("NewSQLiteRetriever: %v", err)
 		}
 
-		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "typo-model"}, 10)
+		got, err := retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "typo-model"}, 10, step.Filter{})
 		if err == nil {
 			t.Fatalf("TopKByANN() error = nil, want an error for an unknown model")
 		}

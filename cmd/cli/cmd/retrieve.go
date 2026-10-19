@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"rag/internal/platform/telemetry/logging"
 	"rag/internal/retrieval/step"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -37,6 +39,11 @@ serve and eval, with the fusion settings from retrieval.fusion.`,
 				return fmt.Errorf("missing query string --query 'query string'")
 			}
 
+			filter, err := filterFromFlags(cmd)
+			if err != nil {
+				return err
+			}
+
 			deps, _, closeDB, err := WireUpRetrieval(ctx, cnf, logger)
 			if closeDB != nil {
 				defer func() {
@@ -49,7 +56,7 @@ serve and eval, with the fusion settings from retrieval.fusion.`,
 				return err
 			}
 
-			err = retrieveChunks(ctx, deps, userQuery, "hybrid")
+			err = retrieveChunks(ctx, deps, userQuery, "hybrid", filter)
 			if err != nil {
 				return fmt.Errorf("error running retrieval: %w", err)
 			}
@@ -59,11 +66,46 @@ serve and eval, with the fusion settings from retrieval.fusion.`,
 	}
 
 	retrieveCmd.Flags().StringP("query", "q", "", "-q 'alles zur farbe grün")
+	retrieveCmd.Flags().StringSlice("source", nil, "--source manual (repeat or comma list): search only in these sources")
+	retrieveCmd.Flags().StringArray("meta", nil, "--meta key=value (repeat): true/false is a bool, a number is a number, else a string")
 
 	return retrieveCmd
 }
 
-func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, query, retrievalType string) error {
+func filterFromFlags(cmd *cobra.Command) (step.Filter, error) {
+	var filter step.Filter
+
+	sources, err := cmd.Flags().GetStringSlice("source")
+	if err != nil {
+		return filter, err
+	}
+	filter.Sources = sources
+
+	metas, err := cmd.Flags().GetStringArray("meta")
+	if err != nil {
+		return filter, err
+	}
+	for _, m := range metas {
+		key, raw, ok := strings.Cut(m, "=")
+		if !ok || key == "" {
+			return filter, fmt.Errorf("--meta %q: want key=value", m)
+		}
+		if filter.Metadata == nil {
+			filter.Metadata = map[string]any{}
+		}
+		if raw == "true" || raw == "false" {
+			filter.Metadata[key] = raw == "true"
+		} else if f, err := strconv.ParseFloat(raw, 64); err == nil {
+			filter.Metadata[key] = f
+		} else {
+			filter.Metadata[key] = raw
+		}
+	}
+
+	return filter, nil
+}
+
+func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, query, retrievalType string, filter step.Filter) error {
 	var strategy step.RetrievalStrategy
 	switch retrievalType {
 	case "fts":
@@ -76,7 +118,7 @@ func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, query, retriev
 		return fmt.Errorf("unknown retrieval type: %s", retrievalType)
 	}
 
-	chunks, err := step.RunRetrieval(ctx, query, 10, strategy, deps)
+	chunks, err := step.RunRetrieval(ctx, query, 10, strategy, filter, deps)
 	if err != nil {
 		return err
 	}

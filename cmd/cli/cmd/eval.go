@@ -288,7 +288,7 @@ type retrievalSearcher struct {
 }
 
 func (s retrievalSearcher) Search(ctx context.Context, q string, k int64, strategy string) ([]evalstep.SearchHit, error) {
-	got, err := retrievalstep.RunRetrieval(ctx, q, k, retrievalstep.RetrievalStrategy(strategy), s.deps)
+	got, err := retrievalstep.RunRetrieval(ctx, q, k, retrievalstep.RetrievalStrategy(strategy), retrievalstep.Filter{}, s.deps)
 	if err != nil {
 		return nil, err
 	}

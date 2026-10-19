@@ -23,11 +23,13 @@ type fakeRetriever struct {
 	ftsIDs    []ScoredChunkID
 	ftsErr    error
 	ftsCalls  []string
+	filters   []Filter
 	ftsKCalls []int64
 }
 
-func (f *fakeRetriever) TopKByANN(ctx context.Context, query Query, k int64) ([]ScoredChunkID, error) {
+func (f *fakeRetriever) TopKByANN(ctx context.Context, query Query, k int64, filter Filter) ([]ScoredChunkID, error) {
 	f.annCalls = append(f.annCalls, query)
+	f.filters = append(f.filters, filter)
 	f.annKCalls = append(f.annKCalls, k)
 	if f.annErr != nil {
 		return nil, f.annErr
@@ -35,8 +37,9 @@ func (f *fakeRetriever) TopKByANN(ctx context.Context, query Query, k int64) ([]
 	return f.annIDs, nil
 }
 
-func (f *fakeRetriever) TopKByFTS(ctx context.Context, query string, k int64) ([]ScoredChunkID, error) {
+func (f *fakeRetriever) TopKByFTS(ctx context.Context, query string, k int64, filter Filter) ([]ScoredChunkID, error) {
 	f.ftsCalls = append(f.ftsCalls, query)
+	f.filters = append(f.filters, filter)
 	f.ftsKCalls = append(f.ftsKCalls, k)
 	if f.ftsErr != nil {
 		return nil, f.ftsErr
@@ -116,7 +119,7 @@ func TestRunANN(t *testing.T) {
 		retriever := &fakeRetriever{annIDs: []ScoredChunkID{{ID: 3}, {ID: 1}, {ID: 2}}}
 		client := &fakeEmbedClient{query: wantQuery}
 
-		ids, err := runANN(testCtx, "hello", 10, client, retriever)
+		ids, err := runANN(testCtx, "hello", 10, Filter{}, client, retriever)
 		if err != nil {
 			t.Fatalf("runANN() error = %v", err)
 		}
@@ -137,7 +140,7 @@ func TestRunANN(t *testing.T) {
 		retriever := &fakeRetriever{}
 		client := &fakeEmbedClient{err: wantErr}
 
-		_, err := runANN(testCtx, "hello", 10, client, retriever)
+		_, err := runANN(testCtx, "hello", 10, Filter{}, client, retriever)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("runANN() error = %v, want %v", err, wantErr)
 		}
@@ -151,7 +154,7 @@ func TestRunANN(t *testing.T) {
 		retriever := &fakeRetriever{annErr: wantErr}
 		client := &fakeEmbedClient{}
 
-		_, err := runANN(testCtx, "hello", 10, client, retriever)
+		_, err := runANN(testCtx, "hello", 10, Filter{}, client, retriever)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("runANN() error = %v, want %v", err, wantErr)
 		}
@@ -160,7 +163,7 @@ func TestRunANN(t *testing.T) {
 
 func TestRunFTS(t *testing.T) {
 	retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 5}, {ID: 6}}}
-	ids, err := runFTS(testCtx, "hello", 10, retriever)
+	ids, err := runFTS(testCtx, "hello", 10, Filter{}, retriever)
 	if err != nil {
 		t.Fatalf("runFTS() error = %v", err)
 	}
@@ -320,7 +323,7 @@ func TestRunHybrid(t *testing.T) {
 		}
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
 
-		ids, err := runHybrid(testCtx, "hello", 2, testFusion, client, retriever)
+		ids, err := runHybrid(testCtx, "hello", 2, Filter{}, testFusion, client, retriever)
 		if err != nil {
 			t.Fatalf("runHybrid() error = %v", err)
 		}
@@ -343,7 +346,7 @@ func TestRunHybrid(t *testing.T) {
 		retriever := &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}}}
 		client := &fakeEmbedClient{query: Query{Model: "fake"}}
 
-		ids, err := runHybrid(testCtx, "hello", 10, testFusion, client, retriever)
+		ids, err := runHybrid(testCtx, "hello", 10, Filter{}, testFusion, client, retriever)
 		if err != nil {
 			t.Fatalf("runHybrid() error = %v", err)
 		}
@@ -361,7 +364,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion}
-		chunks, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, deps)
+		chunks, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, Filter{}, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -381,7 +384,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer}
-		_, err := RunRetrieval(testCtx, "q", 5, StrategyANN, deps)
+		_, err := RunRetrieval(testCtx, "q", 5, StrategyANN, Filter{}, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -398,7 +401,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer}
-		_, err := RunRetrieval(testCtx, "q", 5, RetrievalStrategy("bogus"), deps)
+		_, err := RunRetrieval(testCtx, "q", 5, RetrievalStrategy("bogus"), Filter{}, deps)
 		if err == nil {
 			t.Fatalf("expected an error for an unknown strategy")
 		}
@@ -415,7 +418,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer}
-		_, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, deps)
+		_, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, Filter{}, deps)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("RunRetrieval() error = %v, want %v", err, wantErr)
 		}
@@ -429,7 +432,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{err: wantErr}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer}
-		_, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, deps)
+		_, err := RunRetrieval(testCtx, "q", 5, StrategyFTS, Filter{}, deps)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("RunRetrieval() error = %v, want %v", err, wantErr)
 		}
@@ -442,7 +445,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 3}
-		chunks, err := RunRetrieval(testCtx, "q", 2, StrategyHybrid, deps)
+		chunks, err := RunRetrieval(testCtx, "q", 2, StrategyHybrid, Filter{}, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -465,7 +468,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 2}
-		chunks, err := RunRetrieval(testCtx, "q", 1, StrategyHybrid, deps)
+		chunks, err := RunRetrieval(testCtx, "q", 1, StrategyHybrid, Filter{}, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -484,7 +487,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 1}
-		chunks, err := RunRetrieval(testCtx, "q", 3, StrategyHybrid, deps)
+		chunks, err := RunRetrieval(testCtx, "q", 3, StrategyHybrid, Filter{}, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
@@ -500,7 +503,7 @@ func TestRunRetrieval(t *testing.T) {
 		renderer := &fakeRenderer{}
 
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client, Renderer: renderer, Fusion: testFusion, PoolSize: 40}
-		chunks, err := RunRetrieval(testCtx, "q", 10, StrategyHybrid, deps)
+		chunks, err := RunRetrieval(testCtx, "q", 10, StrategyHybrid, Filter{}, deps)
 		if err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
 		}
