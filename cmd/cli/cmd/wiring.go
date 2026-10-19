@@ -82,3 +82,12 @@ func WireUpRetrieval(ctx context.Context, cnf config.Config, logger *slog.Logger
 
 	return deps, db, closeDB, nil
 }
+
+func NewReadDeps(db *sql.DB, cnf config.Config, logger *slog.Logger) retrievalstep.ReadDeps {
+	loader := retrieval.NewDocumentLoader(db, logger)
+	deps := retrievalstep.ReadDeps{Loader: &loader, MaxChars: cnf.Read.MaxChars}
+	for _, s := range cnf.Sources {
+		deps.Sources = append(deps.Sources, s.Name)
+	}
+	return deps
+}

@@ -77,7 +77,7 @@ env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 				}
 				return fmt.Errorf("error reading catalog: %w", err)
 			}
-			catalogTool, err := newCatalogTool(catalog, deps.Sources)
+			catalogTool, err := newCatalogTool(catalog, deps.Sources, queryLogger)
 			if err != nil {
 				if closeDBErr := closeDB(ctx); closeDBErr != nil {
 					return errors.Join(err, closeDBErr)
@@ -86,7 +86,8 @@ env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 			}
 
 			hybridTool := hyridRetrievalTool(deps, queryLogger)
-			tools := []server.ServerTool{hybridTool, catalogTool}
+			readTool := newReadTool(cmdpkg.NewReadDeps(db, cnf, logger), queryLogger, logger)
+			tools := []server.ServerTool{hybridTool, catalogTool, readTool}
 			mcpHandler := MCPHandler(tools)
 			wrappedAuth := BearerAuth(apiToken, logger)(mcpHandler)
 

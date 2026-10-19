@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"rag/internal/platform/telemetry/logging"
 	"rag/internal/retrieval/step"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -44,6 +46,7 @@ func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogge
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (result *mcp.CallToolResult, err error) {
+		start := time.Now()
 		tracer := otel.Tracer("rag-cli-sdk")
 		handlerCtx, handlerSpan := tracer.Start(ctx, "mcp_query")
 
@@ -118,6 +121,8 @@ func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogge
 		}
 
 		queryLog := logging.QueryLog{
+			Session:  sessionID(ctx),
+			Duration: time.Since(start),
 			Query:    query,
 			K:        int64(k),
 			Strategy: "hybrid",
@@ -176,7 +181,7 @@ func filterFromArgs(args map[string]any) (step.Filter, error) {
 	return filter, nil
 }
 
-func newCatalogTool(catalog step.Catalog, sources []string) (server.ServerTool, error) {
+func newCatalogTool(catalog step.Catalog, sources []string, queryLogger *logging.QueryLogger) (server.ServerTool, error) {
 	tool := mcp.NewTool(
 		"catalog",
 		mcp.WithDescription(fmt.Sprintf(`Lists the document metadata keys and values of one source, with document counts.
@@ -210,5 +215,99 @@ func newCatalogTool(catalog step.Catalog, sources []string) (server.ServerTool, 
 		return mcp.NewToolResultText(body), nil
 	}
 
-	return server.ServerTool{Tool: tool, Handler: handler}, nil
+	return server.ServerTool{Tool: tool, Handler: withToolLog("catalog", queryLogger, handler, nil)}, nil
+}
+
+func newReadTool(deps step.ReadDeps, queryLogger *logging.QueryLogger, logger *slog.Logger) server.ServerTool {
+	modes := make([]string, 0, len(step.ReadModes))
+	for _, m := range step.ReadModes {
+		modes = append(modes, string(m))
+	}
+
+	tool := mcp.NewTool(
+		"read",
+		mcp.WithDescription(`Reads more context for a chunk of a rag result: its neighbour chunks, its section or its document.
+		A section or document that is too large gives an outline: call read again with mode section and the chunk_id of an outline entry.
+		If no outline fits, the result is a page with next_chunk_id: continue with mode page and that chunk_id.`),
+		mcp.WithNumber("chunk_id", mcp.Required(), mcp.Description("the ID of a chunk from a rag result")),
+		mcp.WithString("mode", mcp.Required(), mcp.Enum(modes...),
+			mcp.Description("neighbours: the chunk and n chunks before and after it; section: its section with sub-sections; document: the full document; page: the document from this chunk on")),
+		mcp.WithNumber("n", mcp.Description("only for mode neighbours: chunks before and after, 1 to 5, default 2")),
+		mcp.WithArray("sources", mcp.WithStringEnumItems(deps.Sources), mcp.Description("optional: read only if the document is in these sources")),
+		mcp.WithObject("metadata", mcp.Description("optional: read only if the document metadata has exactly these values")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		chunkID, err := request.RequireInt("chunk_id")
+		if err != nil {
+			return mcp.NewToolResultError("chunk_id not found in request"), nil
+		}
+		mode, err := request.RequireString("mode")
+		if err != nil {
+			return mcp.NewToolResultError("mode not found in request"), nil
+		}
+		filter, err := filterFromArgs(request.GetArguments())
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		req := step.ReadRequest{ChunkID: int64(chunkID), Mode: step.ReadMode(mode), N: int64(request.GetInt("n", 0)), Filter: filter}
+		result, err := step.RunRead(ctx, req, deps)
+		if errors.Is(err, step.ErrInvalidRead) || errors.Is(err, step.ErrInvalidFilter) ||
+			errors.Is(err, step.ErrChunkNotFound) || errors.Is(err, step.ErrChunkNotInFilter) {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if err != nil {
+			logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error running read: %w", err))
+			return mcp.NewToolResultError("error running read"), nil
+		}
+
+		body, err := json.Marshal(result)
+		if err != nil {
+			return mcp.NewToolResultError("error marshaling read result"), nil
+		}
+		return mcp.NewToolResultText(string(body)), nil
+	}
+
+	readResultType := func(text string) string {
+		var result step.ReadResult
+		if err := json.Unmarshal([]byte(text), &result); err != nil {
+			return "unknown"
+		}
+		return result.Type()
+	}
+
+	return server.ServerTool{Tool: tool, Handler: withToolLog("read", queryLogger, handler, readResultType)}
+}
+
+type toolHandler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)
+
+func withToolLog(tool string, queryLogger *logging.QueryLogger, handler toolHandler, resultType func(text string) string) toolHandler {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		start := time.Now()
+		result, err := handler(ctx, request)
+
+		call := logging.ToolCallLog{Session: sessionID(ctx), Tool: tool, Args: request.GetArguments(), Result: "text", Duration: time.Since(start)}
+		if result != nil && len(result.Content) > 0 {
+			if text, ok := result.Content[0].(mcp.TextContent); ok {
+				call.Chars = utf8.RuneCountInString(text.Text)
+				if resultType != nil && !result.IsError {
+					call.Result = resultType(text.Text)
+				}
+			}
+		}
+		if err != nil || result == nil || result.IsError {
+			call.Result = "error"
+		}
+		queryLogger.LogToolCall(ctx, call)
+
+		return result, err
+	}
+}
+
+func sessionID(ctx context.Context) string {
+	if session := server.ClientSessionFromContext(ctx); session != nil {
+		return session.SessionID()
+	}
+	return ""
 }

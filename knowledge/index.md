@@ -37,6 +37,7 @@ Start here:
 - [unstable-scopes](designs/unstable-scopes.md): scopes S0–S6 for `claude-unstable`, ports for each scope, cycle plan. Draft.
 - [sidecar-metadata](designs/sidecar-metadata.md): first source design scope: the source doc provider merges source attributes and `<file>.meta.json`, the extract step checks `classification.personal_data`, stored in `metadata_json`, result field `Metadata`. Locked.
 - [retrieval-filters](designs/retrieval-filters.md): RC4 filters on sources (OR) and metadata keys (AND, equality) in the FTS and ANN SQL; MCP `sources` enum + `metadata`, `retrieve --source/--meta`; RC2 `catalog` MCP tool (snapshot of `metadata_json` at `serve` start) and `catalog` CLI command. Locked.
+- [read-tool](designs/read-tool.md): RC6 tool `read(chunk_id, mode)` with neighbours, section, document, page; `read.max_chars` limit with the fallback outline → page → warning; text without the repeated breadcrumb prefix; same filter as `rag`. Locked.
 
 ## Experiments
 

@@ -57,6 +57,11 @@ retrieval:
     weight_fts: 1
     weight_ann: 1
 
+read:
+  # the read tool gives no more text than this. A larger document or section gives its outline,
+  # then pages, then a warning. 30000 characters are about 7-8k tokens.
+  max_chars: 30000
+
 server:
   # host:port, port 1-65535. The MCP API token comes from the env RAG_CLI_API_TOKEN, not from this file.
   listen: 127.0.0.1:8808

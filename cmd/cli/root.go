@@ -36,6 +36,7 @@ func Execute() {
 		cmd.NewEvalCmd(),
 		cmd.NewRetrieveCmd(),
 		cmd.NewCatalogCmd(),
+		cmd.NewReadCmd(),
 		serve.NewServeCmd(),
 		ingest.NewIngestCommand(),
 	)

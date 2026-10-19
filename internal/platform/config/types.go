@@ -41,6 +41,9 @@ type rawConfig struct {
 			WeightANN float64 `yaml:"weight_ann"`
 		} `yaml:"fusion"`
 	} `yaml:"retrieval"`
+	Read struct {
+		MaxChars int64 `yaml:"max_chars"`
+	} `yaml:"read"`
 	Server struct {
 		Listen string `yaml:"listen"`
 	} `yaml:"server"`
@@ -59,6 +62,7 @@ type Config struct {
 	Embedding Embedding
 	Sources   []Source
 	Retrieval Retrieval
+	Read      Read
 	Server    Server
 	Eval      Eval
 }
@@ -110,6 +114,10 @@ type Fusion struct {
 	RRFK      int64
 	WeightFTS float64
 	WeightANN float64
+}
+
+type Read struct {
+	MaxChars int64
 }
 
 type Server struct {
