@@ -3,6 +3,7 @@ package retrieval
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"rag/internal/platform/sqlite/querries"
@@ -63,6 +64,13 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs []step.Score
 
 		chunk.SourceWeight = row.Weight
 		chunk.SourceName = row.SourceName
+
+		chunk.Metadata = map[string]any{}
+		if row.MetadataJson.Valid {
+			if err := json.Unmarshal([]byte(row.MetadataJson.String), &chunk.Metadata); err != nil {
+				return chunks, fmt.Errorf("chunk %d: reading metadata_json: %w", row.ID, err)
+			}
+		}
 
 		chunks = append(chunks, chunk)
 	}

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"rag/internal/platform/sqlite/sqlitetest"
 	"rag/internal/retrieval/step"
 )
@@ -157,6 +159,36 @@ func TestHydrateChunks(t *testing.T) {
 		}
 		if chunks[1].ID != idA || chunks[1].Rank != 2 || chunks[1].Score != 0.5 {
 			t.Errorf("chunks[1] = (ID: %d, Rank: %d, Score: %v), want (ID: %d, Rank: 2, Score: 0.5)", chunks[1].ID, chunks[1].Rank, chunks[1].Score, idA)
+		}
+	})
+}
+
+func TestHydrateChunksMetadata(t *testing.T) {
+	t.Run("metadata_json becomes Metadata, NULL gives an empty map", func(t *testing.T) {
+		db := sqlitetest.New(t)
+		ctx := context.Background()
+		withID := insertChunkInSource(t, db, "with metadata", "manual", 1.0)
+		withoutID := insertChunkInSource(t, db, "without metadata", "manual", 1.0)
+		if _, err := db.Exec(`UPDATE documents SET metadata_json = ? WHERE id = (SELECT document_id FROM chunks WHERE id = ?)`,
+			`{"classification.personal_data": true, "title": "A"}`, withID); err != nil {
+			t.Fatalf("setting metadata_json: %v", err)
+		}
+
+		hydrator := NewChunkHydrator(db, testLogger)
+		chunks, err := hydrator.HydrateChunks(ctx, []step.ScoredChunkID{{ID: withID}, {ID: withoutID}})
+		if err != nil {
+			t.Fatalf("HydrateChunks() error = %v", err)
+		}
+		if len(chunks) != 2 {
+			t.Fatalf("got %d chunks, want 2", len(chunks))
+		}
+
+		want := map[string]any{"classification.personal_data": true, "title": "A"}
+		if diff := cmp.Diff(want, chunks[0].Metadata); diff != "" {
+			t.Errorf("metadata (-want +got):\n%s", diff)
+		}
+		if chunks[1].Metadata == nil || len(chunks[1].Metadata) != 0 {
+			t.Errorf("metadata without metadata_json = %v, want an empty map", chunks[1].Metadata)
 		}
 	})
 }

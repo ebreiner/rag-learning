@@ -3,8 +3,11 @@ package extraction
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"rag/internal/extract/step"
 	"rag/internal/platform/config"
@@ -197,6 +200,35 @@ func TestExistsDoc(t *testing.T) {
 		}
 		if !isDup || sourceName != "manual" {
 			t.Errorf("ExistsDoc() = (%v, %q), want (true, \"manual\")", isDup, sourceName)
+		}
+	})
+}
+
+func TestSaveExtractedDocMetadata(t *testing.T) {
+	t.Run("the metadata goes into metadata_json", func(t *testing.T) {
+		db := newDBWithSources(t)
+		sink, err := NewExtractedDocSink(db, testLogger)
+		if err != nil {
+			t.Fatalf("NewExtractedDocSink() error = %v", err)
+		}
+		doc := simpleExtractedDoc("a.pdf", "sha-1", "manual")
+		doc.Source.Metadata = map[string]any{"classification.personal_data": true, "title": "A"}
+
+		docID, err := sink.SaveExtractedDoc(testCtx, doc)
+		if err != nil {
+			t.Fatalf("SaveExtractedDoc() error = %v", err)
+		}
+
+		var raw string
+		if err := db.QueryRow("SELECT metadata_json FROM documents WHERE id = ?", docID).Scan(&raw); err != nil {
+			t.Fatalf("querying metadata_json: %v", err)
+		}
+		var got map[string]any
+		if err := json.Unmarshal([]byte(raw), &got); err != nil {
+			t.Fatalf("metadata_json is not JSON: %v", err)
+		}
+		if diff := cmp.Diff(doc.Source.Metadata, got); diff != "" {
+			t.Errorf("metadata_json (-want +got):\n%s", diff)
 		}
 	})
 }

@@ -54,8 +54,8 @@ func (e *ExtractedDocSink) SaveExtractedDoc(ctx context.Context, doc step.Extrac
 		Sha256:     doc.Source.SHA256,
 		SourceName: doc.Source.SourceName,
 	}
-	if len(doc.Source.Additional) > 0 {
-		docAdditotionalMetadata, err := json.Marshal(doc.Source.Additional)
+	if len(doc.Source.Metadata) > 0 {
+		docAdditotionalMetadata, err := json.Marshal(doc.Source.Metadata)
 		if err != nil {
 			txErr := tx.Rollback()
 			if txErr != nil {

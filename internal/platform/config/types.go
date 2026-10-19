@@ -28,9 +28,10 @@ type rawConfig struct {
 		Timeout time.Duration `yaml:"timeout"`
 	} `yaml:"embedding"`
 	Sources []struct {
-		Name   string  `yaml:"name"`
-		Path   string  `yaml:"path"`
-		Weight float64 `yaml:"weight"`
+		Name       string         `yaml:"name"`
+		Path       string         `yaml:"path"`
+		Weight     float64        `yaml:"weight"`
+		Attributes map[string]any `yaml:"attributes"`
 	} `yaml:"sources"`
 	Retrieval struct {
 		PoolSize int64 `yaml:"pool_size"`
@@ -94,9 +95,10 @@ type Embedding struct {
 }
 
 type Source struct {
-	Name   string
-	Path   string
-	Weight float64
+	Name       string
+	Path       string
+	Weight     float64
+	Attributes map[string]any // metadata defaults for each document of the source, a sidecar overrides them
 }
 
 type Retrieval struct {

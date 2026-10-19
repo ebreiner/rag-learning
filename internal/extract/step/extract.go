@@ -92,6 +92,10 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 	stepSpan.SetAttributes(attribute.String("doc.is_duplicate", strconv.FormatBool(false)))
 	sourceSpan.End()
 
+	if err := validateMetadata(sourceDoc.Metadata); err != nil {
+		return fmt.Errorf("%s: %w: %w", sourceDoc.SourcePath, ErrExtractionFailed, err)
+	}
+
 	logger.InfoContext(ctx, fmt.Sprintf("processing doc: %s", sourceDoc.SourcePath))
 
 	extractCtx, extractSpan := tracer.Start(stepCtx, "extract_source_doc")

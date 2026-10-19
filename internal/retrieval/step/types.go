@@ -28,6 +28,7 @@ type RetrievedChunk struct {
 	Text         string
 	SourceWeight float64
 	SourceName   string
+	Metadata     map[string]any
 }
 
 type ScoredChunkID struct {

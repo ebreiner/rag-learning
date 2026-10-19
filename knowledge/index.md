@@ -35,6 +35,7 @@ Start here:
 
 - [eval-harness](designs/eval-harness.md): RC1 eval command, golden format, status for each query, metrics, run files outside the DB. Locked, partly superseded by 0007.
 - [unstable-scopes](designs/unstable-scopes.md): scopes S0–S6 for `claude-unstable`, ports for each scope, cycle plan. Draft.
+- [sidecar-metadata](designs/sidecar-metadata.md): first source design scope: source attributes + `<file>.meta.json` → `Resolve` → `metadata_json` → result `Metadata`; only `classification.personal_data` required. Draft.
 
 ## Experiments
 

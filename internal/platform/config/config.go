@@ -116,9 +116,10 @@ func resolve(ctx context.Context, cnf rawConfig, baseDir string) (Config, error)
 
 	for _, s := range cnf.Sources {
 		c.Sources = append(c.Sources, Source{
-			Name:   s.Name,
-			Path:   absPath(s.Path),
-			Weight: s.Weight,
+			Name:       s.Name,
+			Path:       absPath(s.Path),
+			Weight:     s.Weight,
+			Attributes: s.Attributes,
 		})
 	}
 

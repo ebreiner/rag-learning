@@ -33,13 +33,19 @@ embedding:
 
 # at least one source. The name is unique, the weight is > 0, the paths must not overlap.
 # A document with the same content in two sources goes only into the first source.
+# attributes: metadata defaults for each document of the source. A sidecar <file>.meta.json
+# next to a document overrides them. Each document needs classification.personal_data (true or false).
 sources:
   - name: manual
     path: build/manual
     weight: 0.8
+    attributes:
+      classification.personal_data: false
   - name: changelogs
     path: build/changelogs
     weight: 0.4
+    attributes:
+      classification.personal_data: false
 
 retrieval:
   # FTS and ANN each give pool_size candidates, the fusion result is cut to pool_size.
