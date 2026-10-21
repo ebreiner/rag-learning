@@ -25,7 +25,7 @@ type Filter struct {
 ```
 
 - Equality only: string, bool or number. No ranges, no NOT, no lists as values.
-- A missing key does not match. A filter `enerchart_core: true` does not find a document without that key.
+- A missing key does not match. A filter `product_core: true` does not find a document without that key.
 
 ## Parts
 
@@ -90,6 +90,6 @@ These wait for the views (backlog). Build then what the views need.
 1. FTS and ANN tests: source filter, metadata filter with bool, string and number, missing key. Errors for an unknown source and an invalid key.
 2. A filter on all sources gives the same order as no filter.
 3. `just eval` without a filter is equal to `20261019T135803Z`.
-4. `retrieve --meta enerchart_core=false` gives only chunks of the document with that sidecar value.
+4. `retrieve --meta product_core=false` gives only chunks of the document with that sidecar value.
 5. Catalog tests: counts for each source and key, values up to the cap, only key, type and count above the cap, documents without metadata.
-6. The `catalog` tool and the `catalog` command on the dev corpus show `enerchart_core` with `true: 198, false: 1` for `manual`.
+6. The `catalog` tool and the `catalog` command on the dev corpus show `product_core` with `true: 198, false: 1` for `manual`.

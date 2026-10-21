@@ -40,10 +40,10 @@ func newFilterFixture(t *testing.T) filterFixture {
 	t.Helper()
 	db := sqlitetest.New(t)
 	f := filterFixture{db: db}
-	f.core = insertChunkWithMetadata(t, db, "anchor core", "manual", `{"enerchart_core": true, "lang": "de", "level": 2}`)
-	f.nonCore = insertChunkWithMetadata(t, db, "anchor noncore", "manual", `{"enerchart_core": false, "lang": "en", "level": 3}`)
+	f.core = insertChunkWithMetadata(t, db, "anchor core", "manual", `{"product_core": true, "lang": "de", "level": 2}`)
+	f.nonCore = insertChunkWithMetadata(t, db, "anchor noncore", "manual", `{"product_core": false, "lang": "en", "level": 3}`)
 	f.noKey = insertChunkWithMetadata(t, db, "anchor nokey", "manual", `{"lang": "de"}`)
-	f.logs = insertChunkWithMetadata(t, db, "anchor logs", "changelogs", `{"enerchart_core": true}`)
+	f.logs = insertChunkWithMetadata(t, db, "anchor logs", "changelogs", `{"product_core": true}`)
 	retriever, err := NewSQLiteRetriever(db, testLogger)
 	if err != nil {
 		t.Fatalf("NewSQLiteRetriever: %v", err)
@@ -69,13 +69,13 @@ func TestFilterFTS(t *testing.T) {
 		{name: "no filter", filter: step.Filter{}, want: sortedIDs(f.core, f.nonCore, f.noKey, f.logs)},
 		{name: "one source", filter: step.Filter{Sources: []string{"changelogs"}}, want: sortedIDs(f.logs)},
 		{name: "two sources are OR", filter: step.Filter{Sources: []string{"manual", "changelogs"}}, want: sortedIDs(f.core, f.nonCore, f.noKey, f.logs)},
-		{name: "bool false", filter: step.Filter{Metadata: map[string]any{"enerchart_core": false}}, want: sortedIDs(f.nonCore)},
-		{name: "bool true, a missing key does not match", filter: step.Filter{Metadata: map[string]any{"enerchart_core": true}}, want: sortedIDs(f.core, f.logs)},
+		{name: "bool false", filter: step.Filter{Metadata: map[string]any{"product_core": false}}, want: sortedIDs(f.nonCore)},
+		{name: "bool true, a missing key does not match", filter: step.Filter{Metadata: map[string]any{"product_core": true}}, want: sortedIDs(f.core, f.logs)},
 		{name: "string", filter: step.Filter{Metadata: map[string]any{"lang": "de"}}, want: sortedIDs(f.core, f.noKey)},
 		{name: "number", filter: step.Filter{Metadata: map[string]any{"level": 3.0}}, want: sortedIDs(f.nonCore)},
-		{name: "the string \"true\" is not the bool true", filter: step.Filter{Metadata: map[string]any{"enerchart_core": "true"}}, want: sortedIDs()},
-		{name: "keys are AND", filter: step.Filter{Metadata: map[string]any{"enerchart_core": true, "lang": "de"}}, want: sortedIDs(f.core)},
-		{name: "source and metadata", filter: step.Filter{Sources: []string{"manual"}, Metadata: map[string]any{"enerchart_core": true}}, want: sortedIDs(f.core)},
+		{name: "the string \"true\" is not the bool true", filter: step.Filter{Metadata: map[string]any{"product_core": "true"}}, want: sortedIDs()},
+		{name: "keys are AND", filter: step.Filter{Metadata: map[string]any{"product_core": true, "lang": "de"}}, want: sortedIDs(f.core)},
+		{name: "source and metadata", filter: step.Filter{Sources: []string{"manual"}, Metadata: map[string]any{"product_core": true}}, want: sortedIDs(f.core)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestFilterANN(t *testing.T) {
 	query := step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "bge-m3"}
 
 	t.Run("a metadata filter returns only the matching chunks, ordered by distance", func(t *testing.T) {
-		got, err := f.retriever.TopKByANN(ctx, query, 10, step.Filter{Metadata: map[string]any{"enerchart_core": true}})
+		got, err := f.retriever.TopKByANN(ctx, query, 10, step.Filter{Metadata: map[string]any{"product_core": true}})
 		if err != nil {
 			t.Fatalf("TopKByANN() error = %v", err)
 		}

@@ -16,7 +16,7 @@ func TestDocumentOfChunk(t *testing.T) {
 	db := sqlitetest.New(t)
 	ctx := context.Background()
 	docID := sqlitetest.InsertDocumentNamed(t, db, "guide.md")
-	if _, err := db.Exec(`UPDATE documents SET metadata_json = ? WHERE id = ?`, `{"enerchart_core": true}`, docID); err != nil {
+	if _, err := db.Exec(`UPDATE documents SET metadata_json = ? WHERE id = ?`, `{"product_core": true}`, docID); err != nil {
 		t.Fatalf("setting metadata_json: %v", err)
 	}
 	insert := func(position int64, breadcrumb, text string) int64 {
@@ -44,7 +44,7 @@ func TestDocumentOfChunk(t *testing.T) {
 		want := step.LoadedDocument{
 			Name:     "guide.md",
 			Source:   sqlitetest.TestSource,
-			Metadata: map[string]any{"enerchart_core": true},
+			Metadata: map[string]any{"product_core": true},
 			Chunks: []step.DocChunk{
 				{ID: first, Position: 0, Breadcrumb: "A", Text: "A\n\nfirst"},
 				{ID: second, Position: 1, Breadcrumb: "A > B", Text: "A > B\n\nsecond"},
@@ -56,7 +56,7 @@ func TestDocumentOfChunk(t *testing.T) {
 	})
 
 	t.Run("a matching filter loads the document", func(t *testing.T) {
-		filter := step.Filter{Sources: []string{sqlitetest.TestSource}, Metadata: map[string]any{"enerchart_core": true}}
+		filter := step.Filter{Sources: []string{sqlitetest.TestSource}, Metadata: map[string]any{"product_core": true}}
 		if _, err := loader.DocumentOfChunk(ctx, first, filter); err != nil {
 			t.Fatalf("DocumentOfChunk() error = %v", err)
 		}
@@ -64,7 +64,7 @@ func TestDocumentOfChunk(t *testing.T) {
 
 	t.Run("a filter that excludes the document gives ErrChunkNotInFilter", func(t *testing.T) {
 		for _, filter := range []step.Filter{
-			{Metadata: map[string]any{"enerchart_core": false}},
+			{Metadata: map[string]any{"product_core": false}},
 			{Sources: []string{"manual"}},
 		} {
 			if _, err := loader.DocumentOfChunk(ctx, first, filter); !errors.Is(err, step.ErrChunkNotInFilter) {

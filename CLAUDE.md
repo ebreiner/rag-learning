@@ -14,6 +14,8 @@ documents, code comments and commit messages. This is permanent, not a toggle.
 
 Keep the project knowledge in files. It helps people and Claude instances to continue work with full context.
 
+- When the user or another person builds something and the knowledge files need an entry, Claude writes it.
+  If information for a complete entry is missing (decisions, reasons, rejected options), ask that person for it. Do not guess.
 - Folder `knowledge/`: `index.md`, `decisions/`, `requirements/`, `concepts/`, `designs/`, `experiments/`. One topic per file.
   Link the files to each other.
 - Each file starts with front matter: `type`, `title`, `status`, `date` or `timestamp`, `tags`.
@@ -31,46 +33,28 @@ Keep the project knowledge in files. It helps people and Claude instances to con
 
 ## Branches and ownership
 
-- `master` is the source of truth for code and knowledge. The user writes all code on `master` and on its feature branches.
-  Claude reviews code there and changes code or tests only with an explicit grant for each set of changes.
-  Claude writes `knowledge/` files there as part of the agreed work. The user reviews and commits them.
-- `claude-unstable` is the lab branch of Claude. Claude writes code and makes local commits there.
-  Push, merge, branch and tag operations are the work of the user.
-- The code of `claude-unstable` never merges into `master`. Ideas go to `master`, not code.
-  The user writes an accepted idea again on `master`, or takes one named commit with an explicit `cherry-pick`.
+- `master` is the source of truth for code and knowledge. The user does the work on feature branches from `master`
+  and merges them with pull requests. The user writes the code.
+- Claude reviews code, explains bugs with `file:line` and a failure case, and gives sketches in the chat.
+- Claude changes code or tests only with an explicit grant for a named scope, for example "grant" or "build it".
+  "Agreed" or "fine" on a proposal is not a grant. A grant for a scope includes the tests that the scope needs.
+- Claude reports a bug outside the granted scope and does not fix it, also when the fix is one line.
+- Claude writes `knowledge/` files and `CLAUDE.md` as part of the agreed work.
+- Claude does not commit, push, merge, branch, tag or stash. The user reviews and commits all changes.
+- Throwaway scripts and their tools (for example a Python venv) go into a separate worktree of Claude,
+  for example `../rag-wikimeta`. Never put them into the checkout of the user.
+- The `claude-unstable` lab cycle is cancelled since 2026-10-19. The branch and the tags `unstable/1/*` stay as history.
 
-### Cycle of `claude-unstable`
+## Verification
 
-1. **Fork:** the user makes `claude-unstable` from `master` and tags the fork point `unstable/N/base`.
-   Claude runs one eval on the base after a full re-import. This run is the frozen reference of the cycle.
-2. **Experiment:** one hypothesis, one change, one eval run, one file in `knowledge/experiments/`.
-3. **No merge of `master`** into `claude-unstable` during a cycle.
-4. **Compact:** the user tags the last commit `unstable/N/end` and pushes the tag. The tag keeps the experiment commits reachable after the reset.
-   The user and Claude review the experiment files. Accepted results go to `master` as decisions, designs or backlog rows.
-   On a branch from `master`, copy the new knowledge files without edits: `git checkout unstable/N/end -- <files>`.
-   New decisions name the experiment files, the commit hashes and the tag as evidence.
-5. **Reset:** when `master` has the accepted results, the user resets `claude-unstable` to `master` and tags `unstable/N+1/base`.
-- Compact after about 3 experiments, or at once after a schema change.
+- Use the `just` recipes: `just build`, `just test`, `just lint`, `just eval`. Report a broken recipe. Do not go around it.
+- A change that can change the rank needs an eval run with `--baseline <reference run>`. The experiment file or the backlog row names both run IDs.
+- Change the golden set only in a separate run. A golden change gives a new `golden_sha256`.
+- Test an ingest in a scratchpad DB with a temporary config copy (absolute paths). Delete the copy after use, because it contains secrets.
 
-### Knowledge on `claude-unstable`
+## Public repo
 
-- Write only new files: `knowledge/experiments/` and draft designs.
-- Do not edit `decisions/`, `requirements/`, accepted designs or `index.md` on `claude-unstable`. Thus the compaction has no conflicts.
-
-### Support commits on `claude-unstable`
-
-- A support commit (tooling, infra) is permitted. It must not change the pipeline output. The next experiment file names it.
-- An eval run on a dirty working tree is permitted only when the dirty files do not change the pipeline output.
-  The experiment file names the dirty files.
-
-### Frozen eval on `claude-unstable`
-
-- The eval is the yardstick. It stays as it is at `unstable/N/base` for the full cycle.
-- Do not change the eval core: `internal/eval/step`, `internal/platform/evalstore`, the `eval` command, k, the metrics.
-- Do not change the golden set. Each run must have the same `golden_sha256` as the base run.
-- Do not change the corpus. The base run of a cycle uses a full re-import.
-- Before each other eval run, re-run the pipeline from the first step that the experiment changes (extract → chunk → embed).
-  Check `chunk_count` and `chunks_built` in the run header against the expected values.
-- An eval adapter (`internal/platform/sqlite/eval`, the searcher in `cmd/cli/cmd/eval.go`) can change only when an
-  interface change of the experiment forces it. Make it a separate commit `eval-adapter: <reason>`, and name it in the experiment file.
-- An improvement of the eval goes to the `master` backlog. It comes into the next cycle.
+- The repo is public. Do not commit personal, family or company data nor any corpus content: domains, `.env`, `config.yaml`,
+  `eval/golden*.json`, `eval/runs/`, documents, tickets or wiki content. Do not print secret values.
+- Knowledge files record what was decided and why, not which person or which Claude did the work.
+  Name commits, branches, run IDs and files as evidence.

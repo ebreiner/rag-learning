@@ -259,7 +259,8 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 					if len(cell.Text) == 0 {
 						logger.WarnContext(ctx, "walk-nodes", "warn", "warning: empty column header")
 					}
-					for i := cell.ColStart; i <= cell.ColEnd; i++ {
+					// docling end offsets are exclusive
+					for i := cell.ColStart; i < cell.ColEnd; i++ {
 						colHeaderByCol[i] = cell.Text
 					}
 				}
@@ -271,8 +272,8 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 					continue
 				}
 
-				for r := cell.RowStart; r <= cell.RowEnd; r++ {
-					for c := cell.ColStart; c <= cell.ColEnd; c++ {
+				for r := cell.RowStart; r < cell.RowEnd; r++ {
+					for c := cell.ColStart; c < cell.ColEnd; c++ {
 						if table[int(r)] == nil {
 							table[int(r)] = map[int]string{}
 						}
@@ -294,8 +295,8 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 			// tables can have no headers, calculate first data row
 			dataRowStart := 0
 			for _, cell := range node.Table.Cells {
-				if cell.IsColumnHeader && int(cell.RowEnd)+1 > dataRowStart {
-					dataRowStart = int(cell.RowEnd) + 1
+				if cell.IsColumnHeader && int(cell.RowEnd) > dataRowStart {
+					dataRowStart = int(cell.RowEnd)
 				}
 			}
 			rows := ""
@@ -383,6 +384,13 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 		budget = maxBudget - len(breadcrumb)
 	}
 
+	// emit buffered content before a standalone chunk so that the positions follow the doc order
+	// next content candidate then starts a fresh buffer with new budget
+	closeBuffer := func() {
+		flush()
+		lastCrumb = ""
+	}
+
 	candidatePos := int64(0)
 	for _, candidate := range candidates {
 		// Handle exceptions like container nodes and edge-cases
@@ -395,6 +403,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "table node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 
 			ids := make([]ChunkExtractionNodeID, 0)
 			for pos, id := range candidate.MemberIDs {
@@ -423,6 +432,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "list node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 			ids := make([]ChunkExtractionNodeID, 0)
 			for pos, id := range candidate.MemberIDs {
 				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
@@ -445,6 +455,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "formula node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
 			toSave := ChunkToSave{
 				Breadcrumb:        candidate.Breadcrumb,
@@ -463,6 +474,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "code node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
 			toSave := ChunkToSave{
 				Breadcrumb:        candidate.Breadcrumb,

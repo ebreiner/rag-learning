@@ -38,6 +38,7 @@ Start here:
 - [sidecar-metadata](designs/sidecar-metadata.md): first source design scope: the source doc provider merges source attributes and `<file>.meta.json`, the extract step checks `classification.personal_data`, stored in `metadata_json`, result field `Metadata`. Locked.
 - [retrieval-filters](designs/retrieval-filters.md): RC4 filters on sources (OR) and metadata keys (AND, equality) in the FTS and ANN SQL; MCP `sources` enum + `metadata`, `retrieve --source/--meta`; RC2 `catalog` MCP tool (snapshot of `metadata_json` at `serve` start) and `catalog` CLI command. Locked.
 - [read-tool](designs/read-tool.md): RC6 tool `read(chunk_id, mode)` with neighbours, section, document, page; `read.max_chars` limit with the fallback outline → page → warning; text without the repeated breadcrumb prefix; same filter as `rag`. Locked.
+- [document-links](designs/document-links.md): stage 1 of document links: reserved sidecar key `links` (list of objects `to`, `text`, `kind`), table `document_links`, resolution at query time with the request filter, `rag` result as `{chunks, documents}` with `links_out` grouped by the section of the link (open for the hit section, else name + total + `chunk_id`), `links_in` with section, `doc.title` required with links, snake_case output. Locked.
 
 ## Experiments
 
@@ -51,4 +52,5 @@ Start here:
 
 - [rag-cli-handover](requirements/rag-cli-handover.md): handover from the PO, unchanged, locked.
 - [rag-cli-handover-interpretation](requirements/rag-cli-handover-interpretation.md): gap for each RC, agreed interpretation, open questions.
+- [exporter-contract](requirements/exporter-contract.md): what rag-cli expects from each exporter: folder, document text, sidecar, filter values, shared `doc.*` keys, full export + `ingest-clean`.
 - [backlog](requirements/backlog.md): open work in phases, ordered by RC IDs, plus carry-over items.

@@ -28,8 +28,8 @@ func TestFilterFromArgs(t *testing.T) {
 		{name: "empty metadata", args: map[string]any{"metadata": map[string]any{}}, want: step.Filter{}},
 		{
 			name: "sources and metadata",
-			args: map[string]any{"sources": []any{"manual"}, "metadata": map[string]any{"enerchart_core": false}},
-			want: step.Filter{Sources: []string{"manual"}, Metadata: map[string]any{"enerchart_core": false}},
+			args: map[string]any{"sources": []any{"manual"}, "metadata": map[string]any{"product_core": false}},
+			want: step.Filter{Sources: []string{"manual"}, Metadata: map[string]any{"product_core": false}},
 		},
 		{name: "sources is a string", args: map[string]any{"sources": "manual"}, wantErr: true},
 		{name: "sources has a number", args: map[string]any{"sources": []any{"manual", 1.0}}, wantErr: true},
@@ -52,7 +52,7 @@ func TestFilterFromArgs(t *testing.T) {
 
 func TestCatalogTool(t *testing.T) {
 	catalog := step.Catalog{Sources: []step.CatalogSource{
-		{Name: "manual", Documents: 1, Keys: []step.CatalogKey{{Key: "enerchart_core", Types: []string{"boolean"}, Documents: 1, DistinctValues: 1}}},
+		{Name: "manual", Documents: 1, Keys: []step.CatalogKey{{Key: "product_core", Types: []string{"boolean"}, Documents: 1, DistinctValues: 1}}},
 	}}
 	tool, err := newCatalogTool(catalog, []string{"manual", "changelogs"}, discardQueryLogger(t))
 	if err != nil {
@@ -84,7 +84,7 @@ func TestCatalogTool(t *testing.T) {
 	})
 
 	t.Run("gives the catalog of one source", func(t *testing.T) {
-		want := `{"name":"manual","documents":1,"keys":[{"key":"enerchart_core","types":["boolean"],"documents":1,"distinct_values":1}]}`
+		want := `{"name":"manual","documents":1,"keys":[{"key":"product_core","types":["boolean"],"documents":1,"distinct_values":1}]}`
 		if got := text(call(map[string]any{"source": "manual"})); got != want {
 			t.Errorf("text = %s, want %s", got, want)
 		}
