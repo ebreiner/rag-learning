@@ -44,7 +44,7 @@ serve and eval, with the fusion settings from retrieval.fusion.`,
 				return err
 			}
 
-			deps, _, closeDB, err := WireUpRetrieval(ctx, cnf, logger)
+			deps, db, closeDB, err := WireUpRetrieval(ctx, cnf, logger)
 			if closeDB != nil {
 				defer func() {
 					if err := closeDB(ctx); err != nil {
@@ -56,7 +56,7 @@ serve and eval, with the fusion settings from retrieval.fusion.`,
 				return err
 			}
 
-			err = retrieveChunks(ctx, deps, userQuery, "hybrid", filter)
+			err = retrieveChunks(ctx, deps, NewLinkDeps(db, logger), userQuery, "hybrid", filter)
 			if err != nil {
 				return fmt.Errorf("error running retrieval: %w", err)
 			}
@@ -105,7 +105,7 @@ func filterFromFlags(cmd *cobra.Command) (step.Filter, error) {
 	return filter, nil
 }
 
-func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, query, retrievalType string, filter step.Filter) error {
+func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, linkDeps step.LinkDeps, query, retrievalType string, filter step.Filter) error {
 	var strategy step.RetrievalStrategy
 	switch retrievalType {
 	case "fts":
@@ -123,13 +123,16 @@ func retrieveChunks(ctx context.Context, deps step.RetrievalDeps, query, retriev
 		return err
 	}
 
-	for _, chunk := range chunks {
-		s, err := json.Marshal(chunk)
-		if err != nil {
-			return err
-		}
-		fmt.Print(string(s))
+	result, err := step.AttachLinks(ctx, chunks, filter, linkDeps)
+	if err != nil {
+		return err
 	}
+
+	s, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(s))
 
 	return nil
 }

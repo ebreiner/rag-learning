@@ -26,6 +26,7 @@ type QueryLog struct {
 	Sources  []string
 	Metadata map[string]any
 	Chunks   []Chunk
+	Links    int
 }
 
 func NewQueryLogger(opts ...Option) (*QueryLogger, error) {
@@ -68,6 +69,7 @@ func (q *QueryLogger) LogQuery(ctx context.Context, queryLog QueryLog) {
 		slog.Any("filter_sources", queryLog.Sources),
 		slog.Any("filter_metadata", queryLog.Metadata),
 		slog.Any("chunks", queryLog.Chunks),
+		slog.Int("links", queryLog.Links),
 	)
 }
 

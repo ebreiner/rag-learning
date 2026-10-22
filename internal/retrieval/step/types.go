@@ -20,16 +20,17 @@ type FusionConfig struct {
 }
 
 type RetrievedChunk struct {
-	ID           int64
-	Rank         int64
-	DocTitle     string
-	Position     int64
-	Score        float64
-	Breadcrumb   string
-	Text         string
-	SourceWeight float64
-	SourceName   string
-	Metadata     map[string]any
+	ID           int64          `json:"id"`
+	DocID        int64          `json:"doc_id"`
+	Rank         int64          `json:"rank"`
+	DocTitle     string         `json:"doc_title"`
+	Position     int64          `json:"position"`
+	Score        float64        `json:"score"`
+	Breadcrumb   string         `json:"breadcrumb"`
+	Text         string         `json:"text"`
+	SourceWeight float64        `json:"source_weight"`
+	SourceName   string         `json:"source_name"`
+	Metadata     map[string]any `json:"-"`
 }
 
 type ScoredChunkID struct {

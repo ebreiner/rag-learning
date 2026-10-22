@@ -64,3 +64,17 @@ CREATE TABLE IF NOT EXISTS extraction_nodes (
   CHECK (provenance_json IS NULL OR json_valid(provenance_json)),
   FOREIGN KEY(extraction_id) REFERENCES extractions(id)
 );
+
+CREATE TABLE IF NOT EXISTS document_links (
+  from_document_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  to_source TEXT NOT NULL,
+  to_rel_path TEXT NOT NULL,
+  text TEXT,
+  section TEXT NOT NULL DEFAULT '',
+
+  PRIMARY KEY (from_document_id, position),
+  FOREIGN KEY (from_document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  UNIQUE (from_document_id, to_source, to_rel_path, section)
+);
+CREATE INDEX IF NOT EXISTS document_links_target ON document_links (to_source, to_rel_path);

@@ -1,6 +1,6 @@
 ---
 type: design
-title: Document links, stage 1
+title: Document links, stage 1 (version 2)
 status: locked
 date: 2026-10-22
 tags: [links, graph, sidecar, retrieval, mcp, rc5]
@@ -50,7 +50,7 @@ One reserved top-level key `links`. All other sidecar rules stay the same.
   "doc.title": "Process list",
   "links": [
     {"to": "Feature workflow.md"},
-    {"to": "Server migration.md", "text": "migration", "kind": "link"}
+    {"to": "Server migration.md", "text": "migration", "section": "Internal docs"}
   ]
 }
 ```
@@ -60,7 +60,6 @@ One reserved top-level key `links`. All other sidecar rules stay the same.
 | `to` | Required. The `rel_path` of the target in the **same source**, relative to the source root, in the form of `documents.rel_path`. No absolute path, no `..`. |
 | `text` | Optional. The anchor text. Max. 300 characters. Stage 2 uses it. |
 | `section` | Optional. The heading path of the link in the document that contains it, for example `Internal docs > Review needed`. Separator ` > `, without the document title. Max. 300 characters. rag-cli does not interpret it: it shows it and groups by it. |
-| `kind` | Optional, default `link`. Pattern `^[a-z][a-z0-9_]{0,31}$`. Examples for later: `parent`, `process`, `owner_role`. |
 | other fields | Rejected. A typo must not disappear without a message. |
 
 **`doc.title` is required with `links`.** A sidecar with a `links` key must have `doc.title` as a non-empty string, else the document is rejected. The Markdown of the document starts with `# <doc.title>`, with the same text. rag-cli uses `doc.title` to show a link and to remove the title from the chunk breadcrumb (see the output rules). A source that wants links supplies titles. A link target needs no `doc.title`: without it, rag-cli shows its document name.
@@ -68,7 +67,7 @@ One reserved top-level key `links`. All other sidecar rules stay the same.
 **Rules:**
 
 - The list order is the order in the source. rag-cli keeps it.
-- A link to the document itself is dropped. A second entry with the same `to`, `kind` and `section` is dropped. The first entry wins. The same target in two sections gives two rows, because each section is a separate human statement.
+- A link to the document itself is dropped. A second entry with the same `to` and `section` is dropped. The first entry wins. The same target in two sections gives two rows, because each section is a separate human statement.
 - Max. 1000 entries for each document. More entries make the document invalid.
 - `links` in the source `attributes` of the config is a config error. Links belong to one document only.
 - A target that does not exist is not an error. It is resolved at query time and is not shown while it does not exist.
@@ -96,13 +95,12 @@ CREATE TABLE IF NOT EXISTS document_links (
   position INTEGER NOT NULL,          -- order in the sidecar list
   to_source TEXT NOT NULL,
   to_rel_path TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'link',
   text TEXT,
   section TEXT NOT NULL DEFAULT '',   -- '' = no heading
 
   PRIMARY KEY (from_document_id, position),
   FOREIGN KEY (from_document_id) REFERENCES documents(id) ON DELETE CASCADE,
-  UNIQUE (from_document_id, to_source, to_rel_path, kind, section)
+  UNIQUE (from_document_id, to_source, to_rel_path, section)
 );
 CREATE INDEX IF NOT EXISTS document_links_target ON document_links (to_source, to_rel_path);
 ```
@@ -117,7 +115,7 @@ One new port in the retrieval step, for example `LinkLoader.LinksOfDocuments(ctx
 
 ```sql
 -- outgoing: the targets of the result documents
-SELECT l.from_document_id, l.section, l.kind, l.text, t.id, t.name, t.metadata_json,
+SELECT l.from_document_id, l.section, l.text, t.id, t.name, t.metadata_json,
        (SELECT c.id FROM chunks AS c WHERE c.document_id = t.id ORDER BY c.position, c.id LIMIT 1)
 FROM document_links AS l
 JOIN documents AS t ON t.source_name = l.to_source AND t.rel_path = l.to_rel_path
@@ -125,7 +123,7 @@ WHERE l.from_document_id IN (...) <filter on t>
 ORDER BY l.from_document_id, l.position;
 
 -- incoming: the documents that link to the result documents
-SELECT t.id, l.section, l.kind, l.text, f.id, f.name, f.metadata_json, (first chunk of f)
+SELECT t.id, l.section, l.text, f.id, f.name, f.metadata_json, (first chunk of f)
 FROM documents AS t
 JOIN document_links AS l ON l.to_source = t.source_name AND l.to_rel_path = t.rel_path
 JOIN documents AS f ON f.id = l.from_document_id
@@ -136,11 +134,12 @@ ORDER BY t.id;  -- the adapter sorts links_in by the shown title
 - **The identity of a target is `source + rel_path`**, the same as the document identity ([0002](../decisions/0002-document-identity-derived-db.md)). Titles are not unique in each source, and the links of file-based sources are paths. The exporter maps other link forms (a wiki title, a URL) to the `rel_path`.
 - **The filter applies to the other document.** A link never shows a document that the same request cannot `read`. Later, views use the same rule as an access boundary.
 - A target without chunks (no first chunk) is not shown.
-- Cost: max. 10 result documents, two indexed queries for each `rag` call.
+- Cost: max. 10 result documents, two indexed queries for each `rag` call. The first-chunk subquery needs the index `chunks(document_id, position)`. Without it, each link row scans all chunks. The index comes from the read-side DB optimization batch.
+- The SQL of the filter (`filterClause`) uses the fixed table alias `d`. In both queries, the other document has this alias.
 
 ## Output of the `rag` tool (shape b)
 
-The result changes from a JSON array of chunks to one object. `RunRetrieval` does not change, so the eval does not change. The MCP handler (and `retrieve`) calls the link port after `RunRetrieval` and builds the object.
+The result changes from a JSON array of chunks to one object. A new step function `AttachLinks(ctx, chunks, filter, deps) (SearchResult, error)` in the retrieval step package builds it. It loads the links through the `LinkLoader` port and applies all rules of this section (grouping, title prefix, limits, small documents). The callers (`rag` MCP handler, `retrieve` CLI) call `RunRetrieval` and then `AttachLinks`, in the same way as the ingest calls extract, chunk and embed. `RunRetrieval` does not change, and the eval calls only `RunRetrieval`, so the eval does not change.
 
 ```json
 {
@@ -155,13 +154,13 @@ The result changes from a JSON array of chunks to one object. `RunRetrieval` doe
       "metadata": {"doc.url": "...", "doc.freshness": "current"},
       "links_out": [
         {"section": "Administration", "total": 11, "chunk_id": 4711, "links": [
-          {"title": "Leave request", "kind": "link", "chunk_id": 901}
+          {"title": "Leave request", "chunk_id": 901}
         ]},
         {"section": "Software development", "total": 7, "chunk_id": 4702}
       ],
       "links_out_total": 33,
       "links_in": [
-        {"title": "Main page", "section": "Processes", "kind": "link", "chunk_id": 17, "text": "process list"}
+        {"title": "Main page", "section": "Processes", "chunk_id": 17, "text": "process list"}
       ],
       "links_in_total": 1
     }
@@ -179,15 +178,16 @@ The result changes from a JSON array of chunks to one object. `RunRetrieval` doe
 | open group | A group is open (it has `links`) when its section **equals** the section of a result chunk of this document. No prefix rule: a chunk contains only the text of its own section, so a hit in `Internal docs > Review needed` opens only that group, not `Internal docs`. With more than one chunk of the document in the result, more groups can be open. |
 | closed group | only `section`, `total` and `chunk_id`. The model sees all groups of a hub in a few lines. |
 | `chunk_id` of a group | the first chunk of the document (in `position` order) whose chunk section equals the group section. The model calls `read {chunk_id, mode: section}` and gets the full list as text. No match: no `chunk_id`. |
-| no section match | If no result chunk matches a section, all groups are closed. A document with only the group `""` and max. `links.max_group` links has this group open. |
+| small document | If `links_out_total` ≤ 10, all groups are open. The section rule applies only to larger documents (hubs). Most documents have 1–5 links, and closed groups would hide their titles. |
+| no section match | If no result chunk of a larger document matches a section, all groups are closed. |
+| closed group, known limit | `read {mode: section}` with the `chunk_id` of a closed group returns the section text. The text contains the link titles, but no `chunk_id` of the targets. The model then needs `rag` with the title: 2 calls in place of 1. This happens only on hubs. A later option is a `read` mode for links. |
 | `links_in` | flat list, sorted by the shown title, each entry with the `section` in the linking document. Not grouped. An incoming link from `<hub> > Review needed` tells the model that a person marked this page for review. |
 | `title` of a link | `doc.title` from the metadata of the linked document if it is a string, else the document name |
 | `chunk_id` of a link | the first chunk of the linked document, in `position` order. The model calls `read {chunk_id, mode: document}` or `section`. |
 | `text` | only when the edge has one |
-| limits | `links.max_group` (default 50): max. links in one open group. `links.max_in` (default 50): max. entries in `links_in`. Both are safety limits, not a selection. `*_total` gives the real count. |
+| limits | constants in the step: max. 50 links in one open group, max. 50 entries in `links_in`, 10 for the small-document rule. They are safety limits, not a selection, and not config values. `*_total` gives the real count. |
 | no links | empty lists and totals 0. The keys stay, so the shape is always the same. |
 
-The limits are config values next to `read.max_chars`.
 
 **Tool description:** add two sentences to `rag`: "Each document lists its linked documents, grouped by the section that contains the link. Open a document or a closed group with read and its chunk_id." The `read` description gets no change.
 
@@ -213,7 +213,7 @@ The limits are config values next to `read.max_chars`.
 ## Acceptance
 
 1. A sidecar with `links` gives rows in `document_links` in the sidecar order. Self links and duplicates are dropped.
-2. A wrong shape fails only that document. A rule error (`to` with `..`, bad `kind`, unknown field, more than 1000 entries) is an `ErrInvalidMetadata` with a clear message.
+2. A wrong shape or an unknown field fails only that document (invalid sidecar). A rule error (`to` with `..`, more than 1000 entries, no `doc.title`) is an `ErrInvalidMetadata` with a clear message.
 3. `links` in the source attributes gives a config error at start.
 4. `metadata_json` and the `catalog` output contain no `links` key.
 5. The `rag` result has the object shape. Each document appears one time with its links. A target that does not exist is not shown. Only the groups of the result chunk sections are open.
@@ -236,3 +236,26 @@ The limits are config values next to `read.max_chars`.
 | Field names | snake_case for all output fields, now |
 | `links_in` order | by the shown title |
 | Breadcrumbs | checked in the wiki DB on 2026-10-21: the sections of the 3 hubs are correct, also nested sections. The test export moves all page headings one level below `# <title>`. |
+
+## Changes in version 2 (2026-10-22, review before the build)
+
+| Change | Reason |
+|---|---|
+| `kind` removed (field, column, unique key, output) | No stage 1 function uses it. Unknown fields are rejected, so a later `kind` is an addition without a break. |
+| Step function `AttachLinks` after `RunRetrieval`, called by both callers | The logic is in one place in the step package and testable without MCP or SQLite. No step wraps another step. |
+| Small-document rule (≤ 10 links: all groups open) | Without it, a typical document shows closed groups and no titles. |
+| Limits as constants, not config values | Safety limits, not tuning values. |
+| Index `chunks(document_id, position)` | `chunks` has no index on `document_id`. `EXPLAIN QUERY PLAN` shows a full scan for each first-chunk subquery. |
+| Closed group: known limit written down | `read` of a group gives text, not target IDs. Accepted for hubs. |
+
+## Build status (2026-10-22, branch `graph_stage_1`)
+
+| Acceptance | Evidence |
+|---|---|
+| 1, 2, 10 | `internal/extract/step/links_test.go`, `extract_test.go` (`TestExtractMetadata`), `internal/platform/extraction/source/source_doc_provider_test.go` (`TestSourceDocLinks`), `internal/platform/sqlite/extraction/extracted_doc_sink_test.go` (`TestSaveExtractedDocLinks`) |
+| 3 | `internal/platform/config/config.go` (check in `validate`). No test: the config package has no tests. |
+| 4 | the provider removes `links` from the metadata map (`TestSourceDocLinks`) |
+| 5, 6, 11 | `internal/retrieval/step/links_test.go` (`TestAttachLinks`, `TestChunkSection`), `internal/platform/sqlite/retrieval/link_loader_test.go` (`TestLoadLinks`) |
+| 7, 8, 9 | open: by hand after `ingest-clean` of the wiki export, and an eval against the new reference run |
+
+An end-to-end run with 4 small test documents (scratch DB) gave the expected `document_links` rows and `retrieve` output: a missing target is not shown, and a breadcrumb without the title prefix matches its section.

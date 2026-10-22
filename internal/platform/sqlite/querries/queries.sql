@@ -112,6 +112,7 @@ ORDER BY en.id;
 -- name: RetrievalChunksByIDs :many
 SELECT
 	c.id,
+	d.id AS document_id,
 	d.name,
 	d.source_name,
 	s.weight,
@@ -140,3 +141,7 @@ SELECT
 	COUNT(*) AS chunk_count,
 	CAST(COALESCE(MAX(created_at), '') AS TEXT) AS latest_created_at
 FROM chunks;
+
+-- name: CreateDocumentLink :exec
+INSERT INTO document_links (from_document_id, position, to_source, to_rel_path, text, section)
+VALUES (?, ?, ?, ?, ?, ?);

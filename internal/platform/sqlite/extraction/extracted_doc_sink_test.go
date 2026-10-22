@@ -232,3 +232,74 @@ func TestSaveExtractedDocMetadata(t *testing.T) {
 		}
 	})
 }
+
+func TestSaveExtractedDocLinks(t *testing.T) {
+	type linkRow struct {
+		Position  int64
+		ToSource  string
+		ToRelPath string
+		Text      sql.NullString
+		Section   string
+	}
+	readLinks := func(t *testing.T, db *sql.DB, docID int64) []linkRow {
+		t.Helper()
+		rows, err := db.Query(`SELECT position, to_source, to_rel_path, text, section FROM document_links WHERE from_document_id = ? ORDER BY position`, docID)
+		if err != nil {
+			t.Fatalf("querying document_links: %v", err)
+		}
+		defer func() {
+			if err := rows.Close(); err != nil {
+				t.Errorf("closing rows: %v", err)
+			}
+		}()
+		var got []linkRow
+		for rows.Next() {
+			var r linkRow
+			if err := rows.Scan(&r.Position, &r.ToSource, &r.ToRelPath, &r.Text, &r.Section); err != nil {
+				t.Fatalf("scanning document_links: %v", err)
+			}
+			got = append(got, r)
+		}
+		return got
+	}
+
+	t.Run("the links are saved in order, with the source of the document", func(t *testing.T) {
+		db := newDBWithSources(t)
+		sink, err := NewExtractedDocSink(db, testLogger)
+		if err != nil {
+			t.Fatalf("NewExtractedDocSink() error = %v", err)
+		}
+		doc := simpleExtractedDoc("a.md", "sha-1", "manual")
+		doc.Source.Links = []step.Link{{To: "b.md", Text: "B", Section: "S"}, {To: "dir/c.md"}}
+
+		docID, err := sink.SaveExtractedDoc(testCtx, doc)
+		if err != nil {
+			t.Fatalf("SaveExtractedDoc() error = %v", err)
+		}
+
+		want := []linkRow{
+			{Position: 0, ToSource: "manual", ToRelPath: "b.md", Text: sql.NullString{String: "B", Valid: true}, Section: "S"},
+			{Position: 1, ToSource: "manual", ToRelPath: "dir/c.md"},
+		}
+		if diff := cmp.Diff(want, readLinks(t, db, docID)); diff != "" {
+			t.Errorf("document_links (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a link error rolls back the whole document", func(t *testing.T) {
+		db := newDBWithSources(t)
+		sink, err := NewExtractedDocSink(db, testLogger)
+		if err != nil {
+			t.Fatalf("NewExtractedDocSink() error = %v", err)
+		}
+		doc := simpleExtractedDoc("a.md", "sha-1", "manual")
+		// the step drops duplicates; here the UNIQUE constraint must catch one that passes it
+		doc.Source.Links = []step.Link{{To: "b.md"}, {To: "b.md"}}
+
+		if _, err := sink.SaveExtractedDoc(testCtx, doc); err == nil {
+			t.Fatalf("SaveExtractedDoc() error = nil, want the UNIQUE error")
+		}
+		assertCount(t, db, "documents", 0)
+		assertCount(t, db, "document_links", 0)
+	})
+}

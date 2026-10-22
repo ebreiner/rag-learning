@@ -83,6 +83,11 @@ func WireUpRetrieval(ctx context.Context, cnf config.Config, logger *slog.Logger
 	return deps, db, closeDB, nil
 }
 
+func NewLinkDeps(db *sql.DB, logger *slog.Logger) retrievalstep.LinkDeps {
+	loader := retrieval.NewLinkLoader(db, logger)
+	return retrievalstep.LinkDeps{Loader: &loader}
+}
+
 func NewReadDeps(db *sql.DB, cnf config.Config, logger *slog.Logger) retrievalstep.ReadDeps {
 	loader := retrieval.NewDocumentLoader(db, logger)
 	deps := retrievalstep.ReadDeps{Loader: &loader, MaxChars: cnf.Read.MaxChars}

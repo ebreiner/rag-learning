@@ -36,6 +36,15 @@ type Document struct {
 	SourceName   string
 }
 
+type DocumentLink struct {
+	FromDocumentID int64
+	Position       int64
+	ToSource       string
+	ToRelPath      string
+	Text           sql.NullString
+	Section        string
+}
+
 type Extraction struct {
 	ID         int64
 	CreatedAt  time.Time

@@ -55,6 +55,15 @@ All exporters use these keys with the same meaning. rag-cli does not check them.
 | `doc.freshness` | `current` (year ≥ 2024), `probably_stale` (2022–2023), `dangerous` (< 2022 or marked as old in the source) |
 | `doc.source_id` | the ID of the document in the source system |
 
+## Links (optional)
+
+- The reserved sidecar key `links` holds the outgoing links of the document: a list of objects `{"to": "<rel_path>", "text": "<anchor text>", "section": "<heading path>"}`. `text` and `section` are optional. Other fields reject the document.
+- `to` is the path of the target relative to the source folder, in the same source. Write only links to documents of the same export. A target that does not exist is not shown.
+- `section` is the heading path of the link in the document, with ` > ` as the separator and without the title. rag-cli groups the links by it. Write the heading text only, and do not interpret it.
+- A sidecar with `links` must have `doc.title` (non-empty string). The Markdown starts with `# <doc.title>`, with the same text.
+- rag-cli computes the incoming links. `links` is not metadata: no filter and no catalog entry.
+- Details: [document-links](../designs/document-links.md).
+
 ## Update
 
 - rag-cli does not update or delete single documents. A changed file stops the ingest.

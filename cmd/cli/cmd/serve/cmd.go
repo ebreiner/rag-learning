@@ -85,7 +85,7 @@ env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 				return err
 			}
 
-			hybridTool := hyridRetrievalTool(deps, queryLogger)
+			hybridTool := hyridRetrievalTool(deps, cmdpkg.NewLinkDeps(db, logger), queryLogger)
 			readTool := newReadTool(cmdpkg.NewReadDeps(db, cnf, logger), queryLogger, logger)
 			tools := []server.ServerTool{hybridTool, catalogTool, readTool}
 			mcpHandler := MCPHandler(tools)

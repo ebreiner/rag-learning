@@ -224,6 +224,9 @@ func validate(ctx context.Context, cnf Config) error {
 		if s.Weight <= 0 {
 			fail(field+".weight", "must be > 0")
 		}
+		if _, ok := s.Attributes["links"]; ok {
+			fail(field+".attributes.links", "links belong to one document: set them in its sidecar, not in the source attributes")
+		}
 		for j := range i {
 			other := cnf.Sources[j].Path
 			if s.Path == "" || other == "" {

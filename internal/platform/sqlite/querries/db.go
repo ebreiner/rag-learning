@@ -27,6 +27,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createDocumentStmt, err = db.PrepareContext(ctx, createDocument); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateDocument: %w", err)
 	}
+	if q.createDocumentLinkStmt, err = db.PrepareContext(ctx, createDocumentLink); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateDocumentLink: %w", err)
+	}
 	if q.createExtractionStmt, err = db.PrepareContext(ctx, createExtraction); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateExtraction: %w", err)
 	}
@@ -80,6 +83,11 @@ func (q *Queries) Close() error {
 	if q.createDocumentStmt != nil {
 		if cerr := q.createDocumentStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createDocumentStmt: %w", cerr)
+		}
+	}
+	if q.createDocumentLinkStmt != nil {
+		if cerr := q.createDocumentLinkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createDocumentLinkStmt: %w", cerr)
 		}
 	}
 	if q.createExtractionStmt != nil {
@@ -197,6 +205,7 @@ type Queries struct {
 	db                           DBTX
 	tx                           *sql.Tx
 	createDocumentStmt           *sql.Stmt
+	createDocumentLinkStmt       *sql.Stmt
 	createExtractionStmt         *sql.Stmt
 	createExtractionNodeStmt     *sql.Stmt
 	docAlreadyChunkedStmt        *sql.Stmt
@@ -219,6 +228,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		db:                           tx,
 		tx:                           tx,
 		createDocumentStmt:           q.createDocumentStmt,
+		createDocumentLinkStmt:       q.createDocumentLinkStmt,
 		createExtractionStmt:         q.createExtractionStmt,
 		createExtractionNodeStmt:     q.createExtractionNodeStmt,
 		docAlreadyChunkedStmt:        q.docAlreadyChunkedStmt,

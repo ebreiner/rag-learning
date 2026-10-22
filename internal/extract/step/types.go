@@ -7,6 +7,13 @@ type SourceDoc struct {
 	SHA256     string
 	SourceName string
 	Metadata   map[string]any
+	Links      []Link
+}
+
+type Link struct {
+	To      string
+	Text    string
+	Section string
 }
 
 type ExtractedDoc struct {

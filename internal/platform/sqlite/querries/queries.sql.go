@@ -49,6 +49,32 @@ func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) 
 	return id, err
 }
 
+const createDocumentLink = `-- name: CreateDocumentLink :exec
+INSERT INTO document_links (from_document_id, position, to_source, to_rel_path, text, section)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type CreateDocumentLinkParams struct {
+	FromDocumentID int64
+	Position       int64
+	ToSource       string
+	ToRelPath      string
+	Text           sql.NullString
+	Section        string
+}
+
+func (q *Queries) CreateDocumentLink(ctx context.Context, arg CreateDocumentLinkParams) error {
+	_, err := q.exec(ctx, q.createDocumentLinkStmt, createDocumentLink,
+		arg.FromDocumentID,
+		arg.Position,
+		arg.ToSource,
+		arg.ToRelPath,
+		arg.Text,
+		arg.Section,
+	)
+	return err
+}
+
 const createExtraction = `-- name: CreateExtraction :one
 INSERT INTO extractions (
 	document_id,
@@ -379,6 +405,7 @@ func (q *Queries) InsertChunkNodes(ctx context.Context, arg InsertChunkNodesPara
 const retrievalChunksByIDs = `-- name: RetrievalChunksByIDs :many
 SELECT
 	c.id,
+	d.id AS document_id,
 	d.name,
 	d.source_name,
 	s.weight,
@@ -396,6 +423,7 @@ WHERE c.id IN (/*SLICE:chunk_ids*/?)
 
 type RetrievalChunksByIDsRow struct {
 	ID           int64
+	DocumentID   int64
 	Name         string
 	SourceName   string
 	Weight       float64
@@ -426,6 +454,7 @@ func (q *Queries) RetrievalChunksByIDs(ctx context.Context, chunkIds []int64) ([
 		var i RetrievalChunksByIDsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.DocumentID,
 			&i.Name,
 			&i.SourceName,
 			&i.Weight,

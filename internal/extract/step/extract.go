@@ -95,6 +95,11 @@ func extract(ctx context.Context, source DocSource, sink DocSink, extractor Extr
 	if err := validateMetadata(sourceDoc.Metadata); err != nil {
 		return fmt.Errorf("%s: %w: %w", sourceDoc.SourcePath, ErrExtractionFailed, err)
 	}
+	links, err := validateLinks(sourceDoc)
+	if err != nil {
+		return fmt.Errorf("%s: %w: %w", sourceDoc.SourcePath, ErrExtractionFailed, err)
+	}
+	sourceDoc.Links = links
 
 	logger.InfoContext(ctx, fmt.Sprintf("processing doc: %s", sourceDoc.SourcePath))
 

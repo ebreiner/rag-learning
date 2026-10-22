@@ -77,6 +77,24 @@ func (e *ExtractedDocSink) SaveExtractedDoc(ctx context.Context, doc step.Extrac
 		return -1, err
 	}
 
+	for i, link := range doc.Source.Links {
+		linkParam := querries.CreateDocumentLinkParams{
+			FromDocumentID: docID,
+			Position:       int64(i),
+			ToSource:       doc.Source.SourceName,
+			ToRelPath:      link.To,
+			Text:           sql.NullString{String: link.Text, Valid: link.Text != ""},
+			Section:        link.Section,
+		}
+		if err := q.CreateDocumentLink(ctx, linkParam); err != nil {
+			txErr := tx.Rollback()
+			if txErr != nil {
+				return -1, fmt.Errorf("error rolling back transaction at link creation: %w\noriginal error: %w", txErr, err)
+			}
+			return -1, fmt.Errorf("saving links[%d]: %w", i, err)
+		}
+	}
+
 	extractionParam := querries.CreateExtractionParams{
 		DocumentID: docID,
 		CreatedAt:  time.Now(),

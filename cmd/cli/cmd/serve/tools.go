@@ -19,11 +19,13 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogger) server.ServerTool {
+func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLogger *logging.QueryLogger) server.ServerTool {
 	tool := mcp.NewTool(
 		"rag",
 		mcp.WithDescription(`Retrieves relevant context chunks from the application's manual using semantic and keyword search. 
-		Use this tool when you need authoritative information about the application's domain, features, configuration, usage, or behavior.`),
+		Use this tool when you need authoritative information about the application's domain, features, configuration, usage, or behavior.
+		The result has the chunks and, for each document, its metadata and its linked documents, grouped by the section that contains the link.
+		Open a linked document or a closed group with read and its chunk_id.`),
 		mcp.WithString(
 			"retrieval_query",
 			mcp.Required(),
@@ -107,6 +109,12 @@ func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogge
 		}
 		retrievalSpan.End()
 
+		searchResult, err := step.AttachLinks(handlerCtx, chunks, filter, linkDeps)
+		if err != nil {
+			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error attaching links: %w", err))
+			return mcp.NewToolResultError("error loading document links"), nil
+		}
+
 		logCtx, logSpan := tracer.Start(handlerCtx, "log_query")
 		defer logSpan.End()
 		chunksToLog := make([]logging.Chunk, 0, len(chunks))
@@ -129,6 +137,7 @@ func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogge
 			Sources:  filter.Sources,
 			Metadata: filter.Metadata,
 			Chunks:   chunksToLog,
+			Links:    searchResult.CountLinks(),
 		}
 
 		queryLogger.LogQuery(logCtx, queryLog)
@@ -139,13 +148,13 @@ func hyridRetrievalTool(deps step.RetrievalDeps, queryLogger *logging.QueryLogge
 		)
 		logSpan.End()
 
-		jsonChunks, err := json.Marshal(chunks)
+		jsonResult, err := json.Marshal(searchResult)
 		if err != nil {
-			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error marshaling chunks: %w", err))
-			return mcp.NewToolResultError("error marshaling chunks"), nil
+			deps.Logger.ErrorContext(ctx, "mcp", "err", fmt.Errorf("error marshaling the result: %w", err))
+			return mcp.NewToolResultError("error marshaling the result"), nil
 		}
 
-		return mcp.NewToolResultText(string(jsonChunks)), nil
+		return mcp.NewToolResultText(string(jsonResult)), nil
 	}
 
 	return server.ServerTool{Tool: tool, Handler: handler}
