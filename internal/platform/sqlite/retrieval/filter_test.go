@@ -142,4 +142,33 @@ func TestFilterANN(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("a filter without a matching document gives no chunks", func(t *testing.T) {
+		got, err := f.retriever.TopKByANN(ctx, query, 10, step.Filter{Metadata: map[string]any{"product_core": "no-such-value"}})
+		if err != nil {
+			t.Fatalf("TopKByANN() error = %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("got %d results, want 0", len(got))
+		}
+	})
+
+	t.Run("chunks with the same distance come in chunk ID order", func(t *testing.T) {
+		tieTable, err := sqlite.SetupVecTable(ctx, f.db, 3, "tie-model")
+		if err != nil {
+			t.Fatalf("SetupVecTable: %v", err)
+		}
+		// insert in ID order: for equal distances, the vec0 KNN gives the last inserted vector first
+		want := sortedIDs(f.logs, f.noKey, f.nonCore, f.core)
+		for _, id := range want {
+			seedEmbedding(t, f.db, tieTable, id, []float64{0, 0, 1})
+		}
+		got, err := f.retriever.TopKByANN(ctx, step.Query{Vector: []float64{1, 0, 0}, Dim: 3, Model: "tie-model"}, 10, step.Filter{Sources: []string{"manual", "changelogs"}})
+		if err != nil {
+			t.Fatalf("TopKByANN() error = %v", err)
+		}
+		if gotIDs := resultIDs(got); !slices.Equal(gotIDs, want) {
+			t.Errorf("got ids %v, want %v", gotIDs, want)
+		}
+	})
 }

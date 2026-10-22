@@ -256,6 +256,8 @@ The result changes from a JSON array of chunks to one object. A new step functio
 | 3 | `internal/platform/config/config.go` (check in `validate`). No test: the config package has no tests. |
 | 4 | the provider removes `links` from the metadata map (`TestSourceDocLinks`) |
 | 5, 6, 11 | `internal/retrieval/step/links_test.go` (`TestAttachLinks`, `TestChunkSection`), `internal/platform/sqlite/retrieval/link_loader_test.go` (`TestLoadLinks`) |
-| 7, 8, 9 | open: by hand after `ingest-clean` of the wiki export, and an eval against the new reference run |
+| 7 | e2e in Cursor (GPT 5.6, argon4, Opus), query log `data/query.log` of 2026-10-22: 16 of 20 read targets of the first runs are chunk position 0, which is the `chunk_id` of a link. |
+| 8 | `AttachLinks` runs after `RunRetrieval`, so the links cannot change the rank. Run `20261022T192853Z` (new wiki export + chunker fixes of `07070d9`) is the new reference run. |
+| 9 | Partly. By hand: a hit on the process list hub in a section without links shows all 8 groups closed, each with a `chunk_id`. In the e2e run, the model opened a closed group of the hub with `read {mode: section}`. Not seen: a hit in a link section with only that group open, and `links_in` under a review heading. |
 
 An end-to-end run with 4 small test documents (scratch DB) gave the expected `document_links` rows and `retrieve` output: a missing target is not shown, and a breadcrumb without the title prefix matches its section.

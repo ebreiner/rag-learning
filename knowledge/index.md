@@ -40,6 +40,10 @@ Start here:
 - [read-tool](designs/read-tool.md): RC6 tool `read(chunk_id, mode)` with neighbours, section, document, page; `read.max_chars` limit with the fallback outline → page → warning; text without the repeated breadcrumb prefix; same filter as `rag`. Locked.
 - [document-links](designs/document-links.md): stage 1 of document links: reserved sidecar key `links` (list of objects `to`, `text`, `kind`), table `document_links`, resolution at query time with the request filter, `rag` result as `{chunks, documents}` with `links_out` grouped by the section of the link (open for the hit section, else name + total + `chunk_id`), `links_in` with section, `doc.title` required with links, snake_case output. Locked.
 
+## Concepts
+
+- [sqlite-query-plans](concepts/sqlite-query-plans.md): index `chunks(document_id, position)`, `CROSS JOIN` in the filtered FTS, filtered ANN with `chunk_id IN` inside the vec0 KNN; why, measurements, limits.
+
 ## Experiments
 
 - [0001-eval-baseline](experiments/0001-eval-baseline.md): first valid eval baseline (1806 chunks), findings: `generic` chunks without section signal, hybrid vs. ANN at rank 1, golden-set candidates.

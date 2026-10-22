@@ -78,3 +78,6 @@ CREATE TABLE IF NOT EXISTS document_links (
   UNIQUE (from_document_id, to_source, to_rel_path, section)
 );
 CREATE INDEX IF NOT EXISTS document_links_target ON document_links (to_source, to_rel_path);
+
+-- chunks of one document in position order, see knowledge/concepts/sqlite-query-plans.md
+CREATE INDEX IF NOT EXISTS chunks_document_id_position ON chunks(document_id, position);
