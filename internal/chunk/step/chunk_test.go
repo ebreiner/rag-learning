@@ -2,6 +2,7 @@ package step
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -183,7 +184,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "$20", RowStart: 2, RowEnd: 3, ColStart: 1, ColEnd: 2},
 				),
 			),
-			want: []string{"|Name | Price\nWidget | $10\nGadget | $20\n"},
+			want: []string{"|Name: Widget; Price: $10\nName: Gadget; Price: $20\n"},
 		},
 		{
 			name: "row-spanning cell is restated on every row it covers",
@@ -199,7 +200,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "$2", RowStart: 2, RowEnd: 3, ColStart: 2, ColEnd: 3},
 				),
 			),
-			want: []string{"|Category | Name | Price\nFruit | Apple | $1\nFruit | Banana | $2\n"},
+			want: []string{"|Category: Fruit; Name: Apple; Price: $1\nCategory: Fruit; Name: Banana; Price: $2\n"},
 		},
 		{
 			name: "column-spanning header is applied to every column it covers",
@@ -210,7 +211,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "B", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
 				),
 			),
-			want: []string{"|Group | Group\nA | B\n"},
+			want: []string{"|Group: A; Group: B\n"},
 		},
 		{
 			// Docling has no "number of header rows" field; header-ness is a
@@ -226,14 +227,12 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "D", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
 				),
 			),
-			want: []string{"|\nA | B\nC | D\n"},
+			want: []string{"|A | B\nC | D\n"},
 		},
 		{
 			// A grouped header occupies rows 0 and 1; data starts at row 2.
 			// With the hardcoded row-1 start, row 1 rendered as an all-empty
-			// data line. Known and accepted wart, documented here rather than
-			// fixed: the per-column header map keeps only the last header cell
-			// seen per column, so the "Register" group label is lost.
+			// data line. The header levels of a column are joined.
 			name: "two-row header starts data at row 2 without a blank line",
 			root: withChildren(&ExtractionNode{Kind: "unsupported"},
 				mkTableNode(3, 3,
@@ -246,7 +245,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "16", RowStart: 2, RowEnd: 3, ColStart: 2, ColEnd: 3},
 				),
 			),
-			want: []string{"|Lo | Hi | Bits\n0x01 | 0x02 | 16\n"},
+			want: []string{"|Register / Lo: 0x01; Register / Hi: 0x02; Bits: 16\n"},
 		},
 		{
 			name: "nil table content is skipped without panicking",
@@ -256,15 +255,12 @@ func TestWalkTable(t *testing.T) {
 			want: []string{},
 		},
 		{
-			// documents current tolerant behavior for a malformed/empty
-			// table (still emits one near-empty candidate rather than
-			// skipping it, unlike list's "skip if nothing parsed" rule) --
-			// worth revisiting deliberately, not silently.
+			// a table without data rows gives no candidate, the same as a list
 			name: "table with no cells does not panic",
 			root: withChildren(&ExtractionNode{Kind: "unsupported"},
 				mkTableNode(0, 0),
 			),
-			want: []string{"|\n"},
+			want: []string{},
 		},
 		{
 			name: "data cell in a column with no header degrades to an empty label",
@@ -275,7 +271,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "$10", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
 				),
 			),
-			want: []string{"|Name | \nWidget | $10\n"},
+			want: []string{"|Name: Widget; $10\n"},
 		},
 		{
 			// regression test, real docling data (a wiki page): an
@@ -292,7 +288,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "All staff", RowStart: 2, RowEnd: 3, ColStart: 1, ColEnd: 2},
 				),
 			),
-			want: []string{"|\nOwner | Team A\nExecutor | All staff\n"},
+			want: []string{"|Owner | Team A\nExecutor | All staff\n"},
 		},
 		{
 			// a cell covers only its own columns: a missing cell next to it
@@ -305,7 +301,55 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "Widget", RowStart: 1, RowEnd: 2, ColStart: 0, ColEnd: 1},
 				),
 			),
-			want: []string{"|Name | Price\nWidget | \n"},
+			want: []string{"|Name: Widget\n"},
+		},
+		{
+			// a header cell in a lower row is a row header: its row is data, not header
+			name: "row header in a lower row keeps its row",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(2, 2,
+					TableCell{Text: "Field", RowStart: 0, RowEnd: 1, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "Value", RowStart: 0, RowEnd: 1, ColStart: 1, ColEnd: 2, IsColumnHeader: true},
+					TableCell{Text: "Owner", RowStart: 1, RowEnd: 2, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "Team A", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
+				),
+			),
+			want: []string{"|Field: Owner; Value: Team A\n"},
+		},
+		{
+			// a table with only header cells has no header: all rows are data
+			name: "table with only header cells keeps its text",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(1, 2,
+					TableCell{Text: "Owner", RowStart: 0, RowEnd: 1, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "Team A", RowStart: 0, RowEnd: 1, ColStart: 1, ColEnd: 2, IsColumnHeader: true},
+				),
+			),
+			want: []string{"|Owner | Team A\n"},
+		},
+		{
+			// a header row over empty data cells: the header text is the content
+			name: "header row over empty data cells keeps the header text",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(2, 2,
+					TableCell{Text: "Contact person", RowStart: 0, RowEnd: 1, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+					TableCell{Text: "Team A", RowStart: 0, RowEnd: 1, ColStart: 1, ColEnd: 2, IsColumnHeader: true},
+					TableCell{Text: "", RowStart: 1, RowEnd: 2, ColStart: 0, ColEnd: 1},
+					TableCell{Text: "", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
+				),
+			),
+			want: []string{"|Contact person | Team A\n"},
+		},
+		{
+			// docling gave Cols 0 for a table with cells
+			name: "the cells set the table size when Cols is 0",
+			root: withChildren(&ExtractionNode{Kind: "unsupported"},
+				mkTableNode(2, 0,
+					TableCell{Text: "A", RowStart: 1, RowEnd: 2, ColStart: 0, ColEnd: 1},
+					TableCell{Text: "B", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
+				),
+			),
+			want: []string{"|A | B\n"},
 		},
 		{
 			name: "table candidate carries the active breadcrumb",
@@ -318,7 +362,7 @@ func TestWalkTable(t *testing.T) {
 					TableCell{Text: "$10", RowStart: 1, RowEnd: 2, ColStart: 1, ColEnd: 2},
 				),
 			),
-			want: []string{"Ch1|Name | Price\nWidget | $10\n"},
+			want: []string{"Ch1|Name: Widget; Price: $10\n"},
 		},
 	}
 
@@ -338,6 +382,68 @@ func TestWalkTable(t *testing.T) {
 				t.Errorf("walk() candidates mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestWalkTableSplitsLargeTable(t *testing.T) {
+	cells := []TableCell{
+		{Text: "Name", RowStart: 0, RowEnd: 1, ColStart: 0, ColEnd: 1, IsColumnHeader: true},
+		{Text: "Value", RowStart: 0, RowEnd: 1, ColStart: 1, ColEnd: 2, IsColumnHeader: true},
+	}
+	for r := int64(1); r <= 30; r++ {
+		cells = append(cells,
+			TableCell{Text: fmt.Sprintf("row%02d", r), RowStart: r, RowEnd: r + 1, ColStart: 0, ColEnd: 1},
+			TableCell{Text: strings.Repeat("v", 60), RowStart: r, RowEnd: r + 1, ColStart: 1, ColEnd: 2},
+		)
+	}
+	table := mkTableNode(31, 2, cells...)
+	table.ExtractionNodeID = 200
+	caption := &ExtractionNode{Kind: KindCaption, ExtractionNodeID: 300, Caption: &CaptionContent{Text: "Table 1: values"}}
+	footnote := &ExtractionNode{Kind: KindFootnote, ExtractionNodeID: 400, Footnote: &FootnoteContent{Text: "1. a note"}}
+	root := withChildren(&ExtractionNode{Kind: "unsupported"},
+		mkHeadingNode(1, "Ch1"),
+		withChildren(table, caption, footnote),
+	)
+
+	got, err := walk(testCtx, []*ExtractionNode{root}, testLogger)
+	if err != nil {
+		t.Fatalf("walk() error = %v", err)
+	}
+	if len(got) < 2 {
+		t.Fatalf("got %d candidates, want the table in more than one part", len(got))
+	}
+
+	next := 1
+	for i, c := range got {
+		if len(c.Breadcrumb)+len(c.Text) > tableChunkBudget+len("\n1. a note") {
+			t.Errorf("part %d has %d chars, over the budget", i, len(c.Text))
+		}
+		if !strings.HasPrefix(c.Text, "Table 1: values\n") {
+			t.Errorf("part %d does not start with the caption: %q", i, c.Text[:min(40, len(c.Text))])
+		}
+		last := i == len(got)-1
+		if strings.Contains(c.Text, "1. a note") != last {
+			t.Errorf("part %d: the footnote must be only in the last part", i)
+		}
+		wantIDs := []int64{200, 300}
+		if last {
+			wantIDs = append(wantIDs, 400)
+		}
+		if diff := cmp.Diff(wantIDs, c.MemberIDs); diff != "" {
+			t.Errorf("part %d MemberIDs mismatch (-want +got):\n%s", i, diff)
+		}
+		for _, line := range strings.Split(strings.TrimSpace(c.Text), "\n") {
+			if !strings.HasPrefix(line, "Name: row") {
+				continue
+			}
+			if want := fmt.Sprintf("Name: row%02d; Value: ", next); !strings.HasPrefix(line, want) {
+				t.Fatalf("part %d: got row %q, want the rows in table order (%q)", i, line, want)
+			}
+			next++
+		}
+	}
+	if next != 31 {
+		t.Errorf("got %d rows over all parts, want 30", next-1)
 	}
 }
 
@@ -370,7 +476,7 @@ func TestWalkTableConsumesCaptionAndFootnote(t *testing.T) {
 		t.Fatalf("got %d candidates, want exactly 1 (the table): %+v", len(got), got)
 	}
 
-	wantText := "Name\nWidget\n\nTable 1: widgets\n1. prices excl. VAT"
+	wantText := "Table 1: widgets\nName: Widget\n\n1. prices excl. VAT"
 	if diff := cmp.Diff(wantText, got[0].Text); diff != "" {
 		t.Errorf("table text mismatch (-want +got):\n%s", diff)
 	}
@@ -737,7 +843,7 @@ func TestMergeCandidates(t *testing.T) {
 				mkContainerCandidate(KindTable, 200, "Ch1", "header | row\n", 200),
 			},
 			want: []ChunkToSave{
-				{Text: "header | row\n", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
+				{Text: "Ch1\n\nheader | row\n", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
 			},
 		},
@@ -751,7 +857,7 @@ func TestMergeCandidates(t *testing.T) {
 				mkContainerCandidate(KindTable, 200, "Ch1", "header | row\nFigure 1: a caption", 200, 300),
 			},
 			want: []ChunkToSave{
-				{Text: "header | row\nFigure 1: a caption", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
+				{Text: "Ch1\n\nheader | row\nFigure 1: a caption", Breadcrumb: "Ch1", Position: 0, Type: TypeTable,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}, {ExtractionNodeID: 300, Position: 1}}},
 			},
 		},
@@ -837,7 +943,7 @@ func TestMergeCandidates(t *testing.T) {
 			want: []ChunkToSave{
 				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 100}}},
-				{Text: "TABLE", Breadcrumb: "Ch1", Position: 1, Type: TypeTable,
+				{Text: "Ch1\n\nTABLE", Breadcrumb: "Ch1", Position: 1, Type: TypeTable,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
 				{Text: "Ch1\n\nB", Breadcrumb: "Ch1", Position: 2, Type: TypeContent,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 101, Position: 1}}},
@@ -860,6 +966,26 @@ func TestMergeCandidates(t *testing.T) {
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 20}}},
 				{Text: "- b\n", Breadcrumb: "Administration", Position: 2, Type: TypeList,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 21}}},
+			},
+		},
+		{
+			// the parts of a split table follow each other, so read can give the neighbour parts
+			name: "parts of a split table keep the document order",
+			candidates: []chunkCandidate{
+				mkIDCandidate(100, "Ch1", "A"),
+				mkContainerCandidate(KindTable, 200, "Ch1", "PART1", 200),
+				mkContainerCandidate(KindTable, 200, "Ch1", "PART2", 200),
+				mkIDCandidate(101, "Ch1", "B"),
+			},
+			want: []ChunkToSave{
+				{Text: "Ch1\n\nA", Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 100}}},
+				{Text: "Ch1\n\nPART1", Breadcrumb: "Ch1", Position: 1, Type: TypeTable,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
+				{Text: "Ch1\n\nPART2", Breadcrumb: "Ch1", Position: 2, Type: TypeTable,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
+				{Text: "Ch1\n\nB", Breadcrumb: "Ch1", Position: 3, Type: TypeContent,
+					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 101, Position: 1}}},
 			},
 		},
 		{
@@ -896,7 +1022,7 @@ func TestMergeCandidates(t *testing.T) {
 			want: []ChunkToSave{
 				{Text: "Ch1\n\n" + strings.Repeat("a", 600), Breadcrumb: "Ch1", Position: 0, Type: TypeContent,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 100}}},
-				{Text: "TABLE", Breadcrumb: "Ch1", Position: 1, Type: TypeTable,
+				{Text: "Ch1\n\nTABLE", Breadcrumb: "Ch1", Position: 1, Type: TypeTable,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 200}}},
 				{Text: "Ch1\n\n" + strings.Repeat("b", 300) + "\n\n" + strings.Repeat("c", 300), Breadcrumb: "Ch1", Position: 2, Type: TypeContent,
 					ExtractionNodeIDs: []ChunkExtractionNodeID{{ExtractionNodeID: 101, Position: 1}, {ExtractionNodeID: 102, Position: 2}}},
