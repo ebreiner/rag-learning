@@ -56,6 +56,14 @@ retrieval:
     rrf_k: 60
     weight_fts: 1
     weight_ann: 1
+  # optional: a remote reranker scores the hydrated pool, then the source weight multiplies the score.
+  # On an error or a timeout the RRF order stays. Without this block or with enabled: false, no rerank.
+  rerank:
+    enabled: false
+    url: https://openrouter.ai/api/v1/rerank
+    model: cohere/rerank-4-fast
+    api_key: <your OpenRouter key>
+    timeout: 10s
 
 read:
   # the read tool gives no more text than this. A larger document or section gives its outline,

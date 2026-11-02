@@ -40,6 +40,13 @@ type rawConfig struct {
 			WeightFTS float64 `yaml:"weight_fts"`
 			WeightANN float64 `yaml:"weight_ann"`
 		} `yaml:"fusion"`
+		Rerank struct {
+			Enabled bool          `yaml:"enabled"`
+			URL     string        `yaml:"url"`
+			Model   string        `yaml:"model"`
+			APIKey  string        `yaml:"api_key"`
+			Timeout time.Duration `yaml:"timeout"`
+		} `yaml:"rerank"`
 	} `yaml:"retrieval"`
 	Read struct {
 		MaxChars int64 `yaml:"max_chars"`
@@ -108,6 +115,18 @@ type Source struct {
 type Retrieval struct {
 	PoolSize int64 // candidates after fusion that go into hydration and the source weight, > 0
 	Fusion   Fusion
+	Rerank   Rerank
+}
+
+const DefaultRerankURL = "https://openrouter.ai/api/v1/rerank"
+
+// Rerank is off when the yaml block is missing. The fields are checked only when Enabled is true.
+type Rerank struct {
+	Enabled bool
+	URL     *url.URL // the full rerank endpoint, DefaultRerankURL when empty
+	Model   string
+	APIKey  string
+	Timeout time.Duration
 }
 
 type Fusion struct {

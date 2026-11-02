@@ -8,6 +8,7 @@ type RetrievalDeps struct {
 	Retriever        TopKRetriever
 	EmbeddingsClient EmbedClient
 	Renderer         ChunkRenderer
+	Reranker         Reranker // optional, nil keeps the RRF order
 	Fusion           FusionConfig
 	PoolSize         int64
 	Sources          []string
@@ -17,6 +18,12 @@ type FusionConfig struct {
 	RRFK      int64
 	WeightFTS float64
 	WeightANN float64
+}
+
+type RerankResult struct {
+	Scores []float64
+	Model  string
+	Cost   float64 // 0 when the provider gives no cost
 }
 
 type RetrievedChunk struct {

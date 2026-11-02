@@ -18,3 +18,8 @@ type ChunkRenderer interface {
 type EmbedClient interface {
 	EmbedQuery(context.Context, string) (Query, error)
 }
+
+// Reranker gives one score for each text, in the input order.
+type Reranker interface {
+	Rerank(ctx context.Context, query string, texts []string) (RerankResult, error)
+}

@@ -3,10 +3,12 @@ package step
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const rrfK int64 = 60
@@ -60,6 +62,9 @@ func RunRetrieval(ctx context.Context, query string, k int64, strategy Retrieval
 
 	// phase 2 of hybrid: order the hydrated pool, then cut to k
 	if strategy == StrategyHybrid {
+		if deps.Reranker != nil {
+			hydrated = rerank(stepCtx, query, hydrated, deps.Reranker, deps.Logger)
+		}
 		_, weightSpan := tracer.Start(stepCtx, "source-weight")
 		hydrated = sourceRerank(hydrated)
 		if len(hydrated) > int(k) {
@@ -191,4 +196,46 @@ func sourceRerank(chunks []RetrievedChunk) []RetrievedChunk {
 	}
 
 	return weighted
+}
+
+// rerank sets the score of each chunk to the reranker score. On an error it logs a warning and keeps the RRF scores.
+func rerank(ctx context.Context, query string, chunks []RetrievedChunk, reranker Reranker, logger *slog.Logger) []RetrievedChunk {
+	ctx, span := otel.Tracer("rag-cli-sdk").Start(ctx, "rerank")
+	defer span.End()
+	span.SetAttributes(attribute.Int("rerank.pool_size", len(chunks)))
+
+	if len(chunks) == 0 {
+		return chunks
+	}
+
+	texts := make([]string, 0, len(chunks))
+	for _, c := range chunks {
+		// the same text as the embed input at ingest
+		texts = append(texts, c.Text)
+	}
+
+	result, err := reranker.Rerank(ctx, query, texts)
+	if err == nil && len(result.Scores) != len(chunks) {
+		err = fmt.Errorf("reranker gave %d scores for %d chunks", len(result.Scores), len(chunks))
+	}
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		if logger != nil {
+			logger.WarnContext(ctx, "rerank", "warn", fmt.Errorf("rerank failed, the rrf order stays: %w", err))
+		}
+		return chunks
+	}
+
+	span.SetAttributes(
+		attribute.String("rerank.model", result.Model),
+		attribute.Float64("rerank.cost", result.Cost),
+	)
+
+	reranked := make([]RetrievedChunk, 0, len(chunks))
+	for i, c := range chunks {
+		c.Score = result.Scores[i]
+		reranked = append(reranked, c)
+	}
+	return reranked
 }
