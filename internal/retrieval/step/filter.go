@@ -12,12 +12,13 @@ var ErrInvalidFilter = errors.New("invalid filter")
 type Filter struct {
 	Sources  []string       // OR
 	Metadata map[string]any // AND
+	DocIDs   []int64        // documents of a pool: nil = all documents, empty = no document
 }
 
 var metadataKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 func (f Filter) IsEmpty() bool {
-	return len(f.Sources) == 0 && len(f.Metadata) == 0
+	return len(f.Sources) == 0 && len(f.Metadata) == 0 && f.DocIDs == nil
 }
 
 func (f Filter) validate(knownSources []string) error {

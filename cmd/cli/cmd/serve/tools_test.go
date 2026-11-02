@@ -107,11 +107,13 @@ func TestCatalogTool(t *testing.T) {
 }
 
 type fakeLoader struct {
-	doc step.LoadedDocument
-	err error
+	doc    step.LoadedDocument
+	err    error
+	filter step.Filter // the filter of the last call
 }
 
 func (f *fakeLoader) DocumentOfChunk(ctx context.Context, chunkID int64, filter step.Filter) (step.LoadedDocument, error) {
+	f.filter = filter
 	return f.doc, f.err
 }
 
@@ -215,4 +217,82 @@ func TestToolCallLog(t *testing.T) {
 	if _, ok := got[0]["session"]; !ok {
 		t.Errorf("first entry has no session field: %v", got[0])
 	}
+}
+
+// fakeRetriever records the filters and finds nothing.
+type fakeRetriever struct{ filters []step.Filter }
+
+func (f *fakeRetriever) TopKByANN(ctx context.Context, query step.Query, k int64, filter step.Filter) ([]step.ScoredChunkID, error) {
+	f.filters = append(f.filters, filter)
+	return nil, nil
+}
+
+func (f *fakeRetriever) TopKByFTS(ctx context.Context, query string, k int64, filter step.Filter) ([]step.ScoredChunkID, error) {
+	f.filters = append(f.filters, filter)
+	return nil, nil
+}
+
+type fakeEmbed struct{}
+
+func (fakeEmbed) EmbedQuery(context.Context, string) (step.Query, error) { return step.Query{}, nil }
+
+type passThrough struct{}
+
+func (passThrough) HydrateChunks(context.Context, []step.ScoredChunkID) ([]step.RetrievedChunk, error) {
+	return nil, nil
+}
+
+func (passThrough) RenderChunks(_ context.Context, chunks []step.RetrievedChunk) ([]step.RetrievedChunk, error) {
+	return chunks, nil
+}
+
+// TestPoolTools proves that a pool endpoint applies only the pool, also when a client sends filter arguments.
+func TestPoolTools(t *testing.T) {
+	pool := step.Filter{DocIDs: []int64{3, 5}}
+	args := map[string]any{"retrieval_query": "q", "k": 5.0, "chunk_id": 1.0, "mode": "section",
+		"sources": []any{"other"}, "metadata": map[string]any{"key": true}}
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = args
+
+	t.Run("rag has no filter arguments and searches only the pool", func(t *testing.T) {
+		retriever := &fakeRetriever{}
+		deps := step.RetrievalDeps{Logger: slog.New(slog.DiscardHandler), Retriever: retriever, EmbeddingsClient: fakeEmbed{},
+			Hydrator: passThrough{}, Renderer: passThrough{}, PoolSize: 40, Sources: []string{"manual"}}
+		tool := poolRetrievalTool("the pool", "p", pool, deps, step.LinkDeps{}, discardQueryLogger(t))
+
+		if props := tool.Tool.InputSchema.Properties; props["sources"] != nil || props["metadata"] != nil {
+			t.Errorf("schema properties = %v, want no sources and no metadata", props)
+		}
+		if !strings.HasPrefix(tool.Tool.Description, "the pool") {
+			t.Errorf("description = %q, want the pool description first", tool.Tool.Description)
+		}
+		result, err := tool.Handler(context.Background(), request)
+		if err != nil || result.IsError {
+			t.Fatalf("handler = %+v, %v", result, err)
+		}
+		if len(retriever.filters) != 2 {
+			t.Fatalf("got %d retriever calls, want 2 (FTS and ANN)", len(retriever.filters))
+		}
+		for _, got := range retriever.filters {
+			if diff := cmp.Diff(pool, got); diff != "" {
+				t.Errorf("filter (-want +got):\n%s", diff)
+			}
+		}
+	})
+
+	t.Run("read has no filter arguments and reads only the pool", func(t *testing.T) {
+		loader := &fakeLoader{err: step.ErrChunkNotInFilter}
+		tool := poolReadTool("p", pool, step.ReadDeps{Loader: loader, MaxChars: 30000, Sources: []string{"manual"}}, discardQueryLogger(t), slog.New(slog.DiscardHandler))
+
+		if props := tool.Tool.InputSchema.Properties; props["sources"] != nil || props["metadata"] != nil {
+			t.Errorf("schema properties = %v, want no sources and no metadata", props)
+		}
+		result, err := tool.Handler(context.Background(), request)
+		if err != nil || !result.IsError {
+			t.Errorf("handler = %+v, %v, want a tool error for a chunk outside the pool", result, err)
+		}
+		if diff := cmp.Diff(pool, loader.filter); diff != "" {
+			t.Errorf("filter (-want +got):\n%s", diff)
+		}
+	})
 }

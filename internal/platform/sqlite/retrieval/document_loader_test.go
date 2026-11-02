@@ -62,10 +62,18 @@ func TestDocumentOfChunk(t *testing.T) {
 		}
 	})
 
+	t.Run("a pool with the document loads it", func(t *testing.T) {
+		if _, err := loader.DocumentOfChunk(ctx, first, step.Filter{DocIDs: []int64{docID}}); err != nil {
+			t.Fatalf("DocumentOfChunk() error = %v", err)
+		}
+	})
+
 	t.Run("a filter that excludes the document gives ErrChunkNotInFilter", func(t *testing.T) {
 		for _, filter := range []step.Filter{
 			{Metadata: map[string]any{"product_core": false}},
 			{Sources: []string{"manual"}},
+			{DocIDs: []int64{docIDOf(t, db, otherDocChunk)}},
+			{DocIDs: []int64{}},
 		} {
 			if _, err := loader.DocumentOfChunk(ctx, first, filter); !errors.Is(err, step.ErrChunkNotInFilter) {
 				t.Errorf("filter %+v: error = %v, want ErrChunkNotInFilter", filter, err)

@@ -19,23 +19,29 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+const ragDescription = `The result has the chunks and, for each document, its metadata and its linked documents, grouped by the section that contains the link.
+		Open a linked document or a closed group with read and its chunk_id.`
+
+var ragQueryArgs = []mcp.ToolOption{
+	mcp.WithString(
+		"retrieval_query",
+		mcp.Required(),
+		mcp.Description("query for which retrieval should be performed"),
+	),
+	mcp.WithNumber(
+		"k",
+		mcp.Required(),
+		mcp.Description("k for top k with k maximum of 10"),
+	),
+}
+
 func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLogger *logging.QueryLogger) server.ServerTool {
-	tool := mcp.NewTool(
-		"rag",
+	opts := append([]mcp.ToolOption{
 		mcp.WithDescription(`Retrieves relevant context chunks from the application's manual using semantic and keyword search. 
 		Use this tool when you need authoritative information about the application's domain, features, configuration, usage, or behavior.
-		The result has the chunks and, for each document, its metadata and its linked documents, grouped by the section that contains the link.
-		Open a linked document or a closed group with read and its chunk_id.`),
-		mcp.WithString(
-			"retrieval_query",
-			mcp.Required(),
-			mcp.Description("query for which retrieval should be performed"),
-		),
-		mcp.WithNumber(
-			"k",
-			mcp.Required(),
-			mcp.Description("k for top k with k maximum of 10"),
-		),
+		` + ragDescription),
+	}, ragQueryArgs...)
+	opts = append(opts,
 		mcp.WithArray(
 			"sources",
 			mcp.WithStringEnumItems(deps.Sources),
@@ -46,8 +52,21 @@ func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLo
 			mcp.Description("optional: search only in documents whose metadata has exactly these values, e.g. {\"key\": true}"),
 		),
 	)
+	return server.ServerTool{Tool: mcp.NewTool("rag", opts...), Handler: ragHandler(deps, linkDeps, queryLogger, "", filterFromArgs)}
+}
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (result *mcp.CallToolResult, err error) {
+// poolRetrievalTool is the rag tool of a pool endpoint: the pool replaces the sources and metadata arguments.
+func poolRetrievalTool(description string, poolName string, filter step.Filter, deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLogger *logging.QueryLogger) server.ServerTool {
+	opts := append([]mcp.ToolOption{
+		mcp.WithDescription(description + "\n\n" + `Retrieves relevant context chunks of this pool using semantic and keyword search.
+		` + ragDescription),
+	}, ragQueryArgs...)
+	fixed := func(map[string]any) (step.Filter, error) { return filter, nil }
+	return server.ServerTool{Tool: mcp.NewTool("rag", opts...), Handler: ragHandler(deps, linkDeps, queryLogger, poolName, fixed)}
+}
+
+func ragHandler(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLogger *logging.QueryLogger, poolName string, filterOf func(map[string]any) (step.Filter, error)) toolHandler {
+	return func(ctx context.Context, request mcp.CallToolRequest) (result *mcp.CallToolResult, err error) {
 		start := time.Now()
 		tracer := otel.Tracer("rag-cli-sdk")
 		handlerCtx, handlerSpan := tracer.Start(ctx, "mcp_query")
@@ -85,7 +104,7 @@ func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLo
 			return mcp.NewToolResultError("value for 'k' is outside 1 and 10"), nil
 		}
 
-		filter, err := filterFromArgs(request.GetArguments())
+		filter, err := filterOf(request.GetArguments())
 		if err != nil {
 			deps.Logger.ErrorContext(handlerCtx, "mcp", "err", fmt.Errorf("invalid filter in request: %w", err))
 			return mcp.NewToolResultError(err.Error()), nil
@@ -95,6 +114,7 @@ func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLo
 			attribute.String("query.query", query),
 			attribute.Int("query.k", k),
 			attribute.String("query.strategy", string(step.StrategyHybrid)),
+			attribute.String("query.pool", poolName),
 		)
 
 		retrievalCtx, retrievalSpan := tracer.Start(handlerCtx, "run_retrieval")
@@ -138,6 +158,7 @@ func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLo
 			Metadata: filter.Metadata,
 			Chunks:   chunksToLog,
 			Links:    searchResult.CountLinks(),
+			Pool:     poolName,
 		}
 
 		queryLogger.LogQuery(logCtx, queryLog)
@@ -156,8 +177,6 @@ func hyridRetrievalTool(deps step.RetrievalDeps, linkDeps step.LinkDeps, queryLo
 
 		return mcp.NewToolResultText(string(jsonResult)), nil
 	}
-
-	return server.ServerTool{Tool: tool, Handler: handler}
 }
 
 func filterFromArgs(args map[string]any) (step.Filter, error) {
@@ -224,29 +243,43 @@ func newCatalogTool(catalog step.Catalog, sources []string, queryLogger *logging
 		return mcp.NewToolResultText(body), nil
 	}
 
-	return server.ServerTool{Tool: tool, Handler: withToolLog("catalog", queryLogger, handler, nil)}, nil
+	return server.ServerTool{Tool: tool, Handler: withToolLog("catalog", "", queryLogger, handler, nil)}, nil
 }
 
-func newReadTool(deps step.ReadDeps, queryLogger *logging.QueryLogger, logger *slog.Logger) server.ServerTool {
+const readDescription = `Reads more context for a chunk of a rag result: its neighbour chunks, its section or its document.
+		A section or document that is too large gives an outline: call read again with mode section and the chunk_id of an outline entry.
+		If no outline fits, the result is a page with next_chunk_id: continue with mode page and that chunk_id.`
+
+func readArgs() []mcp.ToolOption {
 	modes := make([]string, 0, len(step.ReadModes))
 	for _, m := range step.ReadModes {
 		modes = append(modes, string(m))
 	}
-
-	tool := mcp.NewTool(
-		"read",
-		mcp.WithDescription(`Reads more context for a chunk of a rag result: its neighbour chunks, its section or its document.
-		A section or document that is too large gives an outline: call read again with mode section and the chunk_id of an outline entry.
-		If no outline fits, the result is a page with next_chunk_id: continue with mode page and that chunk_id.`),
+	return []mcp.ToolOption{
+		mcp.WithDescription(readDescription),
 		mcp.WithNumber("chunk_id", mcp.Required(), mcp.Description("the ID of a chunk from a rag result")),
 		mcp.WithString("mode", mcp.Required(), mcp.Enum(modes...),
 			mcp.Description("neighbours: the chunk and n chunks before and after it; section: its section with sub-sections; document: the full document; page: the document from this chunk on")),
 		mcp.WithNumber("n", mcp.Description("only for mode neighbours: chunks before and after, 1 to 5, default 2")),
+	}
+}
+
+func newReadTool(deps step.ReadDeps, queryLogger *logging.QueryLogger, logger *slog.Logger) server.ServerTool {
+	opts := append(readArgs(),
 		mcp.WithArray("sources", mcp.WithStringEnumItems(deps.Sources), mcp.Description("optional: read only if the document is in these sources")),
 		mcp.WithObject("metadata", mcp.Description("optional: read only if the document metadata has exactly these values")),
 	)
+	return server.ServerTool{Tool: mcp.NewTool("read", opts...), Handler: withToolLog("read", "", queryLogger, readHandler(deps, filterFromArgs, logger), readResultType)}
+}
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// poolReadTool is the read tool of a pool endpoint: it reads only documents of the pool.
+func poolReadTool(poolName string, filter step.Filter, deps step.ReadDeps, queryLogger *logging.QueryLogger, logger *slog.Logger) server.ServerTool {
+	fixed := func(map[string]any) (step.Filter, error) { return filter, nil }
+	return server.ServerTool{Tool: mcp.NewTool("read", readArgs()...), Handler: withToolLog("read", poolName, queryLogger, readHandler(deps, fixed, logger), readResultType)}
+}
+
+func readHandler(deps step.ReadDeps, filterOf func(map[string]any) (step.Filter, error), logger *slog.Logger) toolHandler {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		chunkID, err := request.RequireInt("chunk_id")
 		if err != nil {
 			return mcp.NewToolResultError("chunk_id not found in request"), nil
@@ -255,7 +288,7 @@ func newReadTool(deps step.ReadDeps, queryLogger *logging.QueryLogger, logger *s
 		if err != nil {
 			return mcp.NewToolResultError("mode not found in request"), nil
 		}
-		filter, err := filterFromArgs(request.GetArguments())
+		filter, err := filterOf(request.GetArguments())
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -277,26 +310,24 @@ func newReadTool(deps step.ReadDeps, queryLogger *logging.QueryLogger, logger *s
 		}
 		return mcp.NewToolResultText(string(body)), nil
 	}
+}
 
-	readResultType := func(text string) string {
-		var result step.ReadResult
-		if err := json.Unmarshal([]byte(text), &result); err != nil {
-			return "unknown"
-		}
-		return result.Type()
+func readResultType(text string) string {
+	var result step.ReadResult
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return "unknown"
 	}
-
-	return server.ServerTool{Tool: tool, Handler: withToolLog("read", queryLogger, handler, readResultType)}
+	return result.Type()
 }
 
 type toolHandler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
-func withToolLog(tool string, queryLogger *logging.QueryLogger, handler toolHandler, resultType func(text string) string) toolHandler {
+func withToolLog(tool string, poolName string, queryLogger *logging.QueryLogger, handler toolHandler, resultType func(text string) string) toolHandler {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := time.Now()
 		result, err := handler(ctx, request)
 
-		call := logging.ToolCallLog{Session: sessionID(ctx), Tool: tool, Args: request.GetArguments(), Result: "text", Duration: time.Since(start)}
+		call := logging.ToolCallLog{Session: sessionID(ctx), Tool: tool, Pool: poolName, Args: request.GetArguments(), Result: "text", Duration: time.Since(start)}
 		if result != nil && len(result.Content) > 0 {
 			if text, ok := result.Content[0].(mcp.TextContent); ok {
 				call.Chars = utf8.RuneCountInString(text.Text)

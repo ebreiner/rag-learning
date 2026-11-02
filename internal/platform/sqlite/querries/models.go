@@ -64,6 +64,23 @@ type ExtractionNode struct {
 	ProvenanceJson sql.NullString
 }
 
+type Pool struct {
+	Name        string
+	Description string
+	Query       string
+	State       string
+	UpdatedAt   time.Time
+}
+
+type PoolDocument struct {
+	ID         int64
+	SourceName string
+	RelPath    string
+	Title      string
+	Url        interface{}
+	Metadata   sql.NullString
+}
+
 type Source struct {
 	Name   string
 	Weight float64

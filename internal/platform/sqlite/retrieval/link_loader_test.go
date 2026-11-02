@@ -138,6 +138,20 @@ func TestLoadLinks(t *testing.T) {
 		}
 	})
 
+	t.Run("a pool filter applies to the other document of each link", func(t *testing.T) {
+		pool := step.Filter{DocIDs: []int64{f.docID["wiki/hub.md"], f.docID["wiki/b.md"]}}
+		got, err := loader.LoadLinks(ctx, []int64{f.docID["wiki/hub.md"], f.docID["wiki/b.md"]}, pool)
+		if err != nil {
+			t.Fatalf("LoadLinks() error = %v", err)
+		}
+		if out := got.Out[f.docID["wiki/hub.md"]]; len(out) != 1 || out[0].Name != "b.md" {
+			t.Errorf("out of hub.md = %+v, want only b.md: c.md is outside the pool", out)
+		}
+		if in := got.In[f.docID["wiki/b.md"]]; len(in) != 1 || in[0].Name != "hub.md" {
+			t.Errorf("in of b.md = %+v, want only hub.md: c.md is outside the pool", in)
+		}
+	})
+
 	t.Run("no document IDs give empty maps", func(t *testing.T) {
 		got, err := loader.LoadLinks(ctx, nil, step.Filter{})
 		if err != nil {

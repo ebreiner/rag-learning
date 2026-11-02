@@ -21,6 +21,15 @@ func insertChunkWithMetadata(t *testing.T, db *sql.DB, text, source, metadataJSO
 	return id
 }
 
+func docIDOf(t *testing.T, db *sql.DB, chunkID int64) int64 {
+	t.Helper()
+	var id int64
+	if err := db.QueryRow(`SELECT document_id FROM chunks WHERE id = ?`, chunkID).Scan(&id); err != nil {
+		t.Fatalf("reading document_id: %v", err)
+	}
+	return id
+}
+
 func resultIDs(got []step.ScoredChunkID) []int64 {
 	ids := make([]int64, 0, len(got))
 	for _, g := range got {
@@ -76,6 +85,9 @@ func TestFilterFTS(t *testing.T) {
 		{name: "the string \"true\" is not the bool true", filter: step.Filter{Metadata: map[string]any{"product_core": "true"}}, want: sortedIDs()},
 		{name: "keys are AND", filter: step.Filter{Metadata: map[string]any{"product_core": true, "lang": "de"}}, want: sortedIDs(f.core)},
 		{name: "source and metadata", filter: step.Filter{Sources: []string{"manual"}, Metadata: map[string]any{"product_core": true}}, want: sortedIDs(f.core)},
+		{name: "pool documents", filter: step.Filter{DocIDs: []int64{docIDOf(t, f.db, f.core), docIDOf(t, f.db, f.logs)}}, want: sortedIDs(f.core, f.logs)},
+		{name: "an empty pool gives no chunks", filter: step.Filter{DocIDs: []int64{}}, want: sortedIDs()},
+		{name: "pool and metadata are AND", filter: step.Filter{DocIDs: []int64{docIDOf(t, f.db, f.core), docIDOf(t, f.db, f.nonCore)}, Metadata: map[string]any{"product_core": true}}, want: sortedIDs(f.core)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -140,6 +152,26 @@ func TestFilterANN(t *testing.T) {
 			if unfiltered[i].ID != filtered[i].ID || unfiltered[i].Score != filtered[i].Score {
 				t.Errorf("rank %d: no filter %+v, filter %+v", i+1, unfiltered[i], filtered[i])
 			}
+		}
+	})
+
+	t.Run("a pool filter finds its chunk outside the k nearest", func(t *testing.T) {
+		got, err := f.retriever.TopKByANN(ctx, query, 1, step.Filter{DocIDs: []int64{docIDOf(t, f.db, f.logs)}})
+		if err != nil {
+			t.Fatalf("TopKByANN() error = %v", err)
+		}
+		if ids := resultIDs(got); !slices.Equal(ids, []int64{f.logs}) {
+			t.Errorf("got ids %v, want %v", ids, []int64{f.logs})
+		}
+	})
+
+	t.Run("an empty pool gives no chunks", func(t *testing.T) {
+		got, err := f.retriever.TopKByANN(ctx, query, 10, step.Filter{DocIDs: []int64{}})
+		if err != nil {
+			t.Fatalf("TopKByANN() error = %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("got %d results, want 0", len(got))
 		}
 	})
 
