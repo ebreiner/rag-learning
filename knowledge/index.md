@@ -39,6 +39,7 @@ Start here:
 - [retrieval-filters](designs/retrieval-filters.md): RC4 filters on sources (OR) and metadata keys (AND, equality) in the FTS and ANN SQL; MCP `sources` enum + `metadata`, `retrieve --source/--meta`; RC2 `catalog` MCP tool (snapshot of `metadata_json` at `serve` start) and `catalog` CLI command. Locked.
 - [read-tool](designs/read-tool.md): RC6 tool `read(chunk_id, mode)` with neighbours, section, document, page; `read.max_chars` limit with the fallback outline → page → warning; text without the repeated breadcrumb prefix; same filter as `rag`. Locked.
 - [document-links](designs/document-links.md): stage 1 of document links: reserved sidecar key `links` (list of objects `to`, `text`, `kind`), table `document_links`, resolution at query time with the request filter, `rag` result as `{chunks, documents}` with `links_out` grouped by the section of the link (open for the hit section, else name + total + `chunk_id`), `links_in` with section, `doc.title` required with links, snake_case output. Locked.
+- [knowledge-pools](designs/knowledge-pools.md): target for later: connectors fill a doc store (event log, raw blobs), pools are read-only SQL queries on it, one rag-cli instance for each pool; requirements R1–R14, access with LDAP/OpenWebUI groups. Draft.
 
 ## Concepts
 
@@ -51,6 +52,10 @@ Start here:
   - [0002-generic-breadcrumb](experiments/0002-generic-breadcrumb.md): breadcrumb prefix for `generic` chunks; recall gain, but ANN rank-1 loss and less diversity.
   - [0003-generic-merge](experiments/0003-generic-merge.md): groups merge like paragraphs; 1116 chunks, hybrid r@5 0.80, MRR 0.503. Basis of 0008.
   - [0004-fusion-weights](experiments/0004-fusion-weights.md): RRF weight grid; no gain over equal weights. Basis of 0009.
+- [0005-pool-poc](experiments/0005-pool-poc.md): branch `claude_experimental`: saved pool queries in a web UI of `serve`, one MCP endpoint `/mcp/<name>` for each pool with only `rag` and `read`, pools in the DB, JSON export/import for a new DB; learning goals; run 1 (`20261024T111748Z`): pools find the changelog source, about 500 tokens for each pool and model call, the model matters more than the setup. Open.
+- [0006-openwebui-knowledge](experiments/0006-openwebui-knowledge.md): OpenWebUI Knowledge retrieval against rag-cli on the golden set (document metrics); OpenWebUI hybrid without a reranker = vector search, Ollama `bge-m3` NaN bug, reranker on CPU 20–30 s for each query. Open.
+- [0007-openrouter-reranker](experiments/0007-openrouter-reranker.md): optional remote reranker (OpenRouter) on the hydrated hybrid pool, source weight as a multiplier, fallback to the RRF order; config `retrieval.rerank`. Voyage `rerank-2.5` and Cohere `rerank-4-fast` lift hybrid chunk r@10 0.73 → 0.94; Voyage costs about 1/7; no ZDR endpoint, the ZDR model Qwen fails often with 503. Open.
+- [0008-table-rows](experiments/0008-table-rows.md): table rows as `Header: value` lines, large tables split by rows in table order with the caption in each part, breadcrumb in the table chunk text; no rank change on the golden set (no table query). Open.
 
 ## Requirements
 
