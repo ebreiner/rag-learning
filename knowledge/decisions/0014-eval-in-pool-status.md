@@ -8,12 +8,16 @@ tags: [eval, rc1, retrieval, pool]
 
 # 0014 Eval status in_pool, search depth from the pool size
 
-Adds to [0007](0007-eval-harness-implementation.md) and the locked design [eval-harness](../designs/eval-harness.md). Changes the meaning of the status `ranked_out` from those documents.
+Adds to [0007](0007-eval-harness-implementation.md) and the locked design [eval-harness](../designs/eval-harness.md).
+Changes the meaning of the status `ranked_out` from those documents.
 
 ## Context
 
-- [0013](0013-retrieval-two-phases.md) splits retrieval into phase 1 (find a pool of candidates) and phase 2 (order the pool).
-- The status `ranked_out` said only that the correct chunk is not in the top k. It did not show which phase failed. A miss in phase 1 needs a fix of chunks, FTS or embeddings. A miss in phase 2 needs a fix of the ranking, for example a reranker.
+- [0013](0013-retrieval-two-phases.md) splits retrieval into phase 1 (find a pool of candidates) and phase 2 (order the
+  pool).
+- The status `ranked_out` said only that the correct chunk is not in the top k. It did not show which phase failed. A
+  miss in phase 1 needs a fix of chunks, FTS or embeddings. A miss in phase 2 needs a fix of the ranking, for example a
+  reranker.
 
 ## Options considered
 
@@ -34,4 +38,5 @@ Adds to [0007](0007-eval-harness-implementation.md) and the locked design [eval-
 - The existing metrics do not change. Run `20261019T135803Z` has the same r@n and MRR as the run before the change.
 - A comparison with a run from before this change shows `ranked_out → in_pool` changes and the pool size warning.
 - `20261019T135803Z` (pool 40) is the new reference run.
-- First result for hybrid: 32 of 33 answer queries have the correct chunk in the pool, 22 of them not at rank 1, 10 at rank 2. Only one query is outside the pool. This makes phase 2 (RC7 reranker) the larger potential.
+- First result for hybrid: 32 of 33 answer queries have the correct chunk in the pool, 22 of them not at rank 1, 10 at
+  rank 2. Only one query is outside the pool. This makes phase 2 (RC7 reranker) the larger potential.

@@ -8,9 +8,13 @@ tags: [links, graph, sidecar, retrieval, mcp, rc5]
 
 # Document links, stage 1
 
-Backlog phase 1. An exporter writes the outgoing links of each document into its sidecar. rag-cli stores them, computes the incoming links, and shows both in the `rag` result. The model opens a linked document with the existing `read` tool. There is no graph engine and no change to the rank. Stage 2 (anchor text as a search list) and stage 3 are in the [backlog](../requirements/backlog.md).
+Backlog phase 1. An exporter writes the outgoing links of each document into its sidecar. rag-cli stores them, computes
+the incoming links, and shows both in the `rag` result. The model opens a linked document with the existing `read` tool.
+There is no graph engine and no change to the rank. Stage 2 (anchor text as a search list) and stage 3 are in the
+[backlog](../requirements/backlog.md).
 
-It extends [sidecar-metadata](sidecar-metadata.md). It uses the filter of [retrieval-filters](retrieval-filters.md) and the `chunk_id` entry of [read-tool](read-tool.md).
+It extends [sidecar-metadata](sidecar-metadata.md). It uses the filter of [retrieval-filters](retrieval-filters.md) and
+the `chunk_id` entry of [read-tool](read-tool.md).
 
 ## Goal
 
@@ -38,7 +42,8 @@ The throwaway exporter `../rag-wikimeta/tools/wikimeta/wikimeta.py` (not committ
 | Hub B (topic page) | current 5, review needed 29, obsolete 4, rework needed 2 |
 | Hub C (process list) | 8 process groups, for example administration 11, software development 7, product 4 |
 
-Thus a cut by list order is wrong: the process list is the most important hub, and hub A lists 37 pages for review. The output groups the links by section (below).
+Thus a cut by list order is wrong: the process list is the most important hub, and hub A lists 37 pages for review. The
+output groups the links by section (below).
 
 ## Sidecar contract
 
@@ -62,12 +67,16 @@ One reserved top-level key `links`. All other sidecar rules stay the same.
 | `section` | Optional. The heading path of the link in the document that contains it, for example `Internal docs > Review needed`. Separator ` > `, without the document title. Max. 300 characters. rag-cli does not interpret it: it shows it and groups by it. |
 | other fields | Rejected. A typo must not disappear without a message. |
 
-**`doc.title` is required with `links`.** A sidecar with a `links` key must have `doc.title` as a non-empty string, else the document is rejected. The Markdown of the document starts with `# <doc.title>`, with the same text. rag-cli uses `doc.title` to show a link and to remove the title from the chunk breadcrumb (see the output rules). A source that wants links supplies titles. A link target needs no `doc.title`: without it, rag-cli shows its document name.
+**`doc.title` is required with `links`.** A sidecar with a `links` key must have `doc.title` as a non-empty string, else
+the document is rejected. The Markdown of the document starts with `# <doc.title>`, with the same text. rag-cli uses
+`doc.title` to show a link and to remove the title from the chunk breadcrumb (see the output rules). A source that wants
+links supplies titles. A link target needs no `doc.title`: without it, rag-cli shows its document name.
 
 **Rules:**
 
 - The list order is the order in the source. rag-cli keeps it.
-- A link to the document itself is dropped. A second entry with the same `to` and `section` is dropped. The first entry wins. The same target in two sections gives two rows, because each section is a separate human statement.
+- A link to the document itself is dropped. A second entry with the same `to` and `section` is dropped. The first entry
+  wins. The same target in two sections gives two rows, because each section is a separate human statement.
 - Max. 1000 entries for each document. More entries make the document invalid.
 - `links` in the source `attributes` of the config is a config error. Links belong to one document only.
 - A target that does not exist is not an error. It is resolved at query time and is not shown while it does not exist.
@@ -105,13 +114,15 @@ CREATE TABLE IF NOT EXISTS document_links (
 CREATE INDEX IF NOT EXISTS document_links_target ON document_links (to_source, to_rel_path);
 ```
 
-- The target is stored as `(to_source, to_rel_path)`, not as a document ID. Thus the ingest order does not matter, and a re-ingest of the target does not break the edge.
+- The target is stored as `(to_source, to_rel_path)`, not as a document ID. Thus the ingest order does not matter, and a
+  re-ingest of the target does not break the edge.
 - The connection already sets `_foreign_keys=ON`, so the cascade works.
 - An old DB gets the empty table at start. Links come only with a re-ingest (`ingest-clean`).
 
 ## Query-time resolution
 
-One new port in the retrieval step, for example `LinkLoader.LinksOfDocuments(ctx, docIDs, filter)`. The SQLite adapter runs two queries, out and in. Both apply the request filter to the **other** document of the edge:
+One new port in the retrieval step, for example `LinkLoader.LinksOfDocuments(ctx, docIDs, filter)`. The SQLite adapter
+runs two queries, out and in. Both apply the request filter to the **other** document of the edge:
 
 ```sql
 -- outgoing: the targets of the result documents
@@ -131,15 +142,26 @@ WHERE t.id IN (...) <filter on f>
 ORDER BY t.id;  -- the adapter sorts links_in by the shown title
 ```
 
-- **The identity of a target is `source + rel_path`**, the same as the document identity ([0002](../decisions/0002-document-identity-derived-db.md)). Titles are not unique in each source, and the links of file-based sources are paths. The exporter maps other link forms (a wiki title, a URL) to the `rel_path`.
-- **The filter applies to the other document.** A link never shows a document that the same request cannot `read`. Later, views use the same rule as an access boundary.
+- **The identity of a target is `source + rel_path`**, the same as the document identity
+  ([0002](../decisions/0002-document-identity-derived-db.md)). Titles are not unique in each source, and the links of
+  file-based sources are paths. The exporter maps other link forms (a wiki title, a URL) to the `rel_path`.
+- **The filter applies to the other document.** A link never shows a document that the same request cannot `read`.
+  Later, views use the same rule as an access boundary.
 - A target without chunks (no first chunk) is not shown.
-- Cost: max. 10 result documents, two indexed queries for each `rag` call. The first-chunk subquery needs the index `chunks(document_id, position)`. Without it, each link row scans all chunks. The index comes from the read-side DB optimization batch.
-- The SQL of the filter (`filterClause`) uses the fixed table alias `d`. In both queries, the other document has this alias.
+- Cost: max. 10 result documents, two indexed queries for each `rag` call. The first-chunk subquery needs the index
+  `chunks(document_id, position)`. Without it, each link row scans all chunks. The index comes from the read-side DB
+  optimization batch.
+- The SQL of the filter (`filterClause`) uses the fixed table alias `d`. In both queries, the other document has this
+  alias.
 
 ## Output of the `rag` tool (shape b)
 
-The result changes from a JSON array of chunks to one object. A new step function `AttachLinks(ctx, chunks, filter, deps) (SearchResult, error)` in the retrieval step package builds it. It loads the links through the `LinkLoader` port and applies all rules of this section (grouping, title prefix, limits, small documents). The callers (`rag` MCP handler, `retrieve` CLI) call `RunRetrieval` and then `AttachLinks`, in the same way as the ingest calls extract, chunk and embed. `RunRetrieval` does not change, and the eval calls only `RunRetrieval`, so the eval does not change.
+The result changes from a JSON array of chunks to one object. A new step function
+`AttachLinks(ctx, chunks, filter, deps) (SearchResult, error)` in the retrieval step package builds it. It loads the
+links through the `LinkLoader` port and applies all rules of this section (grouping, title prefix, limits, small
+documents). The callers (`rag` MCP handler, `retrieve` CLI) call `RunRetrieval` and then `AttachLinks`, in the same way
+as the ingest calls extract, chunk and embed. `RunRetrieval` does not change, and the eval calls only `RunRetrieval`, so
+the eval does not change.
 
 ```json
 {
@@ -189,7 +211,8 @@ The result changes from a JSON array of chunks to one object. A new step functio
 | no links | empty lists and totals 0. The keys stay, so the shape is always the same. |
 
 
-**Tool description:** add two sentences to `rag`: "Each document lists its linked documents, grouped by the section that contains the link. Open a document or a closed group with read and its chunk_id." The `read` description gets no change.
+**Tool description:** add two sentences to `rag`: "Each document lists its linked documents, grouped by the section that
+contains the link. Open a document or a closed group with read and its chunk_id." The `read` description gets no change.
 
 **Query log:** each `rag` line gets the number of returned links. It holds no link titles.
 
@@ -213,16 +236,22 @@ The result changes from a JSON array of chunks to one object. A new step functio
 ## Acceptance
 
 1. A sidecar with `links` gives rows in `document_links` in the sidecar order. Self links and duplicates are dropped.
-2. A wrong shape or an unknown field fails only that document (invalid sidecar). A rule error (`to` with `..`, more than 1000 entries, no `doc.title`) is an `ErrInvalidMetadata` with a clear message.
+2. A wrong shape or an unknown field fails only that document (invalid sidecar). A rule error (`to` with `..`, more than
+   1000 entries, no `doc.title`) is an `ErrInvalidMetadata` with a clear message.
 3. `links` in the source attributes gives a config error at start.
 4. `metadata_json` and the `catalog` output contain no `links` key.
-5. The `rag` result has the object shape. Each document appears one time with its links. A target that does not exist is not shown. Only the groups of the result chunk sections are open.
+5. The `rag` result has the object shape. Each document appears one time with its links. A target that does not exist is
+   not shown. Only the groups of the result chunk sections are open.
 6. With a `sources` or `metadata` filter, no link points to a document outside the filter.
 7. `read {chunk_id}` with the `chunk_id` of a link gives the target document.
-8. Full re-ingest of the dev corpus (no sidecars with links) + `just eval`: the same metrics as the reference run after the chunker order and table fixes of 2026-10-22.
-10. A sidecar with `links` and without a string `doc.title` rejects the document. A chunk breadcrumb with and without the `<doc.title> > ` prefix gives the same chunk section.
+8. Full re-ingest of the dev corpus (no sidecars with links) + `just eval`: the same metrics as the reference run after
+   the chunker order and table fixes of 2026-10-22.
+10. A sidecar with `links` and without a string `doc.title` rejects the document. A chunk breadcrumb with and without
+    the `<doc.title> > ` prefix gives the same chunk section.
 11. The `rag` output and the `retrieve` output use snake_case field names.
-9. By hand: wiki test export. A hit in a section of the process list hub shows that group open and the 7 other groups closed, each with a `chunk_id` that `read {mode: section}` opens. `links_in` of a page that a hub lists under a review heading shows that section. `links_in` of a process page contains the process list hub.
+9. By hand: wiki test export. A hit in a section of the process list hub shows that group open and the 7 other groups
+   closed, each with a `chunk_id` that `read {mode: section}` opens. `links_in` of a page that a hub lists under a
+   review heading shows that section. `links_in` of a process page contains the process list hub.
 
 ## Decisions at the lock (2026-10-22)
 
@@ -260,4 +289,5 @@ The result changes from a JSON array of chunks to one object. A new step functio
 | 8 | `AttachLinks` runs after `RunRetrieval`, so the links cannot change the rank. Run `20261022T192853Z` (new wiki export + chunker fixes of `07070d9`) is the new reference run. |
 | 9 | Partly. By hand: a hit on the process list hub in a section without links shows all 8 groups closed, each with a `chunk_id`. In the e2e run, the model opened a closed group of the hub with `read {mode: section}`. Not seen: a hit in a link section with only that group open, and `links_in` under a review heading. |
 
-An end-to-end run with 4 small test documents (scratch DB) gave the expected `document_links` rows and `retrieve` output: a missing target is not shown, and a breadcrumb without the title prefix matches its section.
+An end-to-end run with 4 small test documents (scratch DB) gave the expected `document_links` rows and `retrieve`
+output: a missing target is not shown, and a breadcrumb without the title prefix matches its section.

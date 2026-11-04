@@ -15,10 +15,19 @@ documents, code comments and commit messages. This is permanent, not a toggle.
 Keep the project knowledge in files. It helps people and Claude instances to continue work with full context.
 
 - When the user or another person builds something and the knowledge files need an entry, Claude writes it.
-  If information for a complete entry is missing (decisions, reasons, rejected options), ask that person for it. Do not guess.
-- Folder `knowledge/`: `index.md`, `decisions/`, `requirements/`, `concepts/`, `designs/`, `experiments/`. One topic per file.
+  If information for a complete entry is missing (decisions, reasons, rejected options), ask that person for it. Do not
+  guess.
+- Folder `knowledge/`: `index.md`, `decisions/`, `requirements/`, `concepts/`, `designs/`, `experiments/`. One topic per
+  file.
   Link the files to each other.
 - Each file starts with front matter: `type`, `title`, `status`, `date` or `timestamp`, `tags`.
+- Line length: max. 120 characters for each line of a Markdown file in `knowledge/` and of `CLAUDE.md`.
+  Thus a person can read the file in an editor or a terminal that does not wrap lines.
+  - Break a long sentence or list item onto the next line. Indent a list continuation to the text of the item.
+  - Do not break inside a code span or a link.
+  - Exceptions: table rows, code blocks, front matter, and one token that is longer than the limit (a URL or a path).
+  - A table row cannot wrap. Thus keep table cells short. When a cell needs more than a short phrase, use a list.
+  - Handover documents in `requirements/` stay unchanged.
 - `index.md` lists each file with a one-line summary and shows where to start.
 - **Decisions:** file `NNNN-short-name.md`. Sections: Context, Options considered, Decision, Consequences.
   Status `accepted` or `superseded`. Record a decision only after the user agrees.
@@ -28,7 +37,8 @@ Keep the project knowledge in files. It helps people and Claude instances to con
   need, reason, where found, status.
 - **Input from the product owner:** put each handover document from the product owner project into
   `requirements/`, unchanged. Put your own interpretation and the open questions in a separate file that links to it.
-- **Experiments:** file `NNNN-short-name.md`. Sections: Setup, Result, Findings, Recommendation. Status `open` or `done`.
+- **Experiments:** file `NNNN-short-name.md`. Sections: Setup, Result, Findings, Recommendation. Status `open` or
+  `done`.
   An experiment records evidence. It is not a decision. A result becomes a decision only after the user agrees.
 
 ## Branches and ownership
@@ -47,14 +57,18 @@ Keep the project knowledge in files. It helps people and Claude instances to con
 
 ## Verification
 
-- Use the `just` recipes: `just build`, `just test`, `just lint`, `just eval`. Report a broken recipe. Do not go around it.
-- A change that can change the rank needs an eval run with `--baseline <reference run>`. The experiment file or the backlog row names both run IDs.
+- Use the `just` recipes: `just build`, `just test`, `just lint`, `just eval`. Report a broken recipe. Do not go around
+  it.
+- A change that can change the rank needs an eval run with `--baseline <reference run>`. The experiment file or the
+  backlog row names both run IDs.
 - Change the golden set only in a separate run. A golden change gives a new `golden_sha256`.
-- Test an ingest in a scratchpad DB with a temporary config copy (absolute paths). Delete the copy after use, because it contains secrets.
+- Test an ingest in a scratchpad DB with a temporary config copy (absolute paths). Delete the copy after use, because it
+  contains secrets.
 
 ## Public repo
 
-- The repo is public. Do not commit personal, family or company data nor any corpus content: domains, `.env`, `config.yaml`,
+- The repo is public. Do not commit personal, family or company data nor any corpus content: domains, `.env`,
+  `config.yaml`,
   `eval/golden*.json`, `eval/runs/`, documents, tickets or wiki content. Do not print secret values.
 - Knowledge files record what was decided and why, not which person or which Claude did the work.
   Name commits, branches, run IDs and files as evidence.

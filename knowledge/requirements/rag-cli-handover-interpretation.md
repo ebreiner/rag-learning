@@ -8,7 +8,8 @@ tags: [rag-cli, handover, interpretation, gap-analysis]
 
 # Interpretation of the rag-cli handover
 
-- Source: [rag-cli-handover](rag-cli-handover.md) (from the PO, locked). This file is the interpretation of team rag-cli.
+- Source: [rag-cli-handover](rag-cli-handover.md) (from the PO, locked). This file is the interpretation of team
+  rag-cli.
 - Baseline: [0000](../decisions/0000-migrated-baseline.md). Work order: [backlog](backlog.md).
 
 ## Gap for each requirement
@@ -35,7 +36,8 @@ tags: [rag-cli, handover, interpretation, gap-analysis]
 Agreed with the user on 2026-10-17. Each one supersedes a part of 0000:
 
 - [0001](../decisions/0001-config-yaml-data-sources.md): `config.yaml` with data sources (RC10, RC14, RC17, RC18).
-- [0002](../decisions/0002-document-identity-derived-db.md): document identity by path, the DB is a derived artifact (RC11).
+- [0002](../decisions/0002-document-identity-derived-db.md): document identity by path, the DB is a derived artifact
+  (RC11).
 - [0003](../decisions/0003-remote-reranker.md): remote reranker, collection weight stays optional (RC7).
 - [0004](../decisions/0004-mcp-tool-surface.md): search, read and catalog tools. State only through tools (RC2–RC6).
 - [0005](../decisions/0005-oauth-resource-server.md): OAuth resource server, static token for development (RC19).
@@ -43,13 +45,19 @@ Agreed with the user on 2026-10-17. Each one supersedes a part of 0000:
 
 ## Interpretation (agreed with the user)
 
-- **Attribute defaults (RC14, RC18):** data source attributes are defaults for each document. A sidecar value overrides them. rag-cli has no built-in default for the classification attributes.
-- **Required set:** rag-cli defines a set of required attributes. Each document must get a value for each one, from its sidecar or from an explicit data source attribute. Else the document is rejected with a hard error. The RC18 classification attributes are in the set. The full set goes into the data source design.
+- **Attribute defaults (RC14, RC18):** data source attributes are defaults for each document. A sidecar value overrides
+  them. rag-cli has no built-in default for the classification attributes.
+- **Required set:** rag-cli defines a set of required attributes. Each document must get a value for each one, from its
+  sidecar or from an explicit data source attribute. Else the document is rejected with a hard error. The RC18
+  classification attributes are in the set. The full set goes into the data source design.
 - **Sidecar name:** `<file>.meta.json`, next to the input file. The source walk must not ingest sidecars as documents.
-- **RC3 boundary:** see 0004. Tool descriptions use only static values from `config.yaml`. Dynamic state comes only from tools.
-- **RC7 weight:** the fixed collection weight stays as an optional data source value. RC1 decides how weight and reranker combine.
+- **RC3 boundary:** see 0004. Tool descriptions use only static values from `config.yaml`. Dynamic state comes only from
+  tools.
+- **RC7 weight:** the fixed collection weight stays as an optional data source value. RC1 decides how weight and
+  reranker combine.
 - **Wikitext:** the exporter converts it to Markdown with pandoc. No rag-cli work.
-- **Golden set:** each installation has its own corpus. The golden set path must come from the config. The PO supplies the real German questions later (handover §7).
+- **Golden set:** each installation has its own corpus. The golden set path must come from the config. The PO supplies
+  the real German questions later (handover §7).
 
 ## Open questions
 

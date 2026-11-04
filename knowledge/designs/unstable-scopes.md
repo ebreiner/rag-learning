@@ -8,15 +8,19 @@ tags: [unstable, scopes, ports, architecture, backlog]
 
 # Scopes for claude-unstable
 
-This file groups the [backlog](../requirements/backlog.md) into scopes. Each scope is one subsystem or one coherent change.
-For each scope it shows the ports and the domain types, the reasons, and the effect on the frozen eval. It shows no implementation.
+This file groups the [backlog](../requirements/backlog.md) into scopes. Each scope is one subsystem or one coherent
+change.
+For each scope it shows the ports and the domain types, the reasons, and the effect on the frozen eval. It shows no
+implementation.
 
 ## Naming
 
-One term for the origin of a document, in all layers: **source**. Table `sources`, column `documents.source`, config key `sources:`,
+One term for the origin of a document, in all layers: **source**. Table `sources`, column `documents.source`, config key
+`sources:`,
 domain type `source.Source`, MCP filter and result field `source`, span attribute `rag.source`.
 The handover uses "data source" and "collection" for the same thing. Both map to "source".
-The directory walk package `internal/platform/extraction/source` gets the new name `internal/platform/extraction/walk` (S2).
+The directory walk package `internal/platform/extraction/source` gets the new name `internal/platform/extraction/walk`
+(S2).
 
 ## Overview
 
@@ -30,7 +34,8 @@ The directory walk package `internal/platform/extraction/source` gets the new na
 | S5 | Access and telemetry | RC8, RC19, [0005](../decisions/0005-oauth-resource-server.md) | `internal/platform/auth` | no | 5 |
 | S6 | Later | RC11 schedule, RC13, RC16 | `internal/rewrite/step` | no | later |
 
-Dependencies: S4 needs S2 (metadata in results). S1 freshness needs S2 (dates). S3 needs S2 (sources). S0 and the fusion part of S1 need nothing, so they go first.
+Dependencies: S4 needs S2 (metadata in results). S1 freshness needs S2 (dates). S3 needs S2 (sources). S0 and the fusion
+part of S1 need nothing, so they go first.
 
 Target data flow after S2–S4:
 
@@ -47,7 +52,8 @@ MCP catalog ─► config (static) + DB counts (dynamic)
 
 ## S0 Chunk quality
 
-**Goal:** give the index text of each chunk its section signal, and stop the split of normal paragraphs into small `generic` chunks.
+**Goal:** give the index text of each chunk its section signal, and stop the split of normal paragraphs into small
+`generic` chunks.
 
 **Ports:** no change. The work is inside `internal/chunk/step` (`walk`, `mergeCandidates`).
 
@@ -56,7 +62,8 @@ MCP catalog ─► config (static) + DB counts (dynamic)
 2. `generic` candidates merge with neighbouring paragraph candidates under the same breadcrumb.
 3. Optional: breadcrumb prefix for `list`, `table`, `code`, `formula`.
 
-**Why first:** experiment [0001](../experiments/0001-eval-baseline.md) shows 66 % `generic` chunks, and all 5 full misses are `generic`. No schema change, so the eval stays untouched.
+**Why first:** experiment [0001](../experiments/0001-eval-baseline.md) shows 66 % `generic` chunks, and all 5 full
+misses are `generic`. No schema change, so the eval stays untouched.
 
 **Eval effect:** none on the eval code. Each run needs a full re-import.
 
@@ -64,9 +71,11 @@ MCP catalog ─► config (static) + DB counts (dynamic)
 
 ## S1 Ranking pipeline
 
-**Goal:** one ordered chain of rank stages after hydration. Each stage can be switched on and off, so the eval measures each stage alone.
+**Goal:** one ordered chain of rank stages after hydration. Each stage can be switched on and off, so the eval measures
+each stage alone.
 
-**Today:** `runHybrid` does RRF and the source weight on IDs, before hydration. A stage that needs chunk text or metadata cannot run there.
+**Today:** `runHybrid` does RRF and the source weight on IDs, before hydration. A stage that needs chunk text or
+metadata cannot run there.
 
 **Ports and types** (`internal/retrieval/step`):
 
@@ -101,7 +110,8 @@ Stages, each a small type in the step package:
 - `FreshnessStage` (RC15, needs S2): policy for each source, validity status before age, unknown date = neutral.
 - `BreadcrumbBoostStage` (old T14): only if the eval shows a need after the reranker.
 
-Fusion stays before hydration, because it works on two ID lists. Make it a parameter: `FusionConfig{RRFK int64, WeightFTS, WeightANN float64}`.
+Fusion stays before hydration, because it works on two ID lists. Make it a parameter:
+`FusionConfig{RRFK int64, WeightFTS, WeightANN float64}`.
 
 **Why:**
 - The baseline shows hybrid r@1 = 0.27 against ANN r@1 = 0.40. A fusion weight is the cheapest first test.
@@ -110,13 +120,15 @@ Fusion stays before hydration, because it works on two ID lists. Make it a param
 
 **Eval effect:** none. `RunRetrieval` keeps its signature. Stages and fusion come from the command flags.
 
-**Open question:** which rerank service runs locally? Ollama has no rerank endpoint. A TEI or vLLM container with a multilingual reranker is necessary for cycle 4.
+**Open question:** which rerank service runs locally? Ollama has no rerank endpoint. A TEI or vLLM container with a
+multilingual reranker is necessary for cycle 4.
 
 ---
 
 ## S2 Source model
 
-**Goal:** one place that turns `config.yaml` and the sidecars into validated document metadata. All later scopes read this model.
+**Goal:** one place that turns `config.yaml` and the sidecars into validated document metadata. All later scopes read
+this model.
 
 **New package** `internal/source` (domain, no I/O):
 
@@ -168,8 +180,10 @@ type SidecarReader interface { // adapter: <file>.meta.json, nil map when no fil
 ```
 
 **Why:**
-- `Resolve` is a pure function: the full exporter contract (defaults, override, protection, validation, rejection) is in one place and has table tests.
-- Typed fields for the known meanings: retrieval and ranking read `Updated` or `Validity` without map lookups and type checks.
+- `Resolve` is a pure function: the full exporter contract (defaults, override, protection, validation, rejection) is in
+  one place and has table tests.
+- Typed fields for the known meanings: retrieval and ranking read `Updated` or `Validity` without map lookups and type
+  checks.
 - `Extra` keeps all other keys for RC5 ("all document metadata").
 
 **Eval effect:** none in this scope.
@@ -180,7 +194,9 @@ type SidecarReader interface { // adapter: <file>.meta.json, nil map when no fil
 
 **Goal:** one `ingest` command that brings the DB to the state of the directory: add, replace, delete, skip.
 
-**Schema:** `documents` gets `source`, `rel_path`, `title`, `source_url`, `created`, `updated` and keeps `metadata_json`. `UNIQUE(source, rel_path)`. `collections` becomes `sources` (name, description, weight, last_ingested). `documents.name` stays the file name, so the eval adapter does not change.
+**Schema:** `documents` gets `source`, `rel_path`, `title`, `source_url`, `created`, `updated` and keeps
+`metadata_json`. `UNIQUE(source, rel_path)`. `collections` becomes `sources` (name, description, weight, last_ingested).
+`documents.name` stays the file name, so the eval adapter does not change.
 
 **New package** `internal/ingest/step`:
 
@@ -224,11 +240,13 @@ type IngestDeps struct {
 func RunIngest(ctx context.Context, sources []source.Source, deps IngestDeps) (Report, error)
 ```
 
-**Replace order:** extract the new version first (slow, docling), then delete the old document and insert the new one in one transaction. A failed extraction keeps the old version.
+**Replace order:** extract the new version first (slow, docling), then delete the old document and insert the new one in
+one transaction. A failed extraction keeps the old version.
 
 **Why:**
 - `Plan` is pure: all lifecycle rules have table tests without a DB.
-- Chunk and embed need no change: they already pull "not chunked" and "not embedded" work. Thus `ingest` is incremental at no cost.
+- Chunk and embed need no change: they already pull "not chunked" and "not embedded" work. Thus `ingest` is incremental
+  at no cost.
 - A rejected document (RC18) is in the `Report`. It does not stop the run.
 
 **Eval effect:** none, if `documents.name` keeps the file name. This is a schema change, so compact after this scope.
@@ -237,7 +255,8 @@ func RunIngest(ctx context.Context, sources []source.Source, deps IngestDeps) (R
 
 ## S4 Retrieval API and MCP surface
 
-**Goal:** the three tools of [0004](../decisions/0004-mcp-tool-surface.md) with filters, rich results, a real renderer and a read tool.
+**Goal:** the three tools of [0004](../decisions/0004-mcp-tool-surface.md) with filters, rich results, a real renderer
+and a read tool.
 
 **Retrieval request** (`internal/retrieval/step`):
 
@@ -265,7 +284,8 @@ func RunRetrieval(ctx context.Context, req SearchRequest, strategy RetrievalStra
 `RetrievedChunk` gets `Doc DocRef` (source, title, rel_path, source URL, created, updated, metadata).
 The ANN adapter filters with an over-fetch and a post-filter. A vec0 partition key on the source is an option later.
 
-**Renderer** (old T15): `ChunkRenderer` reads the nodes through `chunk_nodes` in one batch and renders each node kind. The index text stays for FTS and embeddings only.
+**Renderer** (old T15): `ChunkRenderer` reads the nodes through `chunk_nodes` in one batch and renders each node kind.
+The index text stays for FTS and embeddings only.
 
 **New package** `internal/read/step` (RC6):
 
@@ -305,20 +325,23 @@ type StatsSource interface {
 func Describe(sources []source.Source) ToolTexts
 ```
 
-**MCP layer** (`cmd/cli/cmd/serve`): three thin handlers. Each handler parses the arguments, calls one `Run*` function and maps the result to JSON. No logic in the handlers.
+**MCP layer** (`cmd/cli/cmd/serve`): three thin handlers. Each handler parses the arguments, calls one `Run*` function
+and maps the result to JSON. No logic in the handlers.
 
 **Why:**
 - `SearchRequest` replaces the loose parameters: filters can grow without new function signatures.
 - Read is a separate step, not a retrieval option: it does not rank, it navigates from a known chunk.
 - `Describe` is pure and static, so the descriptions never become stale (0004).
 
-**Eval effect:** `RunRetrieval` gets a new signature. The searcher adapter in `cmd/cli/cmd/eval.go` must change (`eval-adapter:` commit). The eval core stays the same.
+**Eval effect:** `RunRetrieval` gets a new signature. The searcher adapter in `cmd/cli/cmd/eval.go` must change
+(`eval-adapter:` commit). The eval core stays the same.
 
 ---
 
 ## S5 Access and telemetry
 
-**Goal:** OAuth resource server (RC19a), identity in spans (RC19b), static token for development (RC19d), complete tool spans (RC8).
+**Goal:** OAuth resource server (RC19a), identity in spans (RC19b), static token for development (RC19d), complete tool
+spans (RC8).
 
 **New package** `internal/platform/auth`:
 
@@ -335,9 +358,12 @@ type TokenVerifier interface {
 // adapters: StaticTokenVerifier, OIDCVerifier (JWKS from the configured issuer)
 ```
 
-The middleware calls the `TokenVerifier`, puts the `Identity` into the context, and answers 401 with `WWW-Authenticate: Bearer resource_metadata="..."`. A separate handler serves `/.well-known/oauth-protected-resource` (RFC 9728).
+The middleware calls the `TokenVerifier`, puts the `Identity` into the context, and answers 401 with
+`WWW-Authenticate: Bearer resource_metadata="..."`. A separate handler serves `/.well-known/oauth-protected-resource`
+(RFC 9728).
 
-RC8: one span for each tool call with query, filters, sources, result IDs, scores, delay and identity. The trace context of the client already continues (`otelhttp` + `TraceContext`).
+RC8: one span for each tool call with query, filters, sources, result IDs, scores, delay and identity. The trace context
+of the client already continues (`otelhttp` + `TraceContext`).
 
 **Why:** one port, two adapters: the static token is only a different `TokenVerifier`, not a second code path.
 
@@ -349,10 +375,12 @@ RC8: one span for each tool call with query, filters, sources, result IDs, score
 
 ## S6 Later
 
-- RC13 query rewrite: port `QueryRewriter{ Rewrite(ctx, q string) (string, error) }` as the first stage before retrieval. Only if RC1 shows a gain.
+- RC13 query rewrite: port `QueryRewriter{ Rewrite(ctx, q string) (string, error) }` as the first stage before
+  retrieval. Only if RC1 shows a gain.
 - RC11 schedule and exporter trigger: a loop or an HTTP trigger around `RunIngest`.
 - RC16: measure the delay of each stage in the spans, then optimize.
-- Carry-overs that touch S0 (picture captions, size guard, NaN chunks, garbage filter) go into S0 experiments when the eval shows a need.
+- Carry-overs that touch S0 (picture captions, size guard, NaN chunks, garbage filter) go into S0 experiments when the
+  eval shows a need.
 
 ## Cycle plan
 

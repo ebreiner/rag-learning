@@ -9,9 +9,12 @@ tags: [backlog, links, handover, eval, data-source, retrieval, mcp, auth]
 # Open backlog
 
 - Open work only. The phase number is the priority. A lower number comes first.
-- Order since 2026-10-21: document links first. A small-bug batch (read `max_chars`, walk root warning, `retrieve` JSON, `mw.go:69` errcheck, `serve` shutdown order) can go in at any time.
-- IDs `RCn` are from the [handover](../requirements/rag-cli-handover.md). The interpretation is in [rag-cli-handover-interpretation](rag-cli-handover-interpretation.md).
-- "Old Tn" is the tier number of the backlog before 2026-10-17 (see [0000](../decisions/0000-migrated-baseline.md) and git history).
+- Order since 2026-10-21: document links first. A small-bug batch (read `max_chars`, walk root warning, `retrieve` JSON,
+  `mw.go:69` errcheck, `serve` shutdown order) can go in at any time.
+- IDs `RCn` are from the [handover](../requirements/rag-cli-handover.md). The interpretation is in
+  [rag-cli-handover-interpretation](rag-cli-handover-interpretation.md).
+- "Old Tn" is the tier number of the backlog before 2026-10-17 (see [0000](../decisions/0000-migrated-baseline.md) and
+  git history).
 
 ## Phases in priority order
 
