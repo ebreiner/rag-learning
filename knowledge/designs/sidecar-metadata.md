@@ -8,15 +8,20 @@ tags: [metadata, sidecar, source, rc14, rc18, rc5]
 
 # Sidecar metadata, first scope
 
-First part of the source design (backlog phase 2). It implements a part of [0001](../decisions/0001-config-yaml-data-sources.md) and of the [interpretation](../requirements/rag-cli-handover-interpretation.md): RC14, RC18 (partly) and RC5 (metadata in the result). The draft [unstable-scopes](unstable-scopes.md) S2 has the full target with typed RC17 fields.
+First part of the source design (backlog phase 2). It implements a part of
+[0001](../decisions/0001-config-yaml-data-sources.md) and of the
+[interpretation](../requirements/rag-cli-handover-interpretation.md): RC14, RC18 (partly) and RC5 (metadata in the
+result). The draft [unstable-scopes](unstable-scopes.md) S2 has the full target with typed RC17 fields.
 
 ## Goal
 
-Each document gets its metadata from its source attributes and its sidecar. A document without a valid `classification.personal_data` is rejected. The metadata is stored and returned.
+Each document gets its metadata from its source attributes and its sidecar. A document without a valid
+`classification.personal_data` is rejected. The metadata is stored and returned.
 
 ## Principle
 
-The sidecar is an input detail of the source doc provider. The provider gives the extract step one finished metadata map for each document. The step only checks that map. The business logic has no sidecar concept.
+The sidecar is an input detail of the source doc provider. The provider gives the extract step one finished metadata map
+for each document. The step only checks that map. The business logic has no sidecar concept.
 
 ## Flow
 
@@ -47,11 +52,16 @@ config sources[].attributes ─┐
 ## Rules
 
 - **Values:** `map[string]any` from YAML and JSON. The step checks the types.
-- **RC18 for now:** only `classification.personal_data`. `customer_data` and `mission_critical` come later. This is a known gap against RC18.
-- **Dev corpus:** `config.yaml` sets `classification.personal_data` as a source attribute, because the corpus has no sidecars. Test sidecars exist only in the tests.
-- **System attributes:** no key check. System values (source name, relative path, hash, file name, weight, IDs) are DB columns and are never read from metadata. `Metadata` is a separate output field, so a sidecar cannot hide them. This satisfies RC14.
+- **RC18 for now:** only `classification.personal_data`. `customer_data` and `mission_critical` come later. This is a
+  known gap against RC18.
+- **Dev corpus:** `config.yaml` sets `classification.personal_data` as a source attribute, because the corpus has no
+  sidecars. Test sidecars exist only in the tests.
+- **System attributes:** no key check. System values (source name, relative path, hash, file name, weight, IDs) are DB
+  columns and are never read from metadata. `Metadata` is a separate output field, so a sidecar cannot hide them. This
+  satisfies RC14.
 - **Sidecar change:** it takes effect after a full re-ingest (`ingest-clean`). RC11 can change this later.
-- **Duplicate content:** the first source wins, and the metadata of the second document is lost. This is a known limit ([0012](../decisions/0012-sources-table-replaces-collections.md)).
+- **Duplicate content:** the first source wins, and the metadata of the second document is lost. This is a known limit
+  ([0012](../decisions/0012-sources-table-replaces-collections.md)).
 
 ## Not in the scope (agreed)
 
@@ -65,7 +75,8 @@ config sources[].attributes ─┐
 ## Acceptance
 
 1. A sidecar value overrides the source attribute.
-2. A missing or non-boolean `classification.personal_data` rejects the document with a clear message, and the next document continues.
+2. A missing or non-boolean `classification.personal_data` rejects the document with a clear message, and the next
+   document continues.
 3. An invalid sidecar fails only its own document.
 4. The MCP result shows `Metadata`.
 5. A full re-ingest plus `just eval` gives the same metrics as `20261019T135803Z`.

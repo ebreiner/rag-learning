@@ -15,7 +15,7 @@ func TestFilterValidate(t *testing.T) {
 		{name: "empty filter", filter: Filter{}},
 		{name: "known sources", filter: Filter{Sources: []string{"manual", "changelogs"}}},
 		{name: "unknown source", filter: Filter{Sources: []string{"manual", "nope"}}, wantErr: true},
-		{name: "bool, string and number values", filter: Filter{Metadata: map[string]any{"enerchart_core": false, "lang": "de", "level": 2.0, "n": 3}}},
+		{name: "bool, string and number values", filter: Filter{Metadata: map[string]any{"product_core": false, "lang": "de", "level": 2.0, "n": 3}}},
 		{name: "key with dot and dash", filter: Filter{Metadata: map[string]any{"classification.personal_data": true, "a-b": "x"}}},
 		{name: "key with a quote", filter: Filter{Metadata: map[string]any{`a"b`: true}}, wantErr: true},
 		{name: "key with a space", filter: Filter{Metadata: map[string]any{"a b": true}}, wantErr: true},
@@ -57,7 +57,7 @@ func TestRunRetrievalFilter(t *testing.T) {
 		hydrator := &fakeHydrator{weights: map[int64]float64{1: 1.0}}
 		deps := RetrievalDeps{Logger: testLogger, Hydrator: hydrator, Retriever: retriever, EmbeddingsClient: client,
 			Renderer: &fakeRenderer{}, Fusion: testFusion, PoolSize: 40, Sources: []string{"manual"}}
-		filter := Filter{Sources: []string{"manual"}, Metadata: map[string]any{"enerchart_core": false}}
+		filter := Filter{Sources: []string{"manual"}, Metadata: map[string]any{"product_core": false}}
 
 		if _, err := RunRetrieval(testCtx, "q", 5, StrategyHybrid, filter, deps); err != nil {
 			t.Fatalf("RunRetrieval() error = %v", err)
@@ -66,7 +66,7 @@ func TestRunRetrievalFilter(t *testing.T) {
 			t.Fatalf("got %d retriever calls, want 2 (FTS and ANN)", len(retriever.filters))
 		}
 		for i, got := range retriever.filters {
-			if len(got.Sources) != 1 || got.Sources[0] != "manual" || got.Metadata["enerchart_core"] != false {
+			if len(got.Sources) != 1 || got.Sources[0] != "manual" || got.Metadata["product_core"] != false {
 				t.Errorf("call %d got filter %+v, want %+v", i, got, filter)
 			}
 		}

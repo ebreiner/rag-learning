@@ -64,3 +64,38 @@ CREATE TABLE IF NOT EXISTS extraction_nodes (
   CHECK (provenance_json IS NULL OR json_valid(provenance_json)),
   FOREIGN KEY(extraction_id) REFERENCES extractions(id)
 );
+
+CREATE TABLE IF NOT EXISTS document_links (
+  from_document_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  to_source TEXT NOT NULL,
+  to_rel_path TEXT NOT NULL,
+  text TEXT,
+  section TEXT NOT NULL DEFAULT '',
+
+  PRIMARY KEY (from_document_id, position),
+  FOREIGN KEY (from_document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  UNIQUE (from_document_id, to_source, to_rel_path, section)
+);
+CREATE INDEX IF NOT EXISTS document_links_target ON document_links (to_source, to_rel_path);
+
+-- chunks of one document in position order, see knowledge/concepts/sqlite-query-plans.md
+CREATE INDEX IF NOT EXISTS chunks_document_id_position ON chunks(document_id, position);
+
+-- pool PoC, see knowledge/experiments/0005-pool-poc.md
+CREATE TABLE IF NOT EXISTS pools (
+  name TEXT PRIMARY KEY,
+  description TEXT NOT NULL,
+  query TEXT NOT NULL,
+  state TEXT NOT NULL,
+  updated_at DATETIME NOT NULL,
+
+  CHECK(state IN ('running', 'stopped'))
+);
+
+-- DROP first: NewConn runs this file at each start, so a changed view reaches existing DBs
+DROP VIEW IF EXISTS pool_documents;
+CREATE VIEW pool_documents AS
+SELECT id, source_name, rel_path, COALESCE(json_extract(metadata_json, '$."doc.title"'), name) AS title,
+  json_extract(metadata_json, '$."doc.url"') AS url, metadata_json AS metadata
+FROM documents;

@@ -25,17 +25,20 @@ func (r *SQLiteRetriever) TopKByANN(ctx context.Context, query step.Query, k int
 	q := fmt.Sprintf("SELECT e.chunk_id, e.distance FROM %s AS e WHERE e.embedding MATCH ? ORDER BY e.distance LIMIT ?", tableName)
 	args := []any{packed, k}
 	if !filter.IsEmpty() {
-		// the KNN query applies a WHERE on joined tables only after the k nearest chunks,
-		// so a filter needs a full scan of the filtered chunks, L2 is the vec0 default  order stays the same
+		// filter inside the KNN with chunk_id IN, not with a join, see knowledge/concepts/sqlite-query-plans.md
 		clause, filterArgs := filterClause(filter)
-		q = fmt.Sprintf(`SELECT e.chunk_id, vec_distance_l2(e.embedding, ?) AS distance
-			FROM %s AS e
-			JOIN chunks AS c ON c.id = e.chunk_id
-			JOIN documents AS d ON d.id = c.document_id
-			WHERE 1 = 1%s
-			ORDER BY distance
-			LIMIT ?`, tableName, clause)
-		args = append(append([]any{packed}, filterArgs...), k)
+		q = fmt.Sprintf(`WITH knn AS MATERIALIZED (
+				SELECT e.chunk_id, e.distance
+				FROM %s AS e
+				WHERE e.embedding MATCH ? AND e.k = ?
+				AND e.chunk_id IN (
+					SELECT c.id
+					FROM chunks AS c
+					JOIN documents AS d ON d.id = c.document_id
+					WHERE 1 = 1%s)
+			)
+			SELECT chunk_id, distance FROM knn ORDER BY distance, chunk_id`, tableName, clause)
+		args = append([]any{packed, k}, filterArgs...)
 	}
 
 	rows, err := r.db.QueryContext(ctx, q, args...)

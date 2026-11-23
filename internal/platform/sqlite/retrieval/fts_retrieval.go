@@ -50,11 +50,12 @@ func (r *SQLiteRetriever) TopKByFTS(ctx context.Context, query string, k int64, 
 	args := []any{matchTerm, k}
 	if !filter.IsEmpty() {
 		clause, filterArgs := filterClause(filter)
+		// CROSS JOIN keeps chunks_fts as the outer loop, see knowledge/concepts/sqlite-query-plans.md
 		q = `
 		SELECT chunks_fts.rowid, bm25(chunks_fts)
 		FROM chunks_fts
-		JOIN chunks AS c ON c.id = chunks_fts.rowid
-		JOIN documents AS d ON d.id = c.document_id
+		CROSS JOIN chunks AS c ON c.id = chunks_fts.rowid
+		CROSS JOIN documents AS d ON d.id = c.document_id
 		WHERE chunks_fts MATCH ?` + clause + `
 		ORDER BY bm25(chunks_fts)
 		LIMIT ?

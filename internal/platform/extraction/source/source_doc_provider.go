@@ -1,6 +1,7 @@
 package source
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -49,12 +50,21 @@ type DocSource struct {
 
 const sidecarSuffix = ".meta.json"
 
+const sidecarLinksKey = "links"
+
+type sidecarLink struct {
+	To      string `json:"to"`
+	Text    string `json:"text"`
+	Section string `json:"section"`
+}
+
 type inputDoc struct {
 	path        string
 	relPath     string
 	sourceID    string
 	index       int64
 	metadata    map[string]any
+	links       []step.Link
 	metadataErr error
 }
 
@@ -114,7 +124,7 @@ func inputDocsForSource(ctx context.Context, source config.Source, logger *slog.
 		if err != nil {
 			return inputDocs, err
 		}
-		metadata, hasSidecar, metadataErr := docMetadata(source.Attributes, path+sidecarSuffix)
+		metadata, links, hasSidecar, metadataErr := docMetadata(source.Attributes, path+sidecarSuffix)
 		if hasSidecar {
 			withSidecar++
 		}
@@ -127,6 +137,7 @@ func inputDocsForSource(ctx context.Context, source config.Source, logger *slog.
 			sourceID:    source.Name,
 			index:       int64(i),
 			metadata:    metadata,
+			links:       links,
 			metadataErr: metadataErr,
 		}
 		inputDocs = append(inputDocs, doc)
@@ -137,25 +148,57 @@ func inputDocsForSource(ctx context.Context, source config.Source, logger *slog.
 	return inputDocs, nil
 }
 
-func docMetadata(attributes map[string]any, sidecarPath string) (metadata map[string]any, hasSidecar bool, err error) {
+func docMetadata(attributes map[string]any, sidecarPath string) (metadata map[string]any, links []step.Link, hasSidecar bool, err error) {
 	metadata = make(map[string]any, len(attributes))
 	maps.Copy(metadata, attributes)
 
 	raw, err := os.ReadFile(sidecarPath)
 	if errors.Is(err, fs.ErrNotExist) {
-		return metadata, false, nil
+		return metadata, nil, false, nil
 	}
 	if err != nil {
-		return nil, true, fmt.Errorf("reading sidecar %s: %w", sidecarPath, err)
+		return nil, nil, true, fmt.Errorf("reading sidecar %s: %w", sidecarPath, err)
 	}
 
-	var sidecar map[string]any
+	var sidecar map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &sidecar); err != nil {
-		return nil, true, fmt.Errorf("parsing sidecar %s: %w", sidecarPath, err)
+		return nil, nil, true, fmt.Errorf("parsing sidecar %s: %w", sidecarPath, err)
 	}
-	maps.Copy(metadata, sidecar)
 
-	return metadata, true, nil
+	if rawLinks, ok := sidecar[sidecarLinksKey]; ok {
+		delete(sidecar, sidecarLinksKey)
+		links, err = parseLinks(rawLinks)
+		if err != nil {
+			return nil, nil, true, fmt.Errorf("parsing sidecar %s: %s: %w", sidecarPath, sidecarLinksKey, err)
+		}
+	}
+
+	for key, value := range sidecar {
+		var v any
+		if err := json.Unmarshal(value, &v); err != nil {
+			return nil, nil, true, fmt.Errorf("parsing sidecar %s: %s: %w", sidecarPath, key, err)
+		}
+		metadata[key] = v
+	}
+
+	return metadata, links, true, nil
+}
+
+func parseLinks(raw json.RawMessage) ([]step.Link, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var parsed []sidecarLink
+	if err := dec.Decode(&parsed); err != nil {
+		return nil, err
+	}
+	if parsed == nil {
+		return nil, fmt.Errorf("must be a list, got null")
+	}
+	links := make([]step.Link, 0, len(parsed))
+	for _, l := range parsed {
+		links = append(links, step.Link(l))
+	}
+	return links, nil
 }
 
 func (s *DocSource) NextSourceDoc() (step.SourceDoc, error) {
@@ -178,6 +221,7 @@ func (s *DocSource) NextSourceDoc() (step.SourceDoc, error) {
 	doc.RelPath = inputDoc.relPath
 	doc.SourceName = inputDoc.sourceID
 	doc.Metadata = inputDoc.metadata
+	doc.Links = inputDoc.links
 
 	return doc, nil
 }

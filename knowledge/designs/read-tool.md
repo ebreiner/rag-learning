@@ -8,11 +8,14 @@ tags: [read, rc6, mcp, renderer, filter, outline]
 
 # Read tool (RC6)
 
-Implements RC6 of the [handover](../requirements/rag-cli-handover.md): from a search hit to the chunks around it, to its section, or to the full document. It is one of the tools of [0004](../decisions/0004-mcp-tool-surface.md). It uses the filter of [retrieval-filters](retrieval-filters.md).
+Implements RC6 of the [handover](../requirements/rag-cli-handover.md): from a search hit to the chunks around it, to its
+section, or to the full document. It is one of the tools of [0004](../decisions/0004-mcp-tool-surface.md). It uses the
+filter of [retrieval-filters](retrieval-filters.md).
 
 ## Goal
 
-The model goes from one `rag` hit to more context with one call. A large document never gives more text than a configured limit.
+The model goes from one `rag` hit to more context with one call. A large document never gives more text than a
+configured limit.
 
 ## Facts (dev corpus, 2026-10-19)
 
@@ -22,7 +25,8 @@ The model goes from one `rag` hit to more context with one call. A large documen
 | Chunks for each document | 5.4 | 62 |
 | Document | 3,389 characters | 26,275 characters |
 
-Production instances will hold much larger documents, for example contracts and regulations. Thus the limit and the outline are necessary, although no current document needs them.
+Production instances will hold much larger documents, for example contracts and regulations. Thus the limit and the
+outline are necessary, although no current document needs them.
 
 ## Tool
 
@@ -35,7 +39,8 @@ One MCP tool `read`:
 | `n` | number, optional | only for `neighbours`: chunks before and after. Default 2, maximum 5. |
 | `sources`, `metadata` | optional | the same filter as `rag`. If the document of the chunk does not match, the tool returns an error. |
 
-A CLI command `read --chunk <id> --mode <mode> [--n] [--source] [--meta]` gives the same result as JSON, for tests by hand.
+A CLI command `read --chunk <id> --mode <mode> [--n] [--source] [--meta]` gives the same result as JSON, for tests by
+hand.
 
 ## Modes
 
@@ -51,16 +56,23 @@ A CLI command `read --chunk <id> --mode <mode> [--n] [--source] [--meta]` gives 
 - `read.max_chars` in the config, required, > 0. Suggested value: 30000 characters, about 7–8k tokens.
 - If the text of `neighbours`, `section` or `document` is not larger than the limit, the tool returns the text.
 - Else the fallback chain applies:
-  1. **Outline:** the distinct breadcrumbs of the document or section in `position` order. Each entry has the breadcrumb, its character count, and the `chunk_id` of its first chunk. The model then calls `section` with that `chunk_id`. A section that is too big gives the outline of its sub-sections. The outline applies only when it has at least 2 entries and its JSON fits the limit.
-  2. **Page:** the chunks from the start of the document or section up to the limit, plus `next_chunk_id`. The model continues with `mode: page` and that `chunk_id`.
-  3. **Warning:** if one chunk alone is larger than the limit, no page fits. The tool returns a warning that the document has too little structure to read in parts. The model then uses `rag` for that document.
+  1. **Outline:** the distinct breadcrumbs of the document or section in `position` order. Each entry has the
+     breadcrumb, its character count, and the `chunk_id` of its first chunk. The model then calls `section` with that
+     `chunk_id`. A section that is too big gives the outline of its sub-sections. The outline applies only when it has
+     at least 2 entries and its JSON fits the limit.
+  2. **Page:** the chunks from the start of the document or section up to the limit, plus `next_chunk_id`. The model
+     continues with `mode: page` and that `chunk_id`.
+  3. **Warning:** if one chunk alone is larger than the limit, no page fits. The tool returns a warning that the
+     document has too little structure to read in parts. The model then uses `rag` for that document.
 
 ## Text (variant b)
 
-- The chunk text starts with `breadcrumb + "\n\n"` (chunker, content chunks). `read` removes this prefix when it is present.
+- The chunk text starts with `breadcrumb + "\n\n"` (chunker, content chunks). `read` removes this prefix when it is
+  present.
 - `read` writes a breadcrumb once as a heading line when it changes, then the chunk texts.
 - Lists and tables keep the form that the chunker gives them.
-- A renderer from the extraction nodes (old T15) is not in this scope. If it becomes necessary, the first step is one shared render function in the chunk step, not a second renderer.
+- A renderer from the extraction nodes (old T15) is not in this scope. If it becomes necessary, the first step is one
+  shared render function in the chunk step, not a second renderer.
 
 ## Result
 
@@ -79,7 +91,8 @@ A CLI command `read --chunk <id> --mode <mode> [--n] [--source] [--meta]` gives 
 }
 ```
 
-Only the fields of the result type are set: `text`, or `outline`, or `text` plus `next_chunk_id` for a page, or `warning`.
+Only the fields of the result type are set: `text`, or `outline`, or `text` plus `next_chunk_id` for a page, or
+`warning`.
 
 ## Parts
 
@@ -105,4 +118,5 @@ Only the fields of the result type are set: `text`, or `outline`, or `text` plus
 3. Text: the prefix is removed, each breadcrumb appears once.
 4. Filter: a chunk of an excluded document gives an error, a matching chunk gives the text.
 5. Eval does not change (no change to `rag`).
-6. By hand on the dev corpus: `read --mode section` for chunk 679 gives the section "Schwellwertüberwachung anlegen". With a small `max_chars`, the same call gives an outline or a page.
+6. By hand on the dev corpus: `read --mode section` for chunk 679 gives the section "Schwellwertüberwachung anlegen".
+   With a small `max_chars`, the same call gives an outline or a page.

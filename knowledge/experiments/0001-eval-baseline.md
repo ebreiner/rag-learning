@@ -25,14 +25,20 @@ First valid baseline of the [eval harness](../designs/eval-harness.md). Later ex
 | ann | 0.40 | 0.53 | 0.57 | 0.70 | 0.474 | 9 | 0 | 0 |
 | hybrid | 0.27 | 0.47 | 0.60 | 0.77 | 0.408 | 7 | 0 | 0 |
 
-Run before the re-import (DB older than fix `812baa3`): `content_lost` = 1 (`g07`) in each strategy, hybrid r@10 = 0.73. The re-import added 150 chunks and fixed `g07`.
+Run before the re-import (DB older than fix `812baa3`): `content_lost` = 1 (`g07`) in each strategy, hybrid r@10 = 0.73.
+The re-import added 150 chunks and fixed `g07`.
 
 ## Findings
 
-1. **A stale DB is not visible in the run header.** The chunks were older than the chunk code. Fix: the header now records `chunks_built` (newest `chunks.created_at`).
-2. **`generic` chunks have no section signal.** 1197 of 1806 chunks (66 %) are `generic` (docling inline groups: paragraphs with bold text or links). They get no breadcrumb prefix in `chunks.text` and do not merge with neighbours. All 5 queries that miss in each strategy (`g04`, `g09`, `g17`, `g19`, `g24`) expect a `generic` chunk.
-3. **Hybrid is worse than ANN at rank 1** (0.27 vs. 0.40), but best at r@10 (0.77). In `g13` and `g21`, ANN has the hit at rank 1 and hybrid at rank 2. The MCP tool always uses hybrid.
-4. **Some misses are golden-set problems.** `g09`: the top 1 is the correct section, another chunk. `g17`: the query says "Grenzwert", the doc says "Schwellwert". `g24`: the top 1 heading is equal to the query text.
+1. **A stale DB is not visible in the run header.** The chunks were older than the chunk code. Fix: the header now
+   records `chunks_built` (newest `chunks.created_at`).
+2. **`generic` chunks have no section signal.** 1197 of 1806 chunks (66 %) are `generic` (docling inline groups:
+   paragraphs with bold text or links). They get no breadcrumb prefix in `chunks.text` and do not merge with neighbours.
+   All 5 queries that miss in each strategy (`g04`, `g09`, `g17`, `g19`, `g24`) expect a `generic` chunk.
+3. **Hybrid is worse than ANN at rank 1** (0.27 vs. 0.40), but best at r@10 (0.77). In `g13` and `g21`, ANN has the hit
+   at rank 1 and hybrid at rank 2. The MCP tool always uses hybrid.
+4. **Some misses are golden-set problems.** `g09`: the top 1 is the correct section, another chunk. `g17`: the query
+   says "Grenzwert", the doc says "Schwellwert". `g24`: the top 1 heading is equal to the query text.
 
 ## Recommendation
 

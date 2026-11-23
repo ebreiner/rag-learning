@@ -58,6 +58,7 @@ func (h *ChunkHydrator) HydrateChunks(ctx context.Context, chunkIDs []step.Score
 			Position:   row.Position,
 			Text:       row.Text,
 			ID:         row.ID,
+			DocID:      row.DocumentID,
 			Breadcrumb: row.Breadcrumb,
 			Score:      chunkIDs[idx].Score,
 		}

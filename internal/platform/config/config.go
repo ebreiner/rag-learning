@@ -130,6 +130,19 @@ func resolve(ctx context.Context, cnf rawConfig, baseDir string) (Config, error)
 		WeightANN: cnf.Retrieval.Fusion.WeightANN,
 	}
 
+	rr := cnf.Retrieval.Rerank
+	rerankURL := rr.URL
+	if rerankURL == "" {
+		rerankURL = DefaultRerankURL
+	}
+	c.Retrieval.Rerank = Rerank{
+		Enabled: rr.Enabled,
+		URL:     parseURL("retrieval.rerank.url", rerankURL),
+		Model:   rr.Model,
+		APIKey:  rr.APIKey,
+		Timeout: rr.Timeout,
+	}
+
 	c.Read.MaxChars = cnf.Read.MaxChars
 
 	c.Server.Listen = cnf.Server.Listen
@@ -224,6 +237,9 @@ func validate(ctx context.Context, cnf Config) error {
 		if s.Weight <= 0 {
 			fail(field+".weight", "must be > 0")
 		}
+		if _, ok := s.Attributes["links"]; ok {
+			fail(field+".attributes.links", "links belong to one document: set them in its sidecar, not in the source attributes")
+		}
 		for j := range i {
 			other := cnf.Sources[j].Path
 			if s.Path == "" || other == "" {
@@ -250,6 +266,15 @@ func validate(ctx context.Context, cnf Config) error {
 	}
 	if f.WeightFTS == 0 && f.WeightANN == 0 {
 		fail("retrieval.fusion", "weight_fts and weight_ann must not both be 0")
+	}
+
+	if r := cnf.Retrieval.Rerank; r.Enabled {
+		checkURL("retrieval.rerank.url", r.URL)
+		required("retrieval.rerank.model", r.Model)
+		required("retrieval.rerank.api_key", r.APIKey)
+		if r.Timeout <= 0 {
+			fail("retrieval.rerank.timeout", "must be > 0")
+		}
 	}
 
 	if cnf.Read.MaxChars <= 0 {

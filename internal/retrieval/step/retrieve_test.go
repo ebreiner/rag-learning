@@ -512,3 +512,130 @@ func TestRunRetrieval(t *testing.T) {
 		}
 	})
 }
+
+type fakeReranker struct {
+	scores   []float64
+	err      error
+	calls    int
+	gotQuery string
+	gotTexts []string
+}
+
+func (f *fakeReranker) Rerank(ctx context.Context, query string, texts []string) (RerankResult, error) {
+	f.calls++
+	f.gotQuery = query
+	f.gotTexts = texts
+	if f.err != nil {
+		return RerankResult{}, f.err
+	}
+	return RerankResult{Scores: f.scores, Model: "fake-rerank", Cost: 0.001}, nil
+}
+
+func TestRunRetrievalRerank(t *testing.T) {
+	// fts gives the RRF order 1, 2, 3
+	newDeps := func(weights map[int64]float64, reranker Reranker) RetrievalDeps {
+		return RetrievalDeps{
+			Logger:           testLogger,
+			Hydrator:         &fakeHydrator{weights: weights},
+			Retriever:        &fakeRetriever{ftsIDs: []ScoredChunkID{{ID: 1}, {ID: 2}, {ID: 3}}},
+			EmbeddingsClient: &fakeEmbedClient{query: Query{Model: "fake"}},
+			Renderer:         &fakeRenderer{},
+			Reranker:         reranker,
+			Fusion:           testFusion,
+			PoolSize:         3,
+		}
+	}
+	equal := map[int64]float64{1: 1, 2: 1, 3: 1}
+
+	t.Run("the reranker score sets the order of the pool, then the cut to k", func(t *testing.T) {
+		reranker := &fakeReranker{scores: []float64{0.1, 0.5, 0.9}}
+		chunks, err := RunRetrieval(testCtx, "q", 2, StrategyHybrid, Filter{}, newDeps(equal, reranker))
+		if err != nil {
+			t.Fatalf("RunRetrieval() error = %v", err)
+		}
+		if diff := cmp.Diff([]int64{3, 2}, chunkIDs(chunks)); diff != "" {
+			t.Errorf("chunk order mismatch (-want +got):\n%s", diff)
+		}
+		if chunks[0].Score != 0.9 || chunks[0].Rank != 1 {
+			t.Errorf("top chunk score, rank = %g, %d, want 0.9, 1", chunks[0].Score, chunks[0].Rank)
+		}
+		if reranker.gotQuery != "q" || len(reranker.gotTexts) != 3 {
+			t.Errorf("reranker got query %q and %d texts, want q and the full pool of 3", reranker.gotQuery, len(reranker.gotTexts))
+		}
+	})
+
+	t.Run("the source weight multiplies the reranker score", func(t *testing.T) {
+		reranker := &fakeReranker{scores: []float64{0.2, 0.9, 0.5}}
+		weights := map[int64]float64{1: 1, 2: 1, 3: 2}
+		chunks, err := RunRetrieval(testCtx, "q", 3, StrategyHybrid, Filter{}, newDeps(weights, reranker))
+		if err != nil {
+			t.Fatalf("RunRetrieval() error = %v", err)
+		}
+		// chunk 3: 0.5 * 2 = 1.0 > chunk 2: 0.9
+		if diff := cmp.Diff([]int64{3, 2, 1}, chunkIDs(chunks)); diff != "" {
+			t.Errorf("chunk order mismatch (-want +got):\n%s", diff)
+		}
+		if chunks[0].Score != 1.0 {
+			t.Errorf("top score = %g, want 1.0", chunks[0].Score)
+		}
+	})
+
+	t.Run("the reranker gets the chunk text", func(t *testing.T) {
+		reranker := &fakeReranker{scores: []float64{1, 0}}
+		deps := newDeps(nil, reranker)
+		deps.Hydrator = &fakeHydrator{chunks: []RetrievedChunk{
+			{ID: 1, Breadcrumb: "A > B", Text: "A > B\n\nfirst", SourceWeight: 1},
+			{ID: 2, Text: "second", SourceWeight: 1},
+		}}
+		if _, err := RunRetrieval(testCtx, "q", 2, StrategyHybrid, Filter{}, deps); err != nil {
+			t.Fatalf("RunRetrieval() error = %v", err)
+		}
+		if diff := cmp.Diff([]string{"A > B\n\nfirst", "second"}, reranker.gotTexts); diff != "" {
+			t.Errorf("texts mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	errCases := []struct {
+		name     string
+		reranker *fakeReranker
+	}{
+		{"an error keeps the RRF order", &fakeReranker{err: errors.New("rerank broke")}},
+		{"a wrong score count keeps the RRF order", &fakeReranker{scores: []float64{0.9}}},
+	}
+	for _, tt := range errCases {
+		t.Run(tt.name, func(t *testing.T) {
+			chunks, err := RunRetrieval(testCtx, "q", 3, StrategyHybrid, Filter{}, newDeps(equal, tt.reranker))
+			if err != nil {
+				t.Fatalf("RunRetrieval() error = %v, want the query to continue", err)
+			}
+			if diff := cmp.Diff([]int64{1, 2, 3}, chunkIDs(chunks)); diff != "" {
+				t.Errorf("chunk order mismatch (-want +got):\n%s", diff)
+			}
+			if chunks[0].Score != rrfScore(1) {
+				t.Errorf("top score = %g, want the RRF score %g", chunks[0].Score, rrfScore(1))
+			}
+		})
+	}
+
+	t.Run("no reranker gives the old order", func(t *testing.T) {
+		chunks, err := RunRetrieval(testCtx, "q", 3, StrategyHybrid, Filter{}, newDeps(equal, nil))
+		if err != nil {
+			t.Fatalf("RunRetrieval() error = %v", err)
+		}
+		if diff := cmp.Diff([]int64{1, 2, 3}, chunkIDs(chunks)); diff != "" {
+			t.Errorf("chunk order mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("FTS and ANN do not call the reranker", func(t *testing.T) {
+		reranker := &fakeReranker{scores: []float64{0.1, 0.5, 0.9}}
+		for _, s := range []RetrievalStrategy{StrategyFTS, StrategyANN} {
+			if _, err := RunRetrieval(testCtx, "q", 3, s, Filter{}, newDeps(equal, reranker)); err != nil {
+				t.Fatalf("RunRetrieval(%s) error = %v", s, err)
+			}
+		}
+		if reranker.calls != 0 {
+			t.Errorf("reranker calls = %d, want 0", reranker.calls)
+		}
+	})
+}

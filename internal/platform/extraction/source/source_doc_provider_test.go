@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"rag/internal/extract/step"
 	"rag/internal/platform/config"
 	"testing"
 
@@ -291,4 +292,68 @@ func TestSourceDocMetadata(t *testing.T) {
 			t.Fatalf("second NextSourceDoc() = (%q, %v), want (b.md, nil)", doc.Name, err)
 		}
 	})
+}
+
+func TestSourceDocLinks(t *testing.T) {
+	nextDoc := func(t *testing.T, sidecar string) (step.SourceDoc, error) {
+		t.Helper()
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, "a.md"), "a")
+		writeFile(t, filepath.Join(dir, "a.md.meta.json"), sidecar)
+		src, err := NewSourceDocSource(testCtx, oneSource(dir), testLogger)
+		if err != nil {
+			t.Fatalf("NewSourceDocSource() error = %v", err)
+		}
+		return src.NextSourceDoc()
+	}
+
+	t.Run("links are parsed and are not metadata", func(t *testing.T) {
+		doc, err := nextDoc(t, `{"doc.title": "A", "links": [{"to": "b.md", "text": "B", "section": "S"}, {"to": "c.md"}]}`)
+		if err != nil {
+			t.Fatalf("NextSourceDoc() error = %v", err)
+		}
+		want := []step.Link{{To: "b.md", Text: "B", Section: "S"}, {To: "c.md"}}
+		if diff := cmp.Diff(want, doc.Links); diff != "" {
+			t.Errorf("links (-want +got):\n%s", diff)
+		}
+		if _, ok := doc.Metadata["links"]; ok {
+			t.Errorf("metadata contains links: %v", doc.Metadata)
+		}
+		if doc.Metadata["doc.title"] != "A" {
+			t.Errorf("metadata = %v, want doc.title A", doc.Metadata)
+		}
+	})
+
+	t.Run("no links key gives nil links", func(t *testing.T) {
+		doc, err := nextDoc(t, `{"doc.title": "A"}`)
+		if err != nil {
+			t.Fatalf("NextSourceDoc() error = %v", err)
+		}
+		if doc.Links != nil {
+			t.Errorf("links = %#v, want nil", doc.Links)
+		}
+	})
+
+	t.Run("an empty links list gives empty, not nil links", func(t *testing.T) {
+		doc, err := nextDoc(t, `{"links": []}`)
+		if err != nil {
+			t.Fatalf("NextSourceDoc() error = %v", err)
+		}
+		if doc.Links == nil || len(doc.Links) != 0 {
+			t.Errorf("links = %#v, want an empty list", doc.Links)
+		}
+	})
+
+	for _, tt := range []struct{ name, sidecar string }{
+		{"an unknown link field fails the doc", `{"links": [{"to": "b.md", "kind": "link"}]}`},
+		{"links that are not a list fail the doc", `{"links": {"to": "b.md"}}`},
+		{"links null fails the doc", `{"links": null}`},
+		{"a to that is not a string fails the doc", `{"links": [{"to": 3}]}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := nextDoc(t, tt.sidecar); err == nil || err == io.EOF {
+				t.Fatalf("NextSourceDoc() error = %v, want the sidecar error", err)
+			}
+		})
+	}
 }

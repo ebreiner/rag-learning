@@ -391,4 +391,36 @@ func TestExtractMetadata(t *testing.T) {
 			t.Errorf("saved metadata (-want +got):\n%s", diff)
 		}
 	})
+
+	t.Run("invalid links reject the doc before the extractor and the sink", func(t *testing.T) {
+		doc := SourceDoc{SHA256: "abc", Name: "doc", Metadata: map[string]any{KeyPersonalData: false}, Links: []Link{{To: "b.md"}}}
+		source := &fakeDocSource{docs: []SourceDoc{doc}}
+		sink := &fakeDocSink{}
+		extractor := &fakeExtractor{}
+
+		err := extract(testCtx, source, sink, extractor, testLogger)
+		if !errors.Is(err, ErrExtractionFailed) || !errors.Is(err, ErrInvalidMetadata) {
+			t.Fatalf("extract() error = %v, want ErrExtractionFailed and ErrInvalidMetadata", err)
+		}
+		if len(extractor.extractCalls) != 0 || len(sink.savedDocs) != 0 {
+			t.Errorf("extractor calls = %d, saved docs = %d, want 0 and 0", len(extractor.extractCalls), len(sink.savedDocs))
+		}
+	})
+
+	t.Run("the sink gets the links without self links and duplicates", func(t *testing.T) {
+		doc := SourceDoc{SHA256: "abc", Name: "doc", RelPath: "a.md",
+			Metadata: map[string]any{KeyPersonalData: false, KeyTitle: "A"},
+			Links:    []Link{{To: "a.md"}, {To: "b.md", Text: "B"}, {To: "b.md", Text: "again"}},
+		}
+		source := &fakeDocSource{docs: []SourceDoc{doc}}
+		sink := &fakeDocSink{}
+		extractor := &fakeExtractor{}
+
+		if err := extract(testCtx, source, sink, extractor, testLogger); err != nil {
+			t.Fatalf("extract() error = %v", err)
+		}
+		if diff := cmp.Diff([]Link{{To: "b.md", Text: "B"}}, sink.savedDocs[0].Source.Links); diff != "" {
+			t.Errorf("saved links (-want +got):\n%s", diff)
+		}
+	})
 }

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type QueryLogger struct {
@@ -26,6 +28,8 @@ type QueryLog struct {
 	Sources  []string
 	Metadata map[string]any
 	Chunks   []Chunk
+	Links    int
+	Pool     string
 }
 
 func NewQueryLogger(opts ...Option) (*QueryLogger, error) {
@@ -56,6 +60,16 @@ type ToolCallLog struct {
 	Result   string
 	Chars    int
 	Duration time.Duration
+	Pool     string
+}
+
+// traceAttrs gives the trace and span ID of ctx, so that a collector can put each line into its trace.
+func traceAttrs(ctx context.Context) []any {
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return nil
+	}
+	return []any{slog.String("trace_id", sc.TraceID().String()), slog.String("span_id", sc.SpanID().String())}
 }
 
 func (q *QueryLogger) LogQuery(ctx context.Context, queryLog QueryLog) {
@@ -68,6 +82,9 @@ func (q *QueryLogger) LogQuery(ctx context.Context, queryLog QueryLog) {
 		slog.Any("filter_sources", queryLog.Sources),
 		slog.Any("filter_metadata", queryLog.Metadata),
 		slog.Any("chunks", queryLog.Chunks),
+		slog.Int("links", queryLog.Links),
+		slog.String("pool", queryLog.Pool),
+		slog.Group("", traceAttrs(ctx)...),
 	)
 }
 
@@ -79,5 +96,7 @@ func (q *QueryLogger) LogToolCall(ctx context.Context, call ToolCallLog) {
 		slog.Any("args", call.Args),
 		slog.String("result", call.Result),
 		slog.Int("chars", call.Chars),
+		slog.String("pool", call.Pool),
+		slog.Group("", traceAttrs(ctx)...),
 	)
 }

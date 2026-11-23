@@ -12,7 +12,8 @@ Supersedes this part of [0000](0000-migrated-baseline.md): Deferred ("Pipeline m
 
 ## Context
 
-- [Handover](../requirements/rag-cli-handover.md) §3 shows `rag-cli ingest`. RC10 has many data sources. RC11 needs re-ingestion with a hash compare.
+- [Handover](../requirements/rag-cli-handover.md) §3 shows `rag-cli ingest`. RC10 has many data sources. RC11 needs
+  re-ingestion with a hash compare.
 - Now `extract`, `chunk` and `embed` are separate commands. Each run needs flags.
 
 ## Options considered
@@ -23,7 +24,8 @@ Supersedes this part of [0000](0000-migrated-baseline.md): Deferred ("Pipeline m
 ## Decision
 
 - `ingest` reads `config.yaml` and processes each data source.
-- For each file it compares the path and the hash with the DB ([0002](0002-document-identity-derived-db.md)): add, replace, delete or skip.
+- For each file it compares the path and the hash with the DB ([0002](0002-document-identity-derived-db.md)): add,
+  replace, delete or skip.
 - The step commands stay for development for now.
 - Scheduled runs and an exporter trigger (RC11, should) come later on top of `ingest`.
 

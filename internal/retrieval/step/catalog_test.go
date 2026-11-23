@@ -11,8 +11,8 @@ func TestBuildCatalog(t *testing.T) {
 	t.Run("groups keys for each source, merges the types, sorts keys and values", func(t *testing.T) {
 		sources := []SourceCount{{Name: "changelogs", Documents: 10}, {Name: "manual", Documents: 199}}
 		rows := []CatalogRow{
-			{Source: "manual", Key: "enerchart_core", Type: "boolean", Value: false, Documents: 1},
-			{Source: "manual", Key: "enerchart_core", Type: "boolean", Value: true, Documents: 198},
+			{Source: "manual", Key: "product_core", Type: "boolean", Value: false, Documents: 1},
+			{Source: "manual", Key: "product_core", Type: "boolean", Value: true, Documents: 198},
 			{Source: "manual", Key: "classification.personal_data", Type: "boolean", Value: false, Documents: 199},
 			{Source: "changelogs", Key: "classification.personal_data", Type: "boolean", Value: false, Documents: 10},
 			{Source: "manual", Key: "tags", Type: "array", Value: nil, Documents: 3},
@@ -26,7 +26,7 @@ func TestBuildCatalog(t *testing.T) {
 			}},
 			{Name: "manual", Documents: 199, Keys: []CatalogKey{
 				{Key: "classification.personal_data", Types: []string{"boolean"}, Documents: 199, DistinctValues: 1, Values: []CatalogValue{{Value: false, Documents: 199}}},
-				{Key: "enerchart_core", Types: []string{"boolean"}, Documents: 199, DistinctValues: 2, Values: []CatalogValue{{Value: true, Documents: 198}, {Value: false, Documents: 1}}},
+				{Key: "product_core", Types: []string{"boolean"}, Documents: 199, DistinctValues: 2, Values: []CatalogValue{{Value: true, Documents: 198}, {Value: false, Documents: 1}}},
 				{Key: "tags", Types: []string{"array"}, Documents: 3, DistinctValues: 1},
 			}},
 		}}

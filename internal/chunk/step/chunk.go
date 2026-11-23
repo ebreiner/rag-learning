@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
+	"strings"
 	"unicode"
 
 	"go.opentelemetry.io/otel"
@@ -13,6 +15,9 @@ import (
 )
 
 const mergeSmallChunkThreshold = 75
+
+// a table larger than this gives more than one chunk, each with the caption and whole rows
+const tableChunkBudget = 1000
 
 func Chunk(ctx context.Context, source ExtractionSource, sink ResultSink, logger *slog.Logger) error {
 	for {
@@ -248,96 +253,7 @@ func walk(ctx context.Context, roots []*ExtractionNode, logger *slog.Logger) ([]
 				logger.WarnContext(ctx, "walk-nodes", "warn", "empty table content, skipping node in walk")
 				continue
 			}
-
-			if len(node.Table.Cells) == 0 {
-				logger.WarnContext(ctx, "walk-nodes", "warn", "warning: table has no cells or header")
-			}
-
-			colHeaderByCol := make(map[int64]string)
-			for _, cell := range node.Table.Cells {
-				if cell.IsColumnHeader {
-					if len(cell.Text) == 0 {
-						logger.WarnContext(ctx, "walk-nodes", "warn", "warning: empty column header")
-					}
-					for i := cell.ColStart; i <= cell.ColEnd; i++ {
-						colHeaderByCol[i] = cell.Text
-					}
-				}
-			}
-
-			table := make(map[int]map[int]string)
-			for _, cell := range node.Table.Cells {
-				if cell.IsColumnHeader {
-					continue
-				}
-
-				for r := cell.RowStart; r <= cell.RowEnd; r++ {
-					for c := cell.ColStart; c <= cell.ColEnd; c++ {
-						if table[int(r)] == nil {
-							table[int(r)] = map[int]string{}
-						}
-						table[int(r)][int(c)] = cell.Text
-					}
-				}
-			}
-
-			headersRow := ""
-			for i := 0; i < int(node.Table.Cols); i++ {
-				if len(headersRow) == 0 {
-					headersRow = colHeaderByCol[int64(i)]
-				} else {
-					headersRow = headersRow + " | " + colHeaderByCol[int64(i)]
-				}
-			}
-			headersRow = headersRow + "\n"
-
-			// tables can have no headers, calculate first data row
-			dataRowStart := 0
-			for _, cell := range node.Table.Cells {
-				if cell.IsColumnHeader && int(cell.RowEnd)+1 > dataRowStart {
-					dataRowStart = int(cell.RowEnd) + 1
-				}
-			}
-			rows := ""
-			for r := dataRowStart; r < int(node.Table.Rows); r++ {
-				for c := 0; c < int(node.Table.Cols); c++ {
-					if c > 0 {
-						rows = rows + " | "
-					}
-					rows = rows + table[r][c]
-				}
-				rows = rows + "\n"
-			}
-			candidate := chunkCandidate{
-				Node:       node,
-				Breadcrumb: currentBreadCrumb(),
-				Text:       headersRow + rows,
-			}
-
-			candidate.MemberIDs = []int64{node.ExtractionNodeID}
-			for _, child := range node.Children {
-				switch child.Kind {
-				case KindCaption:
-					if child.Caption != nil && len(child.Caption.Text) > 0 {
-						candidate.Text = candidate.Text + "\n" + child.Caption.Text
-						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
-					} else {
-						logger.WarnContext(ctx, "walk-nodes", "warn", "empty caption")
-					}
-				case KindFootnote:
-					if child.Footnote != nil && len(child.Footnote.Text) > 0 {
-						candidate.Text = candidate.Text + "\n" + child.Footnote.Text
-						candidate.MemberIDs = append(candidate.MemberIDs, child.ExtractionNodeID)
-					} else {
-						logger.WarnContext(ctx, "walk-nodes", "warn", "empty footnote")
-					}
-
-				default:
-					logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("table children of unsupported type: '%s'", child.Kind))
-				}
-			}
-
-			candidates = append(candidates, candidate)
+			candidates = append(candidates, tableCandidates(ctx, node, currentBreadCrumb(), logger)...)
 			continue
 
 		case KindUnsupported:
@@ -383,6 +299,13 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 		budget = maxBudget - len(breadcrumb)
 	}
 
+	// emit buffered content before a standalone chunk so that the positions follow the doc order
+	// next content candidate then starts a fresh buffer with new budget
+	closeBuffer := func() {
+		flush()
+		lastCrumb = ""
+	}
+
 	candidatePos := int64(0)
 	for _, candidate := range candidates {
 		// Handle exceptions like container nodes and edge-cases
@@ -395,16 +318,21 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "table node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 
 			ids := make([]ChunkExtractionNodeID, 0)
 			for pos, id := range candidate.MemberIDs {
 				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
 			}
+			text := candidate.Text
+			if candidate.Breadcrumb != "" {
+				text = candidate.Breadcrumb + "\n\n" + text
+			}
 			toSave := ChunkToSave{
 				Breadcrumb:        candidate.Breadcrumb,
 				Position:          positionCounter,
 				ExtractionNodeIDs: ids,
-				Text:              candidate.Text,
+				Text:              text,
 				Type:              TypeTable,
 			}
 
@@ -423,6 +351,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "list node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 			ids := make([]ChunkExtractionNodeID, 0)
 			for pos, id := range candidate.MemberIDs {
 				ids = append(ids, ChunkExtractionNodeID{ExtractionNodeID: id, Position: int64(pos)})
@@ -445,6 +374,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "formula node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
 			toSave := ChunkToSave{
 				Breadcrumb:        candidate.Breadcrumb,
@@ -463,6 +393,7 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 				logger.WarnContext(ctx, "merge-nodes", "warn", "code node text is empty, skipping")
 				continue
 			}
+			closeBuffer()
 			ids := []ChunkExtractionNodeID{{ExtractionNodeID: candidate.Node.ExtractionNodeID, Position: 0}}
 			toSave := ChunkToSave{
 				Breadcrumb:        candidate.Breadcrumb,
@@ -524,6 +455,170 @@ func mergeCandidates(ctx context.Context, candidates []chunkCandidate, logger *s
 	}
 
 	return merged
+}
+
+// tableCandidates writes a table with a header as one line for each row ("Header: value; ...") and
+// a table without a header as pipe rows. Rows are packed into parts of tableChunkBudget in table order.
+func tableCandidates(ctx context.Context, node *ExtractionNode, breadcrumb string, logger *slog.Logger) []chunkCandidate {
+	t := node.Table
+	if len(t.Cells) == 0 {
+		logger.WarnContext(ctx, "walk-nodes", "warn", "warning: table has no cells or header")
+	}
+
+	// header rows are the top rows without a data cell that has text. A header cell in a lower row
+	// (a row header) is a value of its row. A table with only header rows has no header.
+	// docling can give Cols 0 for a table with cells, so the cells set the size
+	numRows, numCols := t.Rows, t.Cols
+	hasData := make(map[int64]bool)
+	for _, cell := range t.Cells {
+		numRows, numCols = max(numRows, cell.RowEnd), max(numCols, cell.ColEnd)
+		if cell.IsColumnHeader && len(cell.Text) == 0 {
+			logger.WarnContext(ctx, "walk-nodes", "warn", "warning: empty column header")
+		}
+		if !cell.IsColumnHeader && cell.Text != "" {
+			for r := cell.RowStart; r < cell.RowEnd; r++ {
+				hasData[r] = true
+			}
+		}
+	}
+	dataRowStart := 0
+	for dataRowStart < int(numRows) && !hasData[int64(dataRowStart)] {
+		dataRowStart++
+	}
+	if dataRowStart == int(numRows) {
+		dataRowStart = 0
+	}
+
+	headerCells := make([]TableCell, 0)
+	for _, cell := range t.Cells {
+		if cell.IsColumnHeader && int(cell.RowEnd) <= dataRowStart {
+			headerCells = append(headerCells, cell)
+		}
+	}
+	sort.SliceStable(headerCells, func(i, j int) bool { return headerCells[i].RowStart < headerCells[j].RowStart })
+
+	hasHeader := false
+	colHeaderByCol := make(map[int64]string)
+	for _, cell := range headerCells {
+		if cell.Text == "" {
+			continue
+		}
+		hasHeader = true
+		// docling end offsets are exclusive
+		for i := cell.ColStart; i < cell.ColEnd; i++ {
+			h := colHeaderByCol[i]
+			switch {
+			case h == "":
+				colHeaderByCol[i] = cell.Text
+			case h != cell.Text && !strings.HasSuffix(h, " / "+cell.Text):
+				colHeaderByCol[i] = h + " / " + cell.Text
+			}
+		}
+	}
+
+	table := make(map[int]map[int]string)
+	for _, cell := range t.Cells {
+		for r := max(cell.RowStart, int64(dataRowStart)); r < cell.RowEnd; r++ {
+			for c := cell.ColStart; c < cell.ColEnd; c++ {
+				if table[int(r)] == nil {
+					table[int(r)] = map[int]string{}
+				}
+				table[int(r)][int(c)] = cell.Text
+			}
+		}
+	}
+
+	rows := make([]string, 0, numRows)
+	for r := dataRowStart; r < int(numRows); r++ {
+		values := make([]string, 0, numCols)
+		empty := true
+		for c := 0; c < int(numCols); c++ {
+			v := table[r][c]
+			if v != "" {
+				empty = false
+			}
+			if !hasHeader {
+				values = append(values, v)
+				continue
+			}
+			if v == "" {
+				continue
+			}
+			if h := colHeaderByCol[int64(c)]; h != "" {
+				v = h + ": " + v
+			}
+			values = append(values, v)
+		}
+		if empty {
+			continue
+		}
+		if hasHeader {
+			rows = append(rows, strings.Join(values, "; "))
+		} else {
+			rows = append(rows, strings.Join(values, " | "))
+		}
+	}
+
+	var captions, footnotes []string
+	var captionIDs, footnoteIDs []int64
+	for _, child := range node.Children {
+		switch child.Kind {
+		case KindCaption:
+			if child.Caption != nil && len(child.Caption.Text) > 0 {
+				captions = append(captions, child.Caption.Text)
+				captionIDs = append(captionIDs, child.ExtractionNodeID)
+			} else {
+				logger.WarnContext(ctx, "walk-nodes", "warn", "empty caption")
+			}
+		case KindFootnote:
+			if child.Footnote != nil && len(child.Footnote.Text) > 0 {
+				footnotes = append(footnotes, child.Footnote.Text)
+				footnoteIDs = append(footnoteIDs, child.ExtractionNodeID)
+			} else {
+				logger.WarnContext(ctx, "walk-nodes", "warn", "empty footnote")
+			}
+		default:
+			logger.WarnContext(ctx, "walk-nodes", "warn", fmt.Sprintf("table children of unsupported type: '%s'", child.Kind))
+		}
+	}
+
+	if len(rows) == 0 {
+		logger.WarnContext(ctx, "walk-nodes", "warn", "table has no data rows, skipping")
+		return nil
+	}
+
+	prefix := ""
+	if len(captions) > 0 {
+		prefix = strings.Join(captions, "\n") + "\n"
+	}
+	budget := tableChunkBudget - len(breadcrumb) - len(prefix)
+	parts := [][]string{{}}
+	size := 0
+	for _, row := range rows {
+		if last := parts[len(parts)-1]; len(last) > 0 && size+len(row)+1 > budget {
+			parts = append(parts, []string{})
+			size = 0
+		}
+		parts[len(parts)-1] = append(parts[len(parts)-1], row)
+		size += len(row) + 1
+	}
+
+	candidates := make([]chunkCandidate, 0, len(parts))
+	for i, part := range parts {
+		candidate := chunkCandidate{
+			Node:       node,
+			Breadcrumb: breadcrumb,
+			Text:       prefix + strings.Join(part, "\n") + "\n",
+			MemberIDs:  append([]int64{node.ExtractionNodeID}, captionIDs...),
+		}
+		if i == len(parts)-1 && len(footnotes) > 0 {
+			candidate.Text = candidate.Text + "\n" + strings.Join(footnotes, "\n")
+			candidate.MemberIDs = append(candidate.MemberIDs, footnoteIDs...)
+		}
+		candidates = append(candidates, candidate)
+	}
+
+	return candidates
 }
 
 func tokenCount(text string) int {

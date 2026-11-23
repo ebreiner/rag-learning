@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"net/http"
 	embedstep "rag/internal/embedding/step"
 	"rag/internal/platform/config"
 	"rag/internal/platform/embedclient/kreuzberg"
 	"rag/internal/platform/embedclient/openai"
 	"rag/internal/platform/httpclient"
+	"rag/internal/platform/rerankclient"
 	"rag/internal/platform/sqlite"
 	"rag/internal/platform/sqlite/retrieval"
 	retrievalstep "rag/internal/retrieval/step"
@@ -78,9 +80,21 @@ func WireUpRetrieval(ctx context.Context, cnf config.Config, logger *slog.Logger
 	for _, s := range cnf.Sources {
 		deps.Sources = append(deps.Sources, s.Name)
 	}
-	logger.InfoContext(ctx, "wiring", "info", fmt.Sprintf("hybrid: pool size %d, rrf k %d, weight fts %g, weight ann %g", deps.PoolSize, deps.Fusion.RRFK, deps.Fusion.WeightFTS, deps.Fusion.WeightANN))
+	rerankInfo := "off"
+	if r := cnf.Retrieval.Rerank; r.Enabled {
+		header := http.Header{}
+		header.Set("Authorization", "Bearer "+r.APIKey)
+		deps.Reranker = rerankclient.New(r.URL, r.Model, httpclient.New(r.Timeout, header))
+		rerankInfo = r.Model
+	}
+	logger.InfoContext(ctx, "wiring", "info", fmt.Sprintf("hybrid: pool size %d, rrf k %d, weight fts %g, weight ann %g, rerank %s", deps.PoolSize, deps.Fusion.RRFK, deps.Fusion.WeightFTS, deps.Fusion.WeightANN, rerankInfo))
 
 	return deps, db, closeDB, nil
+}
+
+func NewLinkDeps(db *sql.DB, logger *slog.Logger) retrievalstep.LinkDeps {
+	loader := retrieval.NewLinkLoader(db, logger)
+	return retrievalstep.LinkDeps{Loader: &loader}
 }
 
 func NewReadDeps(db *sql.DB, cnf config.Config, logger *slog.Logger) retrievalstep.ReadDeps {

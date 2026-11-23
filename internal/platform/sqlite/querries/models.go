@@ -36,6 +36,15 @@ type Document struct {
 	SourceName   string
 }
 
+type DocumentLink struct {
+	FromDocumentID int64
+	Position       int64
+	ToSource       string
+	ToRelPath      string
+	Text           sql.NullString
+	Section        string
+}
+
 type Extraction struct {
 	ID         int64
 	CreatedAt  time.Time
@@ -53,6 +62,23 @@ type ExtractionNode struct {
 	Layer          string
 	ContentJson    sql.NullString
 	ProvenanceJson sql.NullString
+}
+
+type Pool struct {
+	Name        string
+	Description string
+	Query       string
+	State       string
+	UpdatedAt   time.Time
+}
+
+type PoolDocument struct {
+	ID         int64
+	SourceName string
+	RelPath    string
+	Title      string
+	Url        interface{}
+	Metadata   sql.NullString
 }
 
 type Source struct {

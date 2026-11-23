@@ -192,3 +192,21 @@ func TestHydrateChunksMetadata(t *testing.T) {
 		}
 	})
 }
+
+func TestHydrateChunksDocID(t *testing.T) {
+	db := sqlitetest.New(t)
+	chunkID := insertChunkInSource(t, db, "a", "manual", 1.0)
+	var wantDocID int64
+	if err := db.QueryRow(`SELECT document_id FROM chunks WHERE id = ?`, chunkID).Scan(&wantDocID); err != nil {
+		t.Fatalf("reading document_id: %v", err)
+	}
+
+	hydrator := NewChunkHydrator(db, testLogger)
+	got, err := hydrator.HydrateChunks(context.Background(), []step.ScoredChunkID{{ID: chunkID}})
+	if err != nil {
+		t.Fatalf("HydrateChunks() error = %v", err)
+	}
+	if len(got) != 1 || got[0].DocID != wantDocID {
+		t.Fatalf("HydrateChunks() = %+v, want one chunk with DocID %d", got, wantDocID)
+	}
+}

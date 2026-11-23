@@ -1,6 +1,7 @@
 package retrieval
 
 import (
+	"encoding/json"
 	"maps"
 	"rag/internal/retrieval/step"
 	"slices"
@@ -21,6 +22,12 @@ func filterClause(filter step.Filter) (string, []any) {
 	for _, key := range slices.Sorted(maps.Keys(filter.Metadata)) {
 		sb.WriteString(" AND json_extract(d.metadata_json, ?) = ?")
 		args = append(args, `$."`+key+`"`, filter.Metadata[key])
+	}
+
+	if filter.DocIDs != nil {
+		ids, _ := json.Marshal(filter.DocIDs) // []int64 cannot fail
+		sb.WriteString(" AND d.id IN (SELECT value FROM json_each(?))")
+		args = append(args, string(ids))
 	}
 
 	return sb.String(), args

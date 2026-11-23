@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	cmdpkg "rag/cmd/cli/cmd"
+	"rag/internal/platform/sqlite/pool"
 	"rag/internal/platform/sqlite/retrieval"
 	"rag/internal/platform/telemetry/logging"
 
@@ -24,7 +26,8 @@ func NewServeCmd() *cobra.Command {
 		Short: "Serve the hybrid retrieval as an MCP tool over streamable HTTP",
 		Long: `Serve the hybrid retrieval as the MCP tool "rag" over streamable HTTP on
 server.listen from the config. Each request needs the bearer token from the
-env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
+env RAG_CLI_API_TOKEN. Each query goes into log.query_log.
+The pool PoC adds a web UI on /ui/ and one MCP endpoint /mcp/<pool> for each pool.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -85,16 +88,38 @@ env RAG_CLI_API_TOKEN. Each query goes into log.query_log.`,
 				return err
 			}
 
-			hybridTool := hyridRetrievalTool(deps, queryLogger)
+			hybridTool := hyridRetrievalTool(deps, cmdpkg.NewLinkDeps(db, logger), queryLogger)
 			readTool := newReadTool(cmdpkg.NewReadDeps(db, cnf, logger), queryLogger, logger)
 			tools := []server.ServerTool{hybridTool, catalogTool, readTool}
 			mcpHandler := MCPHandler(tools)
-			wrappedAuth := BearerAuth(apiToken, logger)(mcpHandler)
+			auth := BearerAuth(apiToken, logger)
+
+			roDB, err := pool.NewReadOnlyConn(cnf.Storage.DBPath)
+			if err != nil {
+				return errors.Join(err, closeDB(ctx))
+			}
+			closeAll := func(ctx context.Context) error { return errors.Join(roDB.Close(), closeDB(ctx)) }
+			pools, err := newPoolManager(ctx, db, roDB, poolDeps{
+				Retrieval:   deps,
+				Links:       cmdpkg.NewLinkDeps(db, logger),
+				Read:        cmdpkg.NewReadDeps(db, cnf, logger),
+				QueryLogger: queryLogger,
+				Logger:      logger,
+			})
+			if err != nil {
+				return errors.Join(fmt.Errorf("error loading pools: %w", err), closeAll(ctx))
+			}
+
+			mux := http.NewServeMux()
+			mux.Handle("/mcp", auth(mcpHandler))
+			mux.Handle("/mcp/{name}", auth(pools))
+			mux.Handle("/ui/", uiHandler(pools, auth))
+			mux.Handle("GET /ui", http.RedirectHandler("/ui/", http.StatusMovedPermanently))
 
 			serverConf := serverConfig{
 				Addr:         cnf.Server.Listen,
-				Handler:      wrappedAuth,
-				Cleanup:      []func(context.Context) error{closeDB},
+				Handler:      mux,
+				Cleanup:      []func(context.Context) error{closeAll},
 				TimeoutRead:  time.Second * 30,
 				TimeoutWrite: time.Second * 30,
 				TimeoutIdle:  time.Second * 120,
