@@ -2,13 +2,15 @@
 type: index
 title: Knowledge base index
 status: current
-date: 2026-10-19
+date: 2026-11-23
 tags: [index]
 ---
 
 # Knowledge base index
 
 Start here:
+0. Read the [README](../README.md) for a short overview: idea, architecture, configuration and how to write an
+   exporter.
 1. Read the [handover](requirements/rag-cli-handover.md) for the product goal and the requirements.
 2. Read [0000](decisions/0000-migrated-baseline.md) for the current architecture. Decisions 0001–0014 supersede or add
    to parts of it.
